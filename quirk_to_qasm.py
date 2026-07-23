@@ -385,10 +385,12 @@ def get_aws_individual() -> tuple:
     return json.dumps(dict_response, indent = 4)
 
 def _parse_quirk_url(url):
+    """Extract Quirk circuit JSON from a URL."""
     return ast.literal_eval(unquote(url).split('circuit=')[1])
 
 
 def _quirk_col_to_qasm(col, offset):
+    """Convert a single Quirk column to a list of OpenQASM 2.0 lines."""
     lines = []
 
     if 'Swap' in col:
@@ -421,6 +423,8 @@ def _quirk_col_to_qasm(col, offset):
                 lines.append(f'ccx {ctrl_str}, {tgt_str};')
             else:
                 lines.append(f'// multi-controlled X with {n_controls} controls (needs decomposition)')
+                # Fallback: generate comment with gate info
+                lines.append(f'// cx {ctrl_str}, {tgt_str};')
         elif target_gate == 'Z':
             if n_controls == 1:
                 lines.append(f'cz {ctrl_str}, {tgt_str};')
@@ -467,6 +471,7 @@ def _quirk_col_to_qasm(col, offset):
 
 @app.route('/code/qasm', methods=['POST'])
 def get_qasm():
+    """Translate multiple Quirk URLs into a single OpenQASM 2.0 circuit."""
     circuitos = []
     for i in request.json.keys():
         circuitos.append(_parse_quirk_url(request.json[i]))
@@ -494,6 +499,7 @@ def get_qasm():
 
 @app.route('/code/qasm/individual', methods=['POST'])
 def get_qasm_individual():
+    """Translate a single Quirk URL into OpenQASM 2.0."""
     data = request.get_json()
     url = data.get('url')
     d = data.get('d', 0)
