@@ -1,0 +1,1862 @@
+{
+  "info": {
+    "_postman_id": "b1d8ccf4-50ac-4a9f-9c2c-quantumquirk",
+    "name": "Quirk Translator - IBM y AWS",
+    "description": "Batería de pruebas para los endpoints Flask /code/ibm, /code/ibm/individual, /code/aws y /code/aws/individual. Incluye circuitos Quirk, pruebas individuales, por lotes y casos límite.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8081"
+    }
+  ],
+  "item": [
+    {
+      "name": "IBM - Pruebas individuales",
+      "item": [
+        {
+          "name": "Shor - IBM individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"X\\\"],[\\\"X\\\",\\\"X\\\",\\\"X\\\",\\\"X\\\"],[1,\\\"•\\\",\\\"X\\\"],[1,\\\"X\\\",\\\"•\\\"],[1,\\\"•\\\",\\\"X\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[1,1,\\\"X\\\",\\\"•\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[\\\"X\\\",1,1,\\\"•\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"d\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "BernsteinVazirani - IBM individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,1,1,\\\"X\\\"],[1,1,1,\\\"H\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,\\\"X\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"d\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Grover - IBM individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\"],[1,\\\"X\\\"],[1,\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[1,\\\"H\\\"],[1,\\\"X\\\"],[1,\\\"H\\\"],[1,\\\"Measure\\\"]]}\",\n  \"d\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DeutschJozsa - IBM individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"X\\\",1,\\\"X\\\",\\\"X\\\"],[1,1,1,\\\"H\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,\\\"X\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[\\\"X\\\",1,\\\"X\\\"],[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"d\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Simon - IBM individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[1,1,\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,1,1,\\\"X\\\"],[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"d\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TSP - IBM individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\"],[1,\\\"X\\\",\\\"X\\\"],[\\\"X\\\",\\\"•\\\"],[\\\"X\\\",1,\\\"•\\\"],[\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"d\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Teleportation - IBM individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[1,\\\"H\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[\\\"•\\\",1,1,1,\\\"Z\\\"]]}\",\n  \"d\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Teleportation contiene H y controladas\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code).to.include(\".h(\");",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PhaseEstimation - IBM individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,1,1,\\\"X\\\"],[\\\"•\\\",1,1,\\\"Z^¼\\\"],[1,\\\"•\\\",1,\\\"Z^¼\\\"],[1,\\\"•\\\",1,\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[\\\"Swap\\\",1,\\\"Swap\\\"],[\\\"H\\\"],[\\\"•\\\",\\\"~16c9\\\"],[1,\\\"H\\\"],[\\\"•\\\",1,\\\"~gf1o\\\"],[1,\\\"•\\\",\\\"~16c9\\\"],[1,1,\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]],\\\"gates\\\":[{\\\"id\\\":\\\"~gf1o\\\",\\\"name\\\":\\\"U(-pi/4)\\\",\\\"matrix\\\":\\\"{{1,0},{0,√½-√½i}}\\\"},{\\\"id\\\":\\\"~16c9\\\",\\\"name\\\":\\\"U(-pi/2)\\\",\\\"matrix\\\":\\\"{{1,0},{0,-i}}\\\"}]}\",\n  \"d\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "QFT - IBM individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,\\\"X\\\",\\\"X\\\"],[\\\"H\\\"],[\\\"Z\\\",\\\"•\\\"],[\\\"Z^½\\\",1,\\\"•\\\"],[1,\\\"H\\\"],[1,\\\"Z\\\",\\\"•\\\"],[1,1,\\\"H\\\"]]}\",\n  \"d\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"QFT contiene puertas H y de fase\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code).to.include(\".h(\");",
+                  "  pm.expect(code.includes(\".z(\") || code.includes(\".s(\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "QAOA - IBM individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"Rxft\\\",\\\"Rxft\\\"],[],[\\\"•\\\",\\\"X\\\"],[\\\"Rxft\\\",\\\"Rxft\\\"],[],[1,\\\"Rxft\\\"],[],[\\\"•\\\",\\\"X\\\"],[\\\"Rxft\\\"],[],[1,\\\"Measure\\\"],[\\\"Measure\\\"]]}\",\n  \"d\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Kickback - IBM individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[1,\\\"X\\\"],[\\\"H\\\",\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\"],[1,\\\"Measure\\\"]]}\",\n  \"d\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "FullAdder - IBM individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"•\\\",\\\"•\\\",1,\\\"X\\\"],[\\\"•\\\",\\\"X\\\"],[1,\\\"•\\\",\\\"•\\\",\\\"X\\\"],[1,\\\"•\\\",\\\"X\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"Measure\\\"],[1,\\\"Measure\\\"],[1,1,\\\"Measure\\\"],[1,1,1,\\\"Measure\\\"]]}\",\n  \"d\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AWS - Pruebas individuales",
+      "item": [
+        {
+          "name": "Shor - AWS individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"X\\\"],[\\\"X\\\",\\\"X\\\",\\\"X\\\",\\\"X\\\"],[1,\\\"•\\\",\\\"X\\\"],[1,\\\"X\\\",\\\"•\\\"],[1,\\\"•\\\",\\\"X\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[1,1,\\\"X\\\",\\\"•\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[\\\"X\\\",1,1,\\\"•\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"d\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "BernsteinVazirani - AWS individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,1,1,\\\"X\\\"],[1,1,1,\\\"H\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,\\\"X\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"d\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Grover - AWS individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\"],[1,\\\"X\\\"],[1,\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[1,\\\"H\\\"],[1,\\\"X\\\"],[1,\\\"H\\\"],[1,\\\"Measure\\\"]]}\",\n  \"d\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DeutschJozsa - AWS individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"X\\\",1,\\\"X\\\",\\\"X\\\"],[1,1,1,\\\"H\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,\\\"X\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[\\\"X\\\",1,\\\"X\\\"],[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"d\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Simon - AWS individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[1,1,\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,1,1,\\\"X\\\"],[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"d\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TSP - AWS individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\"],[1,\\\"X\\\",\\\"X\\\"],[\\\"X\\\",\\\"•\\\"],[\\\"X\\\",1,\\\"•\\\"],[\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"d\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Teleportation - AWS individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[1,\\\"H\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[\\\"•\\\",1,1,1,\\\"Z\\\"]]}\",\n  \"d\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Teleportation contiene H y controladas\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code).to.include(\".h(\");",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PhaseEstimation - AWS individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,1,1,\\\"X\\\"],[\\\"•\\\",1,1,\\\"Z^¼\\\"],[1,\\\"•\\\",1,\\\"Z^¼\\\"],[1,\\\"•\\\",1,\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[\\\"Swap\\\",1,\\\"Swap\\\"],[\\\"H\\\"],[\\\"•\\\",\\\"~16c9\\\"],[1,\\\"H\\\"],[\\\"•\\\",1,\\\"~gf1o\\\"],[1,\\\"•\\\",\\\"~16c9\\\"],[1,1,\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]],\\\"gates\\\":[{\\\"id\\\":\\\"~gf1o\\\",\\\"name\\\":\\\"U(-pi/4)\\\",\\\"matrix\\\":\\\"{{1,0},{0,√½-√½i}}\\\"},{\\\"id\\\":\\\"~16c9\\\",\\\"name\\\":\\\"U(-pi/2)\\\",\\\"matrix\\\":\\\"{{1,0},{0,-i}}\\\"}]}\",\n  \"d\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "QFT - AWS individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,\\\"X\\\",\\\"X\\\"],[\\\"H\\\"],[\\\"Z\\\",\\\"•\\\"],[\\\"Z^½\\\",1,\\\"•\\\"],[1,\\\"H\\\"],[1,\\\"Z\\\",\\\"•\\\"],[1,1,\\\"H\\\"]]}\",\n  \"d\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"QFT contiene puertas H y de fase\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code).to.include(\".h(\");",
+                  "  pm.expect(code.includes(\".z(\") || code.includes(\".s(\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "QAOA - AWS individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"Rxft\\\",\\\"Rxft\\\"],[],[\\\"•\\\",\\\"X\\\"],[\\\"Rxft\\\",\\\"Rxft\\\"],[],[1,\\\"Rxft\\\"],[],[\\\"•\\\",\\\"X\\\"],[\\\"Rxft\\\"],[],[1,\\\"Measure\\\"],[\\\"Measure\\\"]]}\",\n  \"d\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Kickback - AWS individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[1,\\\"X\\\"],[\\\"H\\\",\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\"],[1,\\\"Measure\\\"]]}\",\n  \"d\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "FullAdder - AWS individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"•\\\",\\\"•\\\",1,\\\"X\\\"],[\\\"•\\\",\\\"X\\\"],[1,\\\"•\\\",\\\"•\\\",\\\"X\\\"],[1,\\\"•\\\",\\\"X\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"Measure\\\"],[1,\\\"Measure\\\"],[1,1,\\\"Measure\\\"],[1,1,1,\\\"Measure\\\"]]}\",\n  \"d\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws/individual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws",
+                "individual"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"El código usa el desplazamiento indicado\", function () {",
+                  "  const d = JSON.parse(pm.request.body.raw).d;",
+                  "  const code = body.code.join(\"\\n\");",
+                  "  pm.expect(code).to.match(new RegExp(\"\\\\[\" + d + \"\\\\]|\\\\(\" + d + \"\\\\)\"));",
+                  "});",
+                  "pm.test(\"Se generó al menos una puerta controlada\", function () {",
+                  "  const code = body.code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code.includes(\"cnot\") || code.includes(\"mc_x_gate\") || code.includes(\"append(mc_x_gate\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "IBM - Pruebas por lotes",
+      "item": [
+        {
+          "name": "Todos los circuitos - IBM",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Shor\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"X\\\"],[\\\"X\\\",\\\"X\\\",\\\"X\\\",\\\"X\\\"],[1,\\\"•\\\",\\\"X\\\"],[1,\\\"X\\\",\\\"•\\\"],[1,\\\"•\\\",\\\"X\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[1,1,\\\"X\\\",\\\"•\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[\\\"X\\\",1,1,\\\"•\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"BernsteinVazirani\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,1,1,\\\"X\\\"],[1,1,1,\\\"H\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,\\\"X\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"Grover\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\"],[1,\\\"X\\\"],[1,\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[1,\\\"H\\\"],[1,\\\"X\\\"],[1,\\\"H\\\"],[1,\\\"Measure\\\"]]}\",\n  \"DeutschJozsa\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"X\\\",1,\\\"X\\\",\\\"X\\\"],[1,1,1,\\\"H\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,\\\"X\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[\\\"X\\\",1,\\\"X\\\"],[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"Simon\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[1,1,\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,1,1,\\\"X\\\"],[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"TSP\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\"],[1,\\\"X\\\",\\\"X\\\"],[\\\"X\\\",\\\"•\\\"],[\\\"X\\\",1,\\\"•\\\"],[\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"Teleportation\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[1,\\\"H\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[\\\"•\\\",1,1,1,\\\"Z\\\"]]}\",\n  \"PhaseEstimation\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,1,1,\\\"X\\\"],[\\\"•\\\",1,1,\\\"Z^¼\\\"],[1,\\\"•\\\",1,\\\"Z^¼\\\"],[1,\\\"•\\\",1,\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[\\\"Swap\\\",1,\\\"Swap\\\"],[\\\"H\\\"],[\\\"•\\\",\\\"~16c9\\\"],[1,\\\"H\\\"],[\\\"•\\\",1,\\\"~gf1o\\\"],[1,\\\"•\\\",\\\"~16c9\\\"],[1,1,\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]],\\\"gates\\\":[{\\\"id\\\":\\\"~gf1o\\\",\\\"name\\\":\\\"U(-pi/4)\\\",\\\"matrix\\\":\\\"{{1,0},{0,√½-√½i}}\\\"},{\\\"id\\\":\\\"~16c9\\\",\\\"name\\\":\\\"U(-pi/2)\\\",\\\"matrix\\\":\\\"{{1,0},{0,-i}}\\\"}]}\",\n  \"QFT\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,\\\"X\\\",\\\"X\\\"],[\\\"H\\\"],[\\\"Z\\\",\\\"•\\\"],[\\\"Z^½\\\",1,\\\"•\\\"],[1,\\\"H\\\"],[1,\\\"Z\\\",\\\"•\\\"],[1,1,\\\"H\\\"]]}\",\n  \"QAOA\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"Rxft\\\",\\\"Rxft\\\"],[],[\\\"•\\\",\\\"X\\\"],[\\\"Rxft\\\",\\\"Rxft\\\"],[],[1,\\\"Rxft\\\"],[],[\\\"•\\\",\\\"X\\\"],[\\\"Rxft\\\"],[],[1,\\\"Measure\\\"],[\\\"Measure\\\"]]}\",\n  \"Kickback\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[1,\\\"X\\\"],[\\\"H\\\",\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\"],[1,\\\"Measure\\\"]]}\",\n  \"FullAdder\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"•\\\",\\\"•\\\",1,\\\"X\\\"],[\\\"•\\\",\\\"X\\\"],[1,\\\"•\\\",\\\"•\\\",\\\"X\\\"],[1,\\\"•\\\",\\\"X\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"Measure\\\"],[1,\\\"Measure\\\"],[1,1,\\\"Measure\\\"],[1,1,1,\\\"Measure\\\"]]}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"Se genera un circuito combinado\", function () {",
+                  "  const code = pm.response.json().code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code).to.include(\"circuit\");",
+                  "  pm.expect(code.length).to.be.above(100);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Subconjunto básico - IBM",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Grover\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\"],[1,\\\"X\\\"],[1,\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[1,\\\"H\\\"],[1,\\\"X\\\"],[1,\\\"H\\\"],[1,\\\"Measure\\\"]]}\",\n  \"QFT\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,\\\"X\\\",\\\"X\\\"],[\\\"H\\\"],[\\\"Z\\\",\\\"•\\\"],[\\\"Z^½\\\",1,\\\"•\\\"],[1,\\\"H\\\"],[1,\\\"Z\\\",\\\"•\\\"],[1,1,\\\"H\\\"]]}\",\n  \"Teleportation\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[1,\\\"H\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[\\\"•\\\",1,1,1,\\\"Z\\\"]]}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/ibm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "ibm"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a IBM\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"qiskit\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AWS - Pruebas por lotes",
+      "item": [
+        {
+          "name": "Todos los circuitos - AWS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Shor\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"X\\\"],[\\\"X\\\",\\\"X\\\",\\\"X\\\",\\\"X\\\"],[1,\\\"•\\\",\\\"X\\\"],[1,\\\"X\\\",\\\"•\\\"],[1,\\\"•\\\",\\\"X\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[1,1,\\\"X\\\",\\\"•\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[\\\"X\\\",1,1,\\\"•\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"BernsteinVazirani\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,1,1,\\\"X\\\"],[1,1,1,\\\"H\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,\\\"X\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"Grover\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\"],[1,\\\"X\\\"],[1,\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[1,\\\"H\\\"],[1,\\\"X\\\"],[1,\\\"H\\\"],[1,\\\"Measure\\\"]]}\",\n  \"DeutschJozsa\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"X\\\",1,\\\"X\\\",\\\"X\\\"],[1,1,1,\\\"H\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,\\\"X\\\"],[1,1,\\\"•\\\",\\\"X\\\"],[\\\"X\\\",1,\\\"X\\\"],[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"Simon\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[1,1,\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[1,\\\"•\\\",1,1,1,\\\"X\\\"],[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"TSP\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\"],[1,\\\"X\\\",\\\"X\\\"],[\\\"X\\\",\\\"•\\\"],[\\\"X\\\",1,\\\"•\\\"],[\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]]}\",\n  \"Teleportation\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[1,\\\"H\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[\\\"•\\\",1,1,1,\\\"Z\\\"]]}\",\n  \"PhaseEstimation\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,1,1,\\\"X\\\"],[\\\"•\\\",1,1,\\\"Z^¼\\\"],[1,\\\"•\\\",1,\\\"Z^¼\\\"],[1,\\\"•\\\",1,\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[1,1,\\\"•\\\",\\\"Z^¼\\\"],[\\\"Swap\\\",1,\\\"Swap\\\"],[\\\"H\\\"],[\\\"•\\\",\\\"~16c9\\\"],[1,\\\"H\\\"],[\\\"•\\\",1,\\\"~gf1o\\\"],[1,\\\"•\\\",\\\"~16c9\\\"],[1,1,\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\",\\\"Measure\\\"]],\\\"gates\\\":[{\\\"id\\\":\\\"~gf1o\\\",\\\"name\\\":\\\"U(-pi/4)\\\",\\\"matrix\\\":\\\"{{1,0},{0,√½-√½i}}\\\"},{\\\"id\\\":\\\"~16c9\\\",\\\"name\\\":\\\"U(-pi/2)\\\",\\\"matrix\\\":\\\"{{1,0},{0,-i}}\\\"}]}\",\n  \"QFT\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,\\\"X\\\",\\\"X\\\"],[\\\"H\\\"],[\\\"Z\\\",\\\"•\\\"],[\\\"Z^½\\\",1,\\\"•\\\"],[1,\\\"H\\\"],[1,\\\"Z\\\",\\\"•\\\"],[1,1,\\\"H\\\"]]}\",\n  \"QAOA\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"Rxft\\\",\\\"Rxft\\\"],[],[\\\"•\\\",\\\"X\\\"],[\\\"Rxft\\\",\\\"Rxft\\\"],[],[1,\\\"Rxft\\\"],[],[\\\"•\\\",\\\"X\\\"],[\\\"Rxft\\\"],[],[1,\\\"Measure\\\"],[\\\"Measure\\\"]]}\",\n  \"Kickback\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[1,\\\"X\\\"],[\\\"H\\\",\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"H\\\",\\\"H\\\"],[\\\"Measure\\\"],[1,\\\"Measure\\\"]]}\",\n  \"FullAdder\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[\\\"•\\\",\\\"•\\\",1,\\\"X\\\"],[\\\"•\\\",\\\"X\\\"],[1,\\\"•\\\",\\\"•\\\",\\\"X\\\"],[1,\\\"•\\\",\\\"X\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"Measure\\\"],[1,\\\"Measure\\\"],[1,1,\\\"Measure\\\"],[1,1,1,\\\"Measure\\\"]]}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});",
+                  "pm.test(\"Se genera un circuito combinado\", function () {",
+                  "  const code = pm.response.json().code.join(\"\\n\").toLowerCase();",
+                  "  pm.expect(code).to.include(\"circuit\");",
+                  "  pm.expect(code.length).to.be.above(100);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Subconjunto básico - AWS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Grover\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\"],[1,\\\"X\\\"],[1,\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[1,\\\"H\\\"],[1,\\\"X\\\"],[1,\\\"H\\\"],[1,\\\"Measure\\\"]]}\",\n  \"QFT\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[\\\"H\\\",\\\"H\\\",\\\"H\\\"],[1,\\\"X\\\",\\\"X\\\"],[\\\"H\\\"],[\\\"Z\\\",\\\"•\\\"],[\\\"Z^½\\\",1,\\\"•\\\"],[1,\\\"H\\\"],[1,\\\"Z\\\",\\\"•\\\"],[1,1,\\\"H\\\"]]}\",\n  \"Teleportation\": \"https://algassert.com/quirk#circuit={\\\"cols\\\":[[1,\\\"H\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[\\\"H\\\"],[\\\"•\\\",\\\"X\\\"],[\\\"H\\\"],[\\\"Measure\\\",\\\"Measure\\\"],[1,\\\"•\\\",1,1,\\\"X\\\"],[\\\"•\\\",1,1,1,\\\"Z\\\"]]}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/code/aws",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "code",
+                "aws"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Content-Type JSON o texto JSON válido\", function () {",
+                  "  pm.expect(() => pm.response.json()).not.to.throw();",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"La respuesta contiene code\", function () {",
+                  "  pm.expect(body).to.have.property(\"code\");",
+                  "  pm.expect(body.code).to.be.an(\"array\");",
+                  "  pm.expect(body.code.length).to.be.above(0);",
+                  "});",
+                  "pm.test(\"El código generado corresponde a AWS\", function () {",
+                  "  pm.expect(body.code.join(\"\\n\").toLowerCase()).to.include(\"braket\");",
+                  "});",
+                  "pm.test(\"No se devuelven valores null\", function () {",
+                  "  pm.expect(body.code).not.to.include(null);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
