@@ -1,11 +1,14 @@
 from flask import Flask, request
-import ast
 import json
-from urllib.parse import unquote
 import socket
+import ast
+from urllib.parse import unquote
 from dotenv import load_dotenv
 import os
 from flask_cors import CORS
+import numpy as np
+from utils.qutils import parse_quirk_url, quirk_col_to_qasm
+
 global ports
 
 #SETUP APIs
@@ -384,92 +387,14 @@ def get_aws_individual() -> tuple:
     dict_response['code'] = code_array
     return json.dumps(dict_response, indent = 4)
 
-def _parse_quirk_url(url):
-    return ast.literal_eval(unquote(url).split('circuit=')[1])
 
-
-def _quirk_col_to_qasm(col, offset):
-    lines = []
-
-    if 'Swap' in col:
-        swap_indices = [k for k, g in enumerate(col) if g == 'Swap']
-        if len(swap_indices) == 2:
-            lines.append(f'swap q[{swap_indices[0] + offset}], q[{swap_indices[1] + offset}];')
-        return lines
-
-    if '•' in col:
-        control_indices = [k for k, g in enumerate(col) if g == '•']
-        target_gate = None
-        target_index = None
-        for g in ('X', 'Z', 'Y', 'X^½', 'X^-½', 'X^¼', 'X^-¼', 'Y^½', 'Y^-½', 'Y^¼', 'Y^-¼', 'Z^½', 'Z^-½', 'Z^¼', 'Z^-¼'):
-            if g in col:
-                target_gate = g
-                target_index = col.index(g)
-                break
-
-        if target_gate is None:
-            return lines
-
-        n_controls = len(control_indices)
-        ctrl_str = ', '.join(f'q[{i + offset}]' for i in control_indices)
-        tgt_str = f'q[{target_index + offset}]'
-
-        if target_gate == 'X':
-            if n_controls == 1:
-                lines.append(f'cx {ctrl_str}, {tgt_str};')
-            elif n_controls == 2:
-                lines.append(f'ccx {ctrl_str}, {tgt_str};')
-            else:
-                lines.append(f'// multi-controlled X with {n_controls} controls (needs decomposition)')
-        elif target_gate == 'Z':
-            if n_controls == 1:
-                lines.append(f'cz {ctrl_str}, {tgt_str};')
-            else:
-                lines.append(f'// multi-controlled Z with {n_controls} controls (needs decomposition)')
-        elif target_gate == 'Y':
-            if n_controls == 1:
-                lines.append(f'cy {ctrl_str}, {tgt_str};')
-            else:
-                lines.append(f'// multi-controlled Y with {n_controls} controls (needs decomposition)')
-        else:
-            lines.append(f'// controlled {target_gate} not directly supported in QASM 2.0')
-
-        return lines
-
-    for i, gate in enumerate(col):
-        if gate == 1 or gate == '1':
-            continue
-        qi = i + offset
-        m = {
-            'Measure': f'measure q[{qi}] -> c[{qi}];',
-            'H': f'h q[{qi}];',
-            'X': f'x q[{qi}];',
-            'Y': f'y q[{qi}];',
-            'Z': f'z q[{qi}];',
-            'X^½': f'rx(pi/2) q[{qi}];',
-            'X^-½': f'rx(-pi/2) q[{qi}];',
-            'X^¼': f'rx(pi/4) q[{qi}];',
-            'X^-¼': f'rx(-pi/4) q[{qi}];',
-            'Y^½': f'ry(pi/2) q[{qi}];',
-            'Y^-½': f'ry(-pi/2) q[{qi}];',
-            'Y^¼': f'ry(pi/4) q[{qi}];',
-            'Y^-¼': f'ry(-pi/4) q[{qi}];',
-            'Z^½': f's q[{qi}];',
-            'Z^-½': f'sdg q[{qi}];',
-            'Z^¼': f't q[{qi}];',
-            'Z^-¼': f'tdg q[{qi}];',
-        }
-        if gate in m:
-            lines.append(m[gate])
-
-    return lines
 
 
 @app.route('/code/qasm', methods=['POST'])
 def get_qasm():
     circuitos = []
     for i in request.json.keys():
-        circuitos.append(_parse_quirk_url(request.json[i]))
+        circuitos.append(parse_quirk_url(request.json[i]))
 
     desplazamiento = []
     for y in circuitos:
@@ -486,7 +411,7 @@ def get_qasm():
     for idx, circuito in enumerate(circuitos):
         offset = sum(desplazamiento[:idx])
         for col in circuito['cols']:
-            lines.extend(_quirk_col_to_qasm(col, offset))
+            lines.extend(quirk_col_to_qasm(col, offset))
 
     dict_response = {'qasm': '\n'.join(lines)}
     return json.dumps(dict_response, indent=4)
@@ -501,7 +426,7 @@ def get_qasm_individual():
     if not url:
         return json.dumps({'error': 'Missing url parameter'}, indent=4)
 
-    circuito = _parse_quirk_url(url)
+    circuito = parse_quirk_url(url)
     n_qubits = max(len(c) for c in circuito['cols'])
 
     lines = []
@@ -512,7 +437,7 @@ def get_qasm_individual():
     lines.append('')
 
     for col in circuito['cols']:
-        lines.extend(_quirk_col_to_qasm(col, d))
+        lines.extend(quirk_col_to_qasm(col, d))
 
     dict_response = {'qasm': '\n'.join(lines)}
     return json.dumps(dict_response, indent=4)

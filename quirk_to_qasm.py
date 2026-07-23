@@ -6,6 +6,7 @@ import socket
 from dotenv import load_dotenv
 import os
 from flask_cors import CORS
+from utils.qutils import parse_quirk_url, quirk_col_to_qasm
 global ports
 
 #SETUP APIs
