@@ -1,6 +1,9 @@
 import json
+import os
 
-with open('Quirk_Translator_IBM_AWS.postman_collection.json', encoding='utf-8') as f:
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+with open(os.path.join(BASE, 'postman', 'Quirk_Translator_IBM_AWS.postman_collection_original.json'), encoding='utf-8') as f:
     data = json.load(f)
 
 results = []
@@ -20,7 +23,7 @@ for group in data['item']:
                 results.append((name, endpoint, url))
                 n += 1
 
-with open('quirks_urls.txt', 'w', encoding='utf-8') as f:
+with open(os.path.join(BASE, 'quirks_urls.txt'), 'w', encoding='utf-8') as f:
     for i, (name, endpoint, url) in enumerate(results, 1):
         f.write(f"{i:2d}. {name}\n")
         f.write(f"    POST {endpoint}\n")

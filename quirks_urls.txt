@@ -1,0 +1,216 @@
+ 1. IBM - Pruebas individuales / Shor - IBM individual
+    POST {{baseUrl}}/code/ibm/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H","H"],["X"],["X","X","X","X"],[1,"•","X"],[1,"X","•"],[1,"•","X"],[1,1,"•","X"],[1,1,"X","•"],[1,1,"•","X"],["•",1,1,"X"],["X",1,1,"•"],["•",1,1,"X"],["Measure","Measure","Measure","Measure"]]}
+
+ 2. IBM - Pruebas individuales / BernsteinVazirani - IBM individual
+    POST {{baseUrl}}/code/ibm/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,1,1,"X"],[1,1,1,"H"],["•",1,1,"X"],[1,"•",1,"X"],[1,1,"•","X"],["H","H","H"],["Measure","Measure","Measure"]]}
+
+ 3. IBM - Pruebas individuales / Grover - IBM individual
+    POST {{baseUrl}}/code/ibm/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H"],[1,"X"],[1,"H"],["•","X"],[1,"H"],[1,"X"],[1,"H"],[1,"Measure"]]}
+
+ 4. IBM - Pruebas individuales / DeutschJozsa - IBM individual
+    POST {{baseUrl}}/code/ibm/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],["X",1,"X","X"],[1,1,1,"H"],["•",1,1,"X"],[1,"•",1,"X"],[1,1,"•","X"],["X",1,"X"],["H","H","H"],["Measure","Measure","Measure"]]}
+
+ 5. IBM - Pruebas individuales / Simon - IBM individual
+    POST {{baseUrl}}/code/ibm/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],["•",1,1,"X"],[1,"•",1,1,"X"],[1,1,"•",1,1,"X"],[1,"•",1,1,"X"],[1,"•",1,1,1,"X"],["H","H","H"],["Measure","Measure","Measure"]]}
+
+ 6. IBM - Pruebas individuales / TSP - IBM individual
+    POST {{baseUrl}}/code/ibm/individual
+    https://algassert.com/quirk#circuit={"cols":[["H"],[1,"X","X"],["X","•"],["X",1,"•"],["H"],["Measure","Measure","Measure"]]}
+
+ 7. IBM - Pruebas individuales / Teleportation - IBM individual
+    POST {{baseUrl}}/code/ibm/individual
+    https://algassert.com/quirk#circuit={"cols":[[1,"H"],[1,"•",1,1,"X"],["H"],["•","X"],["H"],["Measure","Measure"],[1,"•",1,1,"X"],["•",1,1,1,"Z"]]}
+
+ 8. IBM - Pruebas individuales / PhaseEstimation - IBM individual
+    POST {{baseUrl}}/code/ibm/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,1,1,"X"],["•",1,1,"Z^¼"],[1,"•",1,"Z^¼"],[1,"•",1,"Z^¼"],[1,1,"•","Z^¼"],[1,1,"•","Z^¼"],[1,1,"•","Z^¼"],[1,1,"•","Z^¼"],["Swap",1,"Swap"],["H"],["•","~16c9"],[1,"H"],["•",1,"~gf1o"],[1,"•","~16c9"],[1,1,"H"],["Measure","Measure","Measure"]],"gates":[{"id":"~gf1o","name":"U(-pi/4)","matrix":"{{1,0},{0,√½-√½i}}"},{"id":"~16c9","name":"U(-pi/2)","matrix":"{{1,0},{0,-i}}"}]}
+
+ 9. IBM - Pruebas individuales / QFT - IBM individual
+    POST {{baseUrl}}/code/ibm/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,"X","X"],["H"],["Z","•"],["Z^½",1,"•"],[1,"H"],[1,"Z","•"],[1,1,"H"]]}
+
+10. IBM - Pruebas individuales / QAOA - IBM individual
+    POST {{baseUrl}}/code/ibm/individual
+    https://algassert.com/quirk#circuit={"cols":[["Rxft","Rxft"],[],["•","X"],["Rxft","Rxft"],[],[1,"Rxft"],[],["•","X"],["Rxft"],[],[1,"Measure"],["Measure"]]}
+
+11. IBM - Pruebas individuales / Kickback - IBM individual
+    POST {{baseUrl}}/code/ibm/individual
+    https://algassert.com/quirk#circuit={"cols":[[1,"X"],["H","H"],["•","X"],["H","H"],["Measure"],[1,"Measure"]]}
+
+12. IBM - Pruebas individuales / FullAdder - IBM individual
+    POST {{baseUrl}}/code/ibm/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],["•","•",1,"X"],["•","X"],[1,"•","•","X"],[1,"•","X"],["•","X"],["Measure"],[1,"Measure"],[1,1,"Measure"],[1,1,1,"Measure"]]}
+
+13. AWS - Pruebas individuales / Shor - AWS individual
+    POST {{baseUrl}}/code/aws/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H","H"],["X"],["X","X","X","X"],[1,"•","X"],[1,"X","•"],[1,"•","X"],[1,1,"•","X"],[1,1,"X","•"],[1,1,"•","X"],["•",1,1,"X"],["X",1,1,"•"],["•",1,1,"X"],["Measure","Measure","Measure","Measure"]]}
+
+14. AWS - Pruebas individuales / BernsteinVazirani - AWS individual
+    POST {{baseUrl}}/code/aws/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,1,1,"X"],[1,1,1,"H"],["•",1,1,"X"],[1,"•",1,"X"],[1,1,"•","X"],["H","H","H"],["Measure","Measure","Measure"]]}
+
+15. AWS - Pruebas individuales / Grover - AWS individual
+    POST {{baseUrl}}/code/aws/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H"],[1,"X"],[1,"H"],["•","X"],[1,"H"],[1,"X"],[1,"H"],[1,"Measure"]]}
+
+16. AWS - Pruebas individuales / DeutschJozsa - AWS individual
+    POST {{baseUrl}}/code/aws/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],["X",1,"X","X"],[1,1,1,"H"],["•",1,1,"X"],[1,"•",1,"X"],[1,1,"•","X"],["X",1,"X"],["H","H","H"],["Measure","Measure","Measure"]]}
+
+17. AWS - Pruebas individuales / Simon - AWS individual
+    POST {{baseUrl}}/code/aws/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],["•",1,1,"X"],[1,"•",1,1,"X"],[1,1,"•",1,1,"X"],[1,"•",1,1,"X"],[1,"•",1,1,1,"X"],["H","H","H"],["Measure","Measure","Measure"]]}
+
+18. AWS - Pruebas individuales / TSP - AWS individual
+    POST {{baseUrl}}/code/aws/individual
+    https://algassert.com/quirk#circuit={"cols":[["H"],[1,"X","X"],["X","•"],["X",1,"•"],["H"],["Measure","Measure","Measure"]]}
+
+19. AWS - Pruebas individuales / Teleportation - AWS individual
+    POST {{baseUrl}}/code/aws/individual
+    https://algassert.com/quirk#circuit={"cols":[[1,"H"],[1,"•",1,1,"X"],["H"],["•","X"],["H"],["Measure","Measure"],[1,"•",1,1,"X"],["•",1,1,1,"Z"]]}
+
+20. AWS - Pruebas individuales / PhaseEstimation - AWS individual
+    POST {{baseUrl}}/code/aws/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,1,1,"X"],["•",1,1,"Z^¼"],[1,"•",1,"Z^¼"],[1,"•",1,"Z^¼"],[1,1,"•","Z^¼"],[1,1,"•","Z^¼"],[1,1,"•","Z^¼"],[1,1,"•","Z^¼"],["Swap",1,"Swap"],["H"],["•","~16c9"],[1,"H"],["•",1,"~gf1o"],[1,"•","~16c9"],[1,1,"H"],["Measure","Measure","Measure"]],"gates":[{"id":"~gf1o","name":"U(-pi/4)","matrix":"{{1,0},{0,√½-√½i}}"},{"id":"~16c9","name":"U(-pi/2)","matrix":"{{1,0},{0,-i}}"}]}
+
+21. AWS - Pruebas individuales / QFT - AWS individual
+    POST {{baseUrl}}/code/aws/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,"X","X"],["H"],["Z","•"],["Z^½",1,"•"],[1,"H"],[1,"Z","•"],[1,1,"H"]]}
+
+22. AWS - Pruebas individuales / QAOA - AWS individual
+    POST {{baseUrl}}/code/aws/individual
+    https://algassert.com/quirk#circuit={"cols":[["Rxft","Rxft"],[],["•","X"],["Rxft","Rxft"],[],[1,"Rxft"],[],["•","X"],["Rxft"],[],[1,"Measure"],["Measure"]]}
+
+23. AWS - Pruebas individuales / Kickback - AWS individual
+    POST {{baseUrl}}/code/aws/individual
+    https://algassert.com/quirk#circuit={"cols":[[1,"X"],["H","H"],["•","X"],["H","H"],["Measure"],[1,"Measure"]]}
+
+24. AWS - Pruebas individuales / FullAdder - AWS individual
+    POST {{baseUrl}}/code/aws/individual
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],["•","•",1,"X"],["•","X"],[1,"•","•","X"],[1,"•","X"],["•","X"],["Measure"],[1,"Measure"],[1,1,"Measure"],[1,1,1,"Measure"]]}
+
+25. IBM - Pruebas por lotes / Todos los circuitos - IBM [Shor]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H","H"],["X"],["X","X","X","X"],[1,"•","X"],[1,"X","•"],[1,"•","X"],[1,1,"•","X"],[1,1,"X","•"],[1,1,"•","X"],["•",1,1,"X"],["X",1,1,"•"],["•",1,1,"X"],["Measure","Measure","Measure","Measure"]]}
+
+26. IBM - Pruebas por lotes / Todos los circuitos - IBM [BernsteinVazirani]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,1,1,"X"],[1,1,1,"H"],["•",1,1,"X"],[1,"•",1,"X"],[1,1,"•","X"],["H","H","H"],["Measure","Measure","Measure"]]}
+
+27. IBM - Pruebas por lotes / Todos los circuitos - IBM [Grover]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[["H","H"],[1,"X"],[1,"H"],["•","X"],[1,"H"],[1,"X"],[1,"H"],[1,"Measure"]]}
+
+28. IBM - Pruebas por lotes / Todos los circuitos - IBM [DeutschJozsa]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],["X",1,"X","X"],[1,1,1,"H"],["•",1,1,"X"],[1,"•",1,"X"],[1,1,"•","X"],["X",1,"X"],["H","H","H"],["Measure","Measure","Measure"]]}
+
+29. IBM - Pruebas por lotes / Todos los circuitos - IBM [Simon]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],["•",1,1,"X"],[1,"•",1,1,"X"],[1,1,"•",1,1,"X"],[1,"•",1,1,"X"],[1,"•",1,1,1,"X"],["H","H","H"],["Measure","Measure","Measure"]]}
+
+30. IBM - Pruebas por lotes / Todos los circuitos - IBM [TSP]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[["H"],[1,"X","X"],["X","•"],["X",1,"•"],["H"],["Measure","Measure","Measure"]]}
+
+31. IBM - Pruebas por lotes / Todos los circuitos - IBM [Teleportation]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[[1,"H"],[1,"•",1,1,"X"],["H"],["•","X"],["H"],["Measure","Measure"],[1,"•",1,1,"X"],["•",1,1,1,"Z"]]}
+
+32. IBM - Pruebas por lotes / Todos los circuitos - IBM [PhaseEstimation]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,1,1,"X"],["•",1,1,"Z^¼"],[1,"•",1,"Z^¼"],[1,"•",1,"Z^¼"],[1,1,"•","Z^¼"],[1,1,"•","Z^¼"],[1,1,"•","Z^¼"],[1,1,"•","Z^¼"],["Swap",1,"Swap"],["H"],["•","~16c9"],[1,"H"],["•",1,"~gf1o"],[1,"•","~16c9"],[1,1,"H"],["Measure","Measure","Measure"]],"gates":[{"id":"~gf1o","name":"U(-pi/4)","matrix":"{{1,0},{0,√½-√½i}}"},{"id":"~16c9","name":"U(-pi/2)","matrix":"{{1,0},{0,-i}}"}]}
+
+33. IBM - Pruebas por lotes / Todos los circuitos - IBM [QFT]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,"X","X"],["H"],["Z","•"],["Z^½",1,"•"],[1,"H"],[1,"Z","•"],[1,1,"H"]]}
+
+34. IBM - Pruebas por lotes / Todos los circuitos - IBM [QAOA]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[["Rxft","Rxft"],[],["•","X"],["Rxft","Rxft"],[],[1,"Rxft"],[],["•","X"],["Rxft"],[],[1,"Measure"],["Measure"]]}
+
+35. IBM - Pruebas por lotes / Todos los circuitos - IBM [Kickback]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[[1,"X"],["H","H"],["•","X"],["H","H"],["Measure"],[1,"Measure"]]}
+
+36. IBM - Pruebas por lotes / Todos los circuitos - IBM [FullAdder]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],["•","•",1,"X"],["•","X"],[1,"•","•","X"],[1,"•","X"],["•","X"],["Measure"],[1,"Measure"],[1,1,"Measure"],[1,1,1,"Measure"]]}
+
+37. IBM - Pruebas por lotes / Subconjunto básico - IBM [Grover]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[["H","H"],[1,"X"],[1,"H"],["•","X"],[1,"H"],[1,"X"],[1,"H"],[1,"Measure"]]}
+
+38. IBM - Pruebas por lotes / Subconjunto básico - IBM [QFT]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,"X","X"],["H"],["Z","•"],["Z^½",1,"•"],[1,"H"],[1,"Z","•"],[1,1,"H"]]}
+
+39. IBM - Pruebas por lotes / Subconjunto básico - IBM [Teleportation]
+    POST {{baseUrl}}/code/ibm
+    https://algassert.com/quirk#circuit={"cols":[[1,"H"],[1,"•",1,1,"X"],["H"],["•","X"],["H"],["Measure","Measure"],[1,"•",1,1,"X"],["•",1,1,1,"Z"]]}
+
+40. AWS - Pruebas por lotes / Todos los circuitos - AWS [Shor]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H","H"],["X"],["X","X","X","X"],[1,"•","X"],[1,"X","•"],[1,"•","X"],[1,1,"•","X"],[1,1,"X","•"],[1,1,"•","X"],["•",1,1,"X"],["X",1,1,"•"],["•",1,1,"X"],["Measure","Measure","Measure","Measure"]]}
+
+41. AWS - Pruebas por lotes / Todos los circuitos - AWS [BernsteinVazirani]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,1,1,"X"],[1,1,1,"H"],["•",1,1,"X"],[1,"•",1,"X"],[1,1,"•","X"],["H","H","H"],["Measure","Measure","Measure"]]}
+
+42. AWS - Pruebas por lotes / Todos los circuitos - AWS [Grover]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[["H","H"],[1,"X"],[1,"H"],["•","X"],[1,"H"],[1,"X"],[1,"H"],[1,"Measure"]]}
+
+43. AWS - Pruebas por lotes / Todos los circuitos - AWS [DeutschJozsa]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],["X",1,"X","X"],[1,1,1,"H"],["•",1,1,"X"],[1,"•",1,"X"],[1,1,"•","X"],["X",1,"X"],["H","H","H"],["Measure","Measure","Measure"]]}
+
+44. AWS - Pruebas por lotes / Todos los circuitos - AWS [Simon]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],["•",1,1,"X"],[1,"•",1,1,"X"],[1,1,"•",1,1,"X"],[1,"•",1,1,"X"],[1,"•",1,1,1,"X"],["H","H","H"],["Measure","Measure","Measure"]]}
+
+45. AWS - Pruebas por lotes / Todos los circuitos - AWS [TSP]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[["H"],[1,"X","X"],["X","•"],["X",1,"•"],["H"],["Measure","Measure","Measure"]]}
+
+46. AWS - Pruebas por lotes / Todos los circuitos - AWS [Teleportation]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[[1,"H"],[1,"•",1,1,"X"],["H"],["•","X"],["H"],["Measure","Measure"],[1,"•",1,1,"X"],["•",1,1,1,"Z"]]}
+
+47. AWS - Pruebas por lotes / Todos los circuitos - AWS [PhaseEstimation]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,1,1,"X"],["•",1,1,"Z^¼"],[1,"•",1,"Z^¼"],[1,"•",1,"Z^¼"],[1,1,"•","Z^¼"],[1,1,"•","Z^¼"],[1,1,"•","Z^¼"],[1,1,"•","Z^¼"],["Swap",1,"Swap"],["H"],["•","~16c9"],[1,"H"],["•",1,"~gf1o"],[1,"•","~16c9"],[1,1,"H"],["Measure","Measure","Measure"]],"gates":[{"id":"~gf1o","name":"U(-pi/4)","matrix":"{{1,0},{0,√½-√½i}}"},{"id":"~16c9","name":"U(-pi/2)","matrix":"{{1,0},{0,-i}}"}]}
+
+48. AWS - Pruebas por lotes / Todos los circuitos - AWS [QFT]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,"X","X"],["H"],["Z","•"],["Z^½",1,"•"],[1,"H"],[1,"Z","•"],[1,1,"H"]]}
+
+49. AWS - Pruebas por lotes / Todos los circuitos - AWS [QAOA]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[["Rxft","Rxft"],[],["•","X"],["Rxft","Rxft"],[],[1,"Rxft"],[],["•","X"],["Rxft"],[],[1,"Measure"],["Measure"]]}
+
+50. AWS - Pruebas por lotes / Todos los circuitos - AWS [Kickback]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[[1,"X"],["H","H"],["•","X"],["H","H"],["Measure"],[1,"Measure"]]}
+
+51. AWS - Pruebas por lotes / Todos los circuitos - AWS [FullAdder]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],["•","•",1,"X"],["•","X"],[1,"•","•","X"],[1,"•","X"],["•","X"],["Measure"],[1,"Measure"],[1,1,"Measure"],[1,1,1,"Measure"]]}
+
+52. AWS - Pruebas por lotes / Subconjunto básico - AWS [Grover]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[["H","H"],[1,"X"],[1,"H"],["•","X"],[1,"H"],[1,"X"],[1,"H"],[1,"Measure"]]}
+
+53. AWS - Pruebas por lotes / Subconjunto básico - AWS [QFT]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[["H","H","H"],[1,"X","X"],["H"],["Z","•"],["Z^½",1,"•"],[1,"H"],[1,"Z","•"],[1,1,"H"]]}
+
+54. AWS - Pruebas por lotes / Subconjunto básico - AWS [Teleportation]
+    POST {{baseUrl}}/code/aws
+    https://algassert.com/quirk#circuit={"cols":[[1,"H"],[1,"•",1,1,"X"],["H"],["•","X"],["H"],["Measure","Measure"],[1,"•",1,1,"X"],["•",1,1,1,"Z"]]}
+
