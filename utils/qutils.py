@@ -81,3 +81,24 @@ def quirk_col_to_qasm(col, offset):
             lines.append(m[gate])
 
     return lines
+
+
+def quirk_to_qasm(url, offset=0):
+    circuito = parse_quirk_url(url)
+    n = max(len(c) for c in circuito['cols'])
+    lines = ['OPENQASM 2.0;', 'include "qelib1.inc";', f'qreg q[{n}];', f'creg c[{n}];', '']
+    for col in circuito['cols']:
+        lines.extend(quirk_col_to_qasm(col, offset))
+    return '\n'.join(lines)
+
+
+def quirk_circuit_info(url):
+    circuito = parse_quirk_url(url)
+    n_qubits = max(len(c) for c in circuito['cols'])
+    n_cols = len(circuito['cols'])
+    gates = set()
+    for col in circuito['cols']:
+        for g in col:
+            if g not in (1, '1', None):
+                gates.add(str(g))
+    return {'n_qubits': n_qubits, 'n_cols': n_cols, 'gates': sorted(gates)}

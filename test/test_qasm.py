@@ -1,19 +1,12 @@
 import sys
-sys.path.insert(0, r'..')
-from utils.qutils import parse_quirk_url, quirk_col_to_qasm
-
-def build_qasm(circuito, offset=0):
-    n = max(len(c) for c in circuito['cols'])
-    lines = ['OPENQASM 2.0;', 'include "qelib1.inc";', f'qreg q[{n}];', f'creg c[{n}];', '']
-    for col in circuito['cols']:
-        lines.extend(quirk_col_to_qasm(col, offset))
-    return '\n'.join(lines)
+sys.path.insert(0, '..')
+from utils.qutils import quirk_to_qasm
 
 
 def test(desc, url, offset=0):
-    circ = parse_quirk_url(url)
+    qasm = quirk_to_qasm(url, offset)
     print(f'\n=== {desc} ===')
-    print(build_qasm(circ, offset))
+    print(qasm)
 
 
 test("Bell state",
