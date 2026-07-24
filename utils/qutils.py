@@ -1,9 +1,18 @@
 import ast
-from urllib.parse import unquote
+from urllib.parse import unquote, quote, urlparse, urlunparse
 
 
 def parse_quirk_url(url):
     return ast.literal_eval(unquote(url).split('circuit=')[1])
+
+
+def encode_quirk_url(url):
+    try:
+        circuit_json = unquote(url).split('circuit=')[1]
+        encoded = quote(circuit_json, safe='')
+        return url.split('circuit=')[0] + 'circuit=' + encoded
+    except Exception:
+        return url
 
 
 def quirk_col_to_qasm(col, offset):
@@ -29,28 +38,37 @@ def quirk_col_to_qasm(col, offset):
             return lines
 
         n_controls = len(control_indices)
+        if n_controls > 2:
+            return lines
+
         ctrl_str = ', '.join(f'q[{i + offset}]' for i in control_indices)
         tgt_str = f'q[{target_index + offset}]'
+
+        ctrl_rz = {
+            'Z^½': 'pi/2', 'Z^-½': '-pi/2', 'Z^¼': 'pi/4', 'Z^-¼': '-pi/4',
+        }
+        ctrl_rx = {
+            'X^½': 'pi/2', 'X^-½': '-pi/2', 'X^¼': 'pi/4', 'X^-¼': '-pi/4',
+        }
+        ctrl_ry = {
+            'Y^½': 'pi/2', 'Y^-½': '-pi/2', 'Y^¼': 'pi/4', 'Y^-¼': '-pi/4',
+        }
 
         if target_gate == 'X':
             if n_controls == 1:
                 lines.append(f'cx {ctrl_str}, {tgt_str};')
-            elif n_controls == 2:
+            else:
                 lines.append(f'ccx {ctrl_str}, {tgt_str};')
-            else:
-                lines.append(f'// multi-controlled X with {n_controls} controls (needs decomposition)')
         elif target_gate == 'Z':
-            if n_controls == 1:
-                lines.append(f'cz {ctrl_str}, {tgt_str};')
-            else:
-                lines.append(f'// multi-controlled Z with {n_controls} controls (needs decomposition)')
+            lines.append(f'cz {ctrl_str}, {tgt_str};')
         elif target_gate == 'Y':
-            if n_controls == 1:
-                lines.append(f'cy {ctrl_str}, {tgt_str};')
-            else:
-                lines.append(f'// multi-controlled Y with {n_controls} controls (needs decomposition)')
-        else:
-            lines.append(f'// controlled {target_gate} not directly supported in QASM 2.0')
+            lines.append(f'cy {ctrl_str}, {tgt_str};')
+        elif target_gate in ctrl_rz:
+            lines.append(f'cu1({ctrl_rz[target_gate]}) {ctrl_str}, {tgt_str};')
+        elif target_gate in ctrl_rx:
+            lines.append(f'crx({ctrl_rx[target_gate]}) {ctrl_str}, {tgt_str};')
+        elif target_gate in ctrl_ry:
+            lines.append(f'cry({ctrl_ry[target_gate]}) {ctrl_str}, {tgt_str};')
 
         return lines
 
@@ -85,7 +103,7 @@ def quirk_col_to_qasm(col, offset):
 
 def quirk_to_qasm(url, offset=0):
     circuito = parse_quirk_url(url)
-    n = max(len(c) for c in circuito['cols'])
+    n = max(len(c) for c in circuito['cols']) + offset
     lines = ['OPENQASM 2.0;', 'include "qelib1.inc";', f'qreg q[{n}];', f'creg c[{n}];', '']
     for col in circuito['cols']:
         lines.extend(quirk_col_to_qasm(col, offset))
