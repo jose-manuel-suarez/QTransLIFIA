@@ -15,6 +15,38 @@ def encode_quirk_url(url):
         return url
 
 
+def _build_gate_map(circuito):
+    """Construye mapa id/name -> definicion de custom gate con 'circuit'.
+    Solo gates con campo 'circuit' son expandibles; los de 'matrix' se ignoran."""
+    gate_map = {}
+    for g in circuito.get('gates', []):
+        if 'circuit' not in g:
+            continue
+        if 'id' in g and isinstance(g['id'], str):
+            gate_map[g['id']] = g
+            base = g['id'].split(':')[0]
+            gate_map[base] = g
+        if 'name' in g and isinstance(g['name'], str):
+            if g['name'] not in gate_map:
+                gate_map[g['name']] = g
+    return gate_map
+
+
+def _gate_height(gate):
+    """Altura (n qubits) del custom gate = max len de sus cols."""
+    cols = gate.get('circuit', {}).get('cols', [])
+    if not cols:
+        return 0
+    return max(len(c) for c in cols)
+
+
+def _is_gate_ref(entry, gate_map):
+    if not isinstance(entry, str):
+        return False
+    base = entry.split(':')[0]
+    return base in gate_map
+
+
 def quirk_col_to_qasm(col, offset):
     lines = []
 
@@ -38,8 +70,6 @@ def quirk_col_to_qasm(col, offset):
             return lines
 
         n_controls = len(control_indices)
-        if n_controls > 2:
-            return lines
 
         ctrl_str = ', '.join(f'q[{i + offset}]' for i in control_indices)
         tgt_str = f'q[{target_index + offset}]'
@@ -57,12 +87,20 @@ def quirk_col_to_qasm(col, offset):
         if target_gate == 'X':
             if n_controls == 1:
                 lines.append(f'cx {ctrl_str}, {tgt_str};')
-            else:
+            elif n_controls == 2:
                 lines.append(f'ccx {ctrl_str}, {tgt_str};')
+            else:
+                lines.append(f'mcx {ctrl_str}, {tgt_str};')
         elif target_gate == 'Z':
-            lines.append(f'cz {ctrl_str}, {tgt_str};')
+            if n_controls <= 2:
+                lines.append(f'cz {ctrl_str}, {tgt_str};')
+            else:
+                lines.append(f'mcz {ctrl_str}, {tgt_str};')
         elif target_gate == 'Y':
-            lines.append(f'cy {ctrl_str}, {tgt_str};')
+            if n_controls <= 2:
+                lines.append(f'cy {ctrl_str}, {tgt_str};')
+            else:
+                lines.append(f'mcy {ctrl_str}, {tgt_str};')
         elif target_gate in ctrl_rz:
             lines.append(f'cu1({ctrl_rz[target_gate]}) {ctrl_str}, {tgt_str};')
         elif target_gate in ctrl_rx:
@@ -101,22 +139,198 @@ def quirk_col_to_qasm(col, offset):
     return lines
 
 
+def _col_to_qasm_with_gates(col, offset, gate_map, depth=0):
+    """Version recursiva que expande custom gates con 'circuit'."""
+    if depth > 10:
+        return []
+    has_gate = any(_is_gate_ref(v, gate_map) for v in col if isinstance(v, str))
+    if not has_gate:
+        return quirk_col_to_qasm(col, offset)
+
+    lines = []
+    occupied = set()
+    for idx, entry in enumerate(col):
+        if not isinstance(entry, str):
+            continue
+        base = entry.split(':')[0]
+        if base not in gate_map:
+            continue
+        gate = gate_map[base]
+        gate_cols = gate.get('circuit', {}).get('cols', [])
+        if not gate_cols:
+            continue
+        if ':' in entry:
+            try:
+                rel = int(entry.split(':')[1])
+            except ValueError:
+                continue
+            if 0 <= rel < len(gate_cols):
+                gcol = gate_cols[rel]
+                padded = [1] * idx + list(gcol)
+                lines.extend(_col_to_qasm_with_gates(padded, offset, gate_map, depth + 1))
+                for k in range(len(gcol)):
+                    occupied.add(idx + k)
+            continue
+        for gcol in gate_cols:
+            padded = [1] * idx + list(gcol)
+            lines.extend(_col_to_qasm_with_gates(padded, offset, gate_map, depth + 1))
+            for k in range(len(gcol)):
+                occupied.add(idx + k)
+
+    max_len = max(len(col), max(occupied) + 1 if occupied else 0)
+    leftover_col = [1] * max_len
+    has_leftover = False
+    for i, v in enumerate(col):
+        if isinstance(v, str) and v.split(':')[0] in gate_map:
+            continue
+        if i in occupied:
+            continue
+        if v == 1 or v == '1':
+            continue
+        if i < len(leftover_col):
+            leftover_col[i] = v
+            has_leftover = True
+    if has_leftover:
+        if any(isinstance(x, str) and _is_gate_ref(x, gate_map) for x in leftover_col):
+            lines.extend(_col_to_qasm_with_gates(leftover_col, offset, gate_map, depth + 1))
+        else:
+            lines.extend(quirk_col_to_qasm(leftover_col, offset))
+    return lines
+
+def append_custom_gates(custom_gates, gate_map):
+    lines = []
+    for custom_gate in custom_gates:
+     #print(f"Custom gate: {custom_gate['name']} (ID: {custom_gate['id']})")
+        lines.append(f'gate {custom_gate["name"]} ')
+        lines.append('{\n')
+        circuit = custom_gate.get("circuit")
+        if circuit is not None:
+            #print(f" Circuit: {circuit}")
+            for col in circuit.get("cols", []):
+                lines.extend(_col_to_qasm_with_gates(col, 0, gate_map))
+        lines.append('}\n')
+    return ''.join(lines)
+
 def quirk_to_qasm(url, offset=0):
+    info = quirk_circuit_info(url)
+    lines = ['OPENQASM 2.0;\n', 'include "qelib1.inc";\n']
+    custom_gates = info.get('custom_gates', [])
+
     circuito = parse_quirk_url(url)
-    n = max(len(c) for c in circuito['cols']) + offset
-    lines = ['OPENQASM 2.0;', 'include "qelib1.inc";', f'qreg q[{n}];', f'creg c[{n}];', '']
-    for col in circuito['cols']:
-        lines.extend(quirk_col_to_qasm(col, offset))
+    gate_map = _build_gate_map(circuito)
+    cols = circuito.get('cols', [])
+    if len(custom_gates) > 0:
+        lines.append(append_custom_gates(custom_gates, gate_map))
+    if not cols:
+        n = offset
+    else:
+        n = max(len(c) for c in cols) + offset
+        for col in cols:
+            for idx, entry in enumerate(col):
+                if not isinstance(entry, str):
+                    continue
+                base = entry.split(':')[0]
+                if base not in gate_map:
+                    continue
+                gate = gate_map[base]
+                if ':' in entry:
+                    try:
+                        rel = int(entry.split(':')[1])
+                        gcol = gate.get('circuit', {}).get('cols', [])[rel]
+                        needed = idx + len(gcol) + offset
+                        if needed > n:
+                            n = needed
+                    except Exception:
+                        pass
+                else:
+                    h = _gate_height(gate)
+                    needed = idx + h + offset
+                    if needed > n:
+                        n = needed
+        
+    lines.extend([f'qreg q[{n}];', f'creg c[{n}];', '\n'])
+    for col in cols:
+        lines.extend(_col_to_qasm_with_gates(col, offset, gate_map))
     return '\n'.join(lines)
 
 
 def quirk_circuit_info(url):
     circuito = parse_quirk_url(url)
-    n_qubits = max(len(c) for c in circuito['cols'])
-    n_cols = len(circuito['cols'])
+    cols = circuito.get('cols', [])
+    gates_defs = circuito.get('gates', [])
+    # n_qubits efectivo: max de cols principales y altura de custom gates usados
+    if cols:
+        n_qubits = max(len(c) for c in cols) if cols else 0
+        gate_map_eff = _build_gate_map(circuito)
+        for col in cols:
+            for idx, entry in enumerate(col):
+                if not isinstance(entry, str):
+                    continue
+                base = entry.split(':')[0]
+                if base not in gate_map_eff:
+                    continue
+                gate = gate_map_eff[base]
+                if ':' in entry:
+                    try:
+                        rel = int(entry.split(':')[1])
+                        gcol = gate.get('circuit', {}).get('cols', [])[rel]
+                        needed = idx + len(gcol)
+                        if needed > n_qubits:
+                            n_qubits = needed
+                    except Exception:
+                        pass
+                else:
+                    h = _gate_height(gate)
+                    needed = idx + h
+                    if needed > n_qubits:
+                        n_qubits = needed
+        n_cols = len(cols)
+    else:
+        n_qubits = 0
+        n_cols = 0
+
     gates = set()
-    for col in circuito['cols']:
+    for col in cols:
         for g in col:
             if g not in (1, '1', None):
                 gates.add(str(g))
-    return {'n_qubits': n_qubits, 'n_cols': n_cols, 'gates': sorted(gates)}
+
+    # Gates internos de los custom gates
+    custom_gates_gates = set()
+    for g in gates_defs:
+        if 'circuit' in g:
+            for c in g['circuit'].get('cols', []):
+                for e in c:
+                    if e not in (1, '1', None):
+                        custom_gates_gates.add(str(e))
+
+    custom_gate_ids = [g['id'] for g in gates_defs if isinstance(g.get('id'), str)]
+    custom_gate_names = [g['name'] for g in gates_defs if isinstance(g.get('name'), str)]
+
+    custom_gates_info = []
+    for g in gates_defs:
+        info = {
+            'id': g.get('id'),
+            'name': g.get('name'),
+            'matrix': g.get('matrix'),
+            'circuit_cols': g.get('circuit', {}).get('cols') if 'circuit' in g else None,
+        }
+        if 'circuit' in g:
+            info['n_qubits'] = _gate_height(g)
+            info['n_cols'] = len(g.get('circuit', {}).get('cols', []))
+        else:
+            info['n_qubits'] = None
+            info['n_cols'] = None
+        custom_gates_info.append(info)
+
+    return {
+        'n_qubits': n_qubits,
+        'n_cols': n_cols,
+        'gates': sorted(gates),
+        'custom_gates': gates_defs,
+        'custom_gate_ids': custom_gate_ids,
+        'custom_gate_names': custom_gate_names,
+        'n_custom_gates': len(gates_defs),
+        'custom_gates_gates': sorted(custom_gates_gates),
+        'custom_gates_info': custom_gates_info,
+    }
