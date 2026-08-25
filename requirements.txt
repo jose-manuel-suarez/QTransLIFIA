@@ -1,6 +1,5 @@
 Flask==2.0.1
 Flask-Cors==3.0.10
-dotenv==1.0.0
 python-dotenv==1.0.0
 numpy>=1.24.0
 Werkzeug==2.3.4
