@@ -1,0 +1,62 @@
+{
+	"1. Shor": {
+		"desc": "Algoritmo de factorización de Shor (4 qubits)",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"X\"],[\"X\",\"X\",\"X\",\"X\"],[1,\"•\",\"X\"],[1,\"X\",\"•\"],[1,\"•\",\"X\"],[1,1,\"•\",\"X\"],[1,1,\"X\",\"•\"],[1,1,\"•\",\"X\"],[\"•\",1,1,\"X\"],[\"X\",1,1,\"•\"],[\"•\",1,1,\"X\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}",
+		"offset": 0
+	},
+	"2. Bernstein-Vazirani": {
+		"desc": "Algoritmo de Bernstein-Vazirani (4 qubits)",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\"],[1,1,1,\"X\"],[1,1,1,\"H\"],[\"•\",1,1,\"X\"],[1,\"•\",1,\"X\"],[1,1,\"•\",\"X\"],[\"H\",\"H\",\"H\"],[\"Measure\",\"Measure\",\"Measure\"]]}",
+		"offset": 0
+	},
+	"3. Grover": {
+		"desc": "Algoritmo de búsqueda de Grover (2 qubits)",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[1,\"X\"],[1,\"H\"],[\"•\",\"X\"],[1,\"H\"],[1,\"X\"],[1,\"H\"],[1,\"Measure\"]]}",
+		"offset": 0
+	},
+	"4. Deutsch-Jozsa": {
+		"desc": "Algoritmo de Deutsch-Jozsa (4 qubits)",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\"],[\"X\",1,\"X\",\"X\"],[1,1,1,\"H\"],[\"•\",1,1,\"X\"],[1,\"•\",1,\"X\"],[1,1,\"•\",\"X\"],[\"X\",1,\"X\"],[\"H\",\"H\",\"H\"],[\"Measure\",\"Measure\",\"Measure\"]]}",
+		"offset": 0
+	},
+	"5. Simon": {
+		"desc": "Algoritmo de Simon (6 qubits)",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\"],[\"•\",1,1,\"X\"],[1,\"•\",1,1,\"X\"],[1,1,\"•\",1,1,\"X\"],[1,\"•\",1,1,\"X\"],[1,\"•\",1,1,1,\"X\"],[\"H\",\"H\",\"H\"],[\"Measure\",\"Measure\",\"Measure\"]]}",
+		"offset": 0
+	},
+	"6. TSP": {
+		"desc": "Circuito para problema del viajante (TSP, 3 qubits)",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\"],[1,\"X\",\"X\"],[\"X\",\"•\"],[\"X\",1,\"•\"],[\"H\"],[\"Measure\",\"Measure\",\"Measure\"]]}",
+		"offset": 0
+	},
+	"7. Teleportation": {
+		"desc": "Protocolo de teleportación cuántica (5 qubits)",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[1,\"H\"],[1,\"•\",1,1,\"X\"],[\"H\"],[\"•\",\"X\"],[\"H\"],[\"Measure\",\"Measure\"],[1,\"•\",1,1,\"X\"],[\"•\",1,1,1,\"Z\"]]}",
+		"offset": 0
+	},
+	"8. Phase Estimation": {
+		"desc": "Estimación de fase cuántica (4 qubits + compuertas custom)",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\"],[1,1,1,\"X\"],[\"•\",1,1,\"Z^¼\"],[1,\"•\",1,\"Z^¼\"],[1,\"•\",1,\"Z^¼\"],[1,1,\"•\",\"Z^¼\"],[1,1,\"•\",\"Z^¼\"],[1,1,\"•\",\"Z^¼\"],[1,1,\"•\",\"Z^¼\"],[\"Swap\",1,\"Swap\"],[\"H\"],[\"•\",\"~16c9\"],[1,\"H\"],[\"•\",1,\"~gf1o\"],[1,\"•\",\"~16c9\"],[1,1,\"H\"],[\"Measure\",\"Measure\",\"Measure\"]],\"gates\":[{\"id\":\"~gf1o\",\"name\":\"U(-pi/4)\",\"matrix\":\"{{1,0},{0,√½-√½i}}\"},{\"id\":\"~16c9\",\"name\":\"U(-pi/2)\",\"matrix\":\"{{1,0},{0,-i}}\"}]}",
+		"offset": 0
+	},
+	"9. QFT": {
+		"desc": "Transformada de Fourier Cuántica (3 qubits)",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\"],[1,\"X\",\"X\"],[\"H\"],[\"Z\",\"•\"],[\"Z^½\",1,\"•\"],[1,\"H\"],[1,\"Z\",\"•\"],[1,1,\"H\"]]}",
+		"offset": 0
+	},
+	"10. QAOA": {
+		"desc": "Quantum Approximate Optimization Algorithm (2 qubits)",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[\"Rxft\",\"Rxft\"],[],[\"•\",\"X\"],[\"Rxft\",\"Rxft\"],[],[1,\"Rxft\"],[],[\"•\",\"X\"],[\"Rxft\"],[],[1,\"Measure\"],[\"Measure\"]]}",
+		"offset": 0
+	},
+	"11. Kickback": {
+		"desc": "Phase kickback (2 qubits)",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[1,\"X\"],[\"H\",\"H\"],[\"•\",\"X\"],[\"H\",\"H\"],[\"Measure\"],[1,\"Measure\"]]}",
+		"offset": 0
+	},
+	"12. Full Adder": {
+		"desc": "Sumador completo (4 qubits)",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\"],[\"•\",\"•\",1,\"X\"],[\"•\",\"X\"],[1,\"•\",\"•\",\"X\"],[1,\"•\",\"X\"],[\"•\",\"X\"],[\"Measure\"],[1,\"Measure\"],[1,1,\"Measure\"],[1,1,1,\"Measure\"]]}",
+		"offset": 0
+	}
+}

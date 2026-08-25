@@ -64,7 +64,7 @@ def quirk_col_to_qasm(col, offset):
         elif target_gate == 'Y':
             lines.append(f'cy {ctrl_str}, {tgt_str};')
         elif target_gate in ctrl_rz:
-            lines.append(f'cu1({ctrl_rz[target_gate]}) {ctrl_str}, {tgt_str};')
+            lines.append(f'cp({ctrl_rz[target_gate]}) {ctrl_str}, {tgt_str};')
         elif target_gate in ctrl_rx:
             lines.append(f'crx({ctrl_rx[target_gate]}) {ctrl_str}, {tgt_str};')
         elif target_gate in ctrl_ry:
@@ -77,7 +77,7 @@ def quirk_col_to_qasm(col, offset):
             continue
         qi = i + offset
         m = {
-            'Measure': f'measure q[{qi}] -> c[{qi}];',
+            'Measure': f'c[{qi}] = measure q[{qi}];',
             'H': f'h q[{qi}];',
             'X': f'x q[{qi}];',
             'Y': f'y q[{qi}];',
@@ -104,7 +104,7 @@ def quirk_col_to_qasm(col, offset):
 def quirk_to_qasm(url, offset=0):
     circuito = parse_quirk_url(url)
     n = max(len(c) for c in circuito['cols']) + offset
-    lines = ['OPENQASM 2.0;', 'include "qelib1.inc";', f'qreg q[{n}];', f'creg c[{n}];', '']
+    lines = ['OPENQASM 3.0;', 'include "stdgates.inc";', f'qubit[{n}] q;', f'bit[{n}] c;', '']
     for col in circuito['cols']:
         lines.extend(quirk_col_to_qasm(col, offset))
     return '\n'.join(lines)
