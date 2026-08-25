@@ -402,10 +402,10 @@ def get_qasm():
 
     n_qubits = sum(desplazamiento)
     lines = []
-    lines.append('OPENQASM 2.0;')
-    lines.append('include "qelib1.inc";')
-    lines.append(f'qreg q[{n_qubits}];')
-    lines.append(f'creg c[{n_qubits}];')
+    lines.append('OPENQASM 3.0;')
+    lines.append('include "stdgates.inc";')
+    lines.append(f'qubit[{n_qubits}] q;')
+    lines.append(f'bit[{n_qubits}] c;')
     lines.append('')
 
     for idx, circuito in enumerate(circuitos):
@@ -430,10 +430,10 @@ def get_qasm_individual():
     n_qubits = max(len(c) for c in circuito['cols'])
 
     lines = []
-    lines.append('OPENQASM 2.0;')
-    lines.append('include "qelib1.inc";')
-    lines.append(f'qreg q[{n_qubits}];')
-    lines.append(f'creg c[{n_qubits}];')
+    lines.append('OPENQASM 3.0;')
+    lines.append('include "stdgates.inc";')
+    lines.append(f'qubit[{n_qubits}] q;')
+    lines.append(f'bit[{n_qubits}] c;')
     lines.append('')
 
     for col in circuito['cols']:

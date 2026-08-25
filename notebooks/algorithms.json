@@ -58,5 +58,10 @@
 		"desc": "Sumador completo (4 qubits)",
 		"url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\"],[\"•\",\"•\",1,\"X\"],[\"•\",\"X\"],[1,\"•\",\"•\",\"X\"],[1,\"•\",\"X\"],[\"•\",\"X\"],[\"Measure\"],[1,\"Measure\"],[1,1,\"Measure\"],[1,1,1,\"Measure\"]]}",
 		"offset": 0
+	},
+	"13. Multicontroled Gates": {
+		"desc": "Circuito de prueba con compuertas multicontroladas CCX, CCY, CCZ, CCCX, CCCY y CCCZ",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\"],[\"•\",\"•\",1,\"X\",1],[1,\"•\",\"•\",\"Y\",1],[1,1,\"•\",\"•\",\"Z\"],[\"•\",\"•\",\"•\",\"X\",1],[1,\"•\",\"•\",\"•\",\"Y\"],[\"•\",1,\"•\",\"•\",\"Z\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}",
+		"offset": 0
 	}
 }

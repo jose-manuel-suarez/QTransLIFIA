@@ -6,7 +6,7 @@ bit[2] c;
 x q[1];
 h q[0];
 h q[1];
-cx q[0], q[1];
+ctrl @ x q[0], q[1];
 h q[0];
 h q[1];
 c[0] = measure q[0];
