@@ -15,12 +15,9 @@ def encode_quirk_url(url):
         return url
 
 def _build_gate_map(circuito):
-    """Construye mapa id/name -> definicion de custom gate con 'circuit'.
-    Solo gates con campo 'circuit' son expandibles; los de 'matrix' se ignoran."""
+    """Construye un mapa id/name -> definición de gate."""
     gate_map = {}
     for g in circuito.get('gates', []):
-        if 'circuit' not in g:
-            continue
         if 'id' in g and isinstance(g['id'], str):
             gate_map[g['id']] = g
             base = g['id'].split(':')[0]
@@ -37,6 +34,15 @@ def _gate_height(gate):
     if not cols:
         return 0
     return max(len(c) for c in cols)
+
+
+def _matrix_gate_operation(gate):
+    """Devuelve la operación QASM para las matrices de fase conocidas."""
+    operations = {
+        'U(-pi/2)': 'p(-pi/2)',
+        'U(-pi/4)': 'p(-pi/4)',
+    }
+    return operations.get(gate.get('name'))
 
 
 def _is_gate_ref(entry, gate_map):
@@ -60,6 +66,7 @@ def _quirk2_col_to_qasm(col, offset, gate_map):
             target = _quirk2_col_to_qasm(target_col, offset, gate_map)
             if isinstance(target, list):
                 target = ''.join(target)
+        target = re.sub(r' q\[\d+\](?=,|;|$)', '', target)
         target = target.rstrip(';')
         qubits = [f'q[{i + offset}]' for i in control_indices]
         qubits.extend(
@@ -87,14 +94,45 @@ def _quirk2_col_to_qasm(col, offset, gate_map):
             gate_id = gate_reference.split(':')[0] if gate_reference else None
             gate = gate_map.get(gate_id) if gate_id is not None else None
             if gate is not None:
-                gate_name = gate.get('name', gate_id)
-                gate_height = _gate_height(gate)
+                gate_name = _matrix_gate_operation(gate) or gate.get('name', gate_id)
+                gate_height = _gate_height(gate) or 1
                 qubits = ', '.join(
                     f'q[{index + offset}]'
                     for index in range(gate_index, gate_index + gate_height)
                 )
                 return [f'{gate_name} {qubits};']
-            return col[0]
+            basic_gates = {
+                'Measure': f'c[{offset}] = measure q[{offset}];',
+                'H': f'h q[{offset}];',
+                'X': f'x q[{offset}];',
+                'Y': f'y q[{offset}];',
+                'Z': f'z q[{offset}];',
+                'X^½': f'rx(pi/2) q[{offset}];',
+                'X^-½': f'rx(-pi/2) q[{offset}];',
+                'X^¼': f'rx(pi/4) q[{offset}];',
+                'X^-¼': f'rx(-pi/4) q[{offset}];',
+                'Y^½': f'ry(pi/2) q[{offset}];',
+                'Y^-½': f'ry(-pi/2) q[{offset}];',
+                'Y^¼': f'ry(pi/4) q[{offset}];',
+                'Y^-¼': f'ry(-pi/4) q[{offset}];',
+                'Z^½': f'p(pi/2) q[{offset}];',
+                'Z^-½': f'p(-pi/2) q[{offset}];',
+                'Z^¼': f'p(pi/4) q[{offset}];',
+                'Z^-¼': f'p(-pi/4) q[{offset}];',
+            }
+            for index, value in enumerate(col):
+                if value in (1, '1'):
+                    continue
+                if value in basic_gates:
+                    qi = index + offset
+                    lines.append(
+                        basic_gates[value].replace(
+                            f'q[{offset}]', f'q[{qi}]'
+                        ).replace(
+                            f'c[{offset}]', f'c[{qi}]'
+                        )
+                    )
+            return lines
     return lines
     
 # Borrar esta función, se reemplaza por _col_to_qasm_with_gates() o _quirk2_col_to_qasm()
@@ -277,7 +315,7 @@ def append_custom_gates(custom_gates_info, gate_map):
 
 def quirk_to_qasm(url, offset=0):
     info = quirk_circuit_info(url)
-    lines = ['OPENQASM 2.0;', 'include "qelib1.inc";']
+    lines = ['OPENQASM 3.0;', 'include "stdgates.inc";']
     custom_gates_info = info.get('custom_gates_info', [])
 
     circuito = parse_quirk_url(url)
@@ -289,7 +327,14 @@ def quirk_to_qasm(url, offset=0):
         n = offset
     else:
         n = max(len(c) for c in cols) + offset
-        r = max(map(lambda gate: gate["n_qubits"], custom_gates_info), default=0) + offset
+        r = max(
+            (
+                gate.get("n_qubits")
+                for gate in custom_gates_info
+                if gate.get("n_qubits") is not None
+            ),
+            default=0,
+        ) + offset
         if r > n: n = r
         
     lines.extend([f'qreg q[{n}];', f'creg c[{n}];'])
