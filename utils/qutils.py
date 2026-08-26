@@ -49,6 +49,39 @@ def _is_gate_ref(entry, gate_map):
     return base in gate_map
 
 
+def quirk2_col_to_qasm(col, offset, gate_map):
+    lines = []
+    if '•' in col:
+        control_indices = [i for i, value in enumerate(col) if value == '•']
+        target_col = [
+            value for value in col
+            if value != '•' and value not in (1, '1')
+        ]
+        if 'Swap' in target_col:
+            target = 'swap'
+        else:
+            target = quirk2_col_to_qasm(target_col, offset, gate_map)
+            if isinstance(target, list):
+                target = ''.join(target)
+        target = target.rstrip(';')
+        qubits = [f'q[{i + offset}]' for i in control_indices]
+        qubits.extend(
+            f'q[{i + offset}]'
+            for i, value in enumerate(col)
+            if value != '•' and value not in (1, '1')
+        )
+        lines.append(f'{"ctrl @ " * len(control_indices)}{target} {", ".join(qubits)};')
+    else:
+        if 'Swap' in col:
+            swap_indices = [k for k, g in enumerate(col) if g == 'Swap']
+            if len(swap_indices) == 2:
+                lines.append(f'swap q[{swap_indices[0] + offset}], q[{swap_indices[1] + offset}];')
+            return lines
+        else:
+            return col[0]
+    return lines
+    
+
 def quirk_col_to_qasm(col, offset):
     lines = []
 
@@ -62,6 +95,7 @@ def quirk_col_to_qasm(col, offset):
         control_indices = [k for k, g in enumerate(col) if g == '•']
         target_gate = None
         target_index = None
+        # acá hay que construir un target con lo que no sea el control
         for g in ('X', 'Z', 'Y', 'X^½', 'X^-½', 'X^¼', 'X^-¼', 'Y^½', 'Y^-½', 'Y^¼', 'Y^-¼', 'Z^½', 'Z^-½', 'Z^¼', 'Z^-¼'):
             if g in col:
                 target_gate = g
@@ -147,7 +181,7 @@ def _col_to_qasm_with_gates(col, offset, gate_map, depth=0):
         return []
     has_gate = any(_is_gate_ref(v, gate_map) for v in col if isinstance(v, str))
     if not has_gate:
-        return quirk_col_to_qasm(col, offset)
+        return quirk2_col_to_qasm(col, offset, gate_map)
 
     lines = []
     occupied = set()
@@ -196,7 +230,7 @@ def _col_to_qasm_with_gates(col, offset, gate_map, depth=0):
         if any(isinstance(x, str) and _is_gate_ref(x, gate_map) for x in leftover_col):
             lines.extend(_col_to_qasm_with_gates(leftover_col, offset, gate_map, depth + 1))
         else:
-            lines.extend(quirk_col_to_qasm(leftover_col, offset))
+            lines.extend(quirk2_col_to_qasm(leftover_col, offset))
     return lines
 
 def primeras_letras(n):
@@ -204,6 +238,8 @@ def primeras_letras(n):
     return ','.join(string.ascii_lowercase[:n])
 
 def replace_params(lines):
+    if not lines:
+        return []
     for index, line in enumerate(lines):
         if 'q[' in line:
             lines[index] = re.sub(r'q\[(\d+)\]', lambda m: string.ascii_lowercase[int(m.group(1))], line)
@@ -243,7 +279,8 @@ def quirk_to_qasm(url, offset=0):
         
     lines.extend([f'qreg q[{n}];', f'creg c[{n}];', '\n'])
     for col in cols:
-        lines.extend(_col_to_qasm_with_gates(col, offset, gate_map))
+        algo=_col_to_qasm_with_gates(col, offset, gate_map)
+        lines.extend(algo)
     return '\n'.join(lines)
 
 
