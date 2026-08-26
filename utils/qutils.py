@@ -1,4 +1,6 @@
 import ast
+import re
+import string
 from urllib.parse import unquote, quote, urlparse, urlunparse
 
 
@@ -197,56 +199,47 @@ def _col_to_qasm_with_gates(col, offset, gate_map, depth=0):
             lines.extend(quirk_col_to_qasm(leftover_col, offset))
     return lines
 
-def append_custom_gates(custom_gates, gate_map):
+def primeras_letras(n):
+    """Retorna las primeras n letras del abecedario separadas por coma."""
+    return ','.join(string.ascii_lowercase[:n])
+
+def replace_params(lines):
+    for index, line in enumerate(lines):
+        if 'q[' in line:
+            lines[index] = re.sub(r'q\[(\d+)\]', lambda m: string.ascii_lowercase[int(m.group(1))], line)
+    return lines
+
+def append_custom_gates(custom_gates_info, gate_map):
     lines = []
-    for custom_gate in custom_gates:
+    for custom_gate_info in custom_gates_info:
      #print(f"Custom gate: {custom_gate['name']} (ID: {custom_gate['id']})")
-        lines.append(f'gate {custom_gate["name"]} ')
+        cols = custom_gate_info.get("circuit_cols")
+        if cols is None:
+            # Gates con matrix (no circuit) no son declarables en QASM
+            continue
+        lines.append(f'gate {custom_gate_info["name"]} {primeras_letras(custom_gate_info["n_qubits"])} ')
         lines.append('{\n')
-        circuit = custom_gate.get("circuit")
-        if circuit is not None:
-            #print(f" Circuit: {circuit}")
-            for col in circuit.get("cols", []):
-                lines.extend(_col_to_qasm_with_gates(col, 0, gate_map))
+        for col in cols:
+            lines.extend(replace_params(_col_to_qasm_with_gates(col, 0, gate_map)))
         lines.append('}\n')
     return ''.join(lines)
 
 def quirk_to_qasm(url, offset=0):
     info = quirk_circuit_info(url)
-    lines = ['OPENQASM 2.0;\n', 'include "qelib1.inc";\n']
-    custom_gates = info.get('custom_gates', [])
+    lines = ['OPENQASM 2.0;', 'include "qelib1.inc";']
+    custom_gates_info = info.get('custom_gates_info', [])
 
     circuito = parse_quirk_url(url)
     gate_map = _build_gate_map(circuito)
     cols = circuito.get('cols', [])
-    if len(custom_gates) > 0:
-        lines.append(append_custom_gates(custom_gates, gate_map))
+    if len(custom_gates_info) > 0:
+        lines.append(append_custom_gates(custom_gates_info, gate_map))
     if not cols:
         n = offset
     else:
         n = max(len(c) for c in cols) + offset
-        for col in cols:
-            for idx, entry in enumerate(col):
-                if not isinstance(entry, str):
-                    continue
-                base = entry.split(':')[0]
-                if base not in gate_map:
-                    continue
-                gate = gate_map[base]
-                if ':' in entry:
-                    try:
-                        rel = int(entry.split(':')[1])
-                        gcol = gate.get('circuit', {}).get('cols', [])[rel]
-                        needed = idx + len(gcol) + offset
-                        if needed > n:
-                            n = needed
-                    except Exception:
-                        pass
-                else:
-                    h = _gate_height(gate)
-                    needed = idx + h + offset
-                    if needed > n:
-                        n = needed
+        r = max(map(lambda gate: gate["n_qubits"], custom_gates_info), default=0) + offset
+        if r > n: n = r
         
     lines.extend([f'qreg q[{n}];', f'creg c[{n}];', '\n'])
     for col in cols:
