@@ -3,10 +3,8 @@ import re
 import string
 from urllib.parse import unquote, quote, urlparse, urlunparse
 
-
 def parse_quirk_url(url):
     return ast.literal_eval(unquote(url).split('circuit=')[1])
-
 
 def encode_quirk_url(url):
     try:
@@ -15,7 +13,6 @@ def encode_quirk_url(url):
         return url.split('circuit=')[0] + 'circuit=' + encoded
     except Exception:
         return url
-
 
 def _build_gate_map(circuito):
     """Construye mapa id/name -> definicion de custom gate con 'circuit'.
@@ -49,7 +46,7 @@ def _is_gate_ref(entry, gate_map):
     return base in gate_map
 
 
-def quirk2_col_to_qasm(col, offset, gate_map):
+def _quirk2_col_to_qasm(col, offset, gate_map):
     lines = []
     if '•' in col:
         control_indices = [i for i, value in enumerate(col) if value == '•']
@@ -60,7 +57,7 @@ def quirk2_col_to_qasm(col, offset, gate_map):
         if 'Swap' in target_col:
             target = 'swap'
         else:
-            target = quirk2_col_to_qasm(target_col, offset, gate_map)
+            target = _quirk2_col_to_qasm(target_col, offset, gate_map)
             if isinstance(target, list):
                 target = ''.join(target)
         target = target.rstrip(';')
@@ -78,11 +75,30 @@ def quirk2_col_to_qasm(col, offset, gate_map):
                 lines.append(f'swap q[{swap_indices[0] + offset}], q[{swap_indices[1] + offset}];')
             return lines
         else:
+            gate_index = next(
+                (
+                    index for index, value in enumerate(col)
+                    if isinstance(value, str)
+                    and _is_gate_ref(value, gate_map)
+                ),
+                None,
+            )
+            gate_reference = col[gate_index] if gate_index is not None else None
+            gate_id = gate_reference.split(':')[0] if gate_reference else None
+            gate = gate_map.get(gate_id) if gate_id is not None else None
+            if gate is not None:
+                gate_name = gate.get('name', gate_id)
+                gate_height = _gate_height(gate)
+                qubits = ', '.join(
+                    f'q[{index + offset}]'
+                    for index in range(gate_index, gate_index + gate_height)
+                )
+                return [f'{gate_name} {qubits};']
             return col[0]
     return lines
     
-
-def quirk_col_to_qasm(col, offset):
+# Borrar esta función, se reemplaza por _col_to_qasm_with_gates() o _quirk2_col_to_qasm()
+def _quirk_col_to_qasm(col, offset):
     lines = []
 
     if 'Swap' in col:
@@ -174,14 +190,14 @@ def quirk_col_to_qasm(col, offset):
 
     return lines
 
-
+# FLATEA los custom gates con 'circuit' que se expanden recursivamente. Esto se hace en _col_qasm_with_gates() y se llama desde quirk_to_qasm().
 def _col_to_qasm_with_gates(col, offset, gate_map, depth=0):
     """Version recursiva que expande custom gates con 'circuit'."""
     if depth > 10:
         return []
     has_gate = any(_is_gate_ref(v, gate_map) for v in col if isinstance(v, str))
     if not has_gate:
-        return quirk2_col_to_qasm(col, offset, gate_map)
+        return _quirk2_col_to_qasm(col, offset, gate_map)
 
     lines = []
     occupied = set()
@@ -230,7 +246,7 @@ def _col_to_qasm_with_gates(col, offset, gate_map, depth=0):
         if any(isinstance(x, str) and _is_gate_ref(x, gate_map) for x in leftover_col):
             lines.extend(_col_to_qasm_with_gates(leftover_col, offset, gate_map, depth + 1))
         else:
-            lines.extend(quirk2_col_to_qasm(leftover_col, offset))
+            lines.extend(_quirk2_col_to_qasm(leftover_col, offset))
     return lines
 
 def primeras_letras(n):
@@ -253,12 +269,11 @@ def append_custom_gates(custom_gates_info, gate_map):
         if cols is None:
             # Gates con matrix (no circuit) no son declarables en QASM
             continue
-        lines.append(f'gate {custom_gate_info["name"]} {primeras_letras(custom_gate_info["n_qubits"])} ')
-        lines.append('{\n')
+        lines.append(f'gate {custom_gate_info["name"]} {primeras_letras(custom_gate_info["n_qubits"])} {{')
         for col in cols:
-            lines.extend(replace_params(_col_to_qasm_with_gates(col, 0, gate_map)))
-        lines.append('}\n')
-    return ''.join(lines)
+            lines.extend(replace_params(_quirk2_col_to_qasm(col, 0, gate_map)))
+        lines.append('}')
+    return '\n'.join(lines)
 
 def quirk_to_qasm(url, offset=0):
     info = quirk_circuit_info(url)
@@ -277,9 +292,10 @@ def quirk_to_qasm(url, offset=0):
         r = max(map(lambda gate: gate["n_qubits"], custom_gates_info), default=0) + offset
         if r > n: n = r
         
-    lines.extend([f'qreg q[{n}];', f'creg c[{n}];', '\n'])
+    lines.extend([f'qreg q[{n}];', f'creg c[{n}];'])
     for col in cols:
-        algo=_col_to_qasm_with_gates(col, offset, gate_map)
+        # algo=_col_to_qasm_with_gates(col, offset, gate_map)
+        algo = _quirk2_col_to_qasm(col, offset, gate_map)
         lines.extend(algo)
     return '\n'.join(lines)
 
