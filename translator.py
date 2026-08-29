@@ -388,8 +388,6 @@ def get_aws_individual() -> tuple:
     return json.dumps(dict_response, indent = 4)
 
 
-
-
 @app.route('/code/qasm', methods=['POST'])
 def get_qasm():
     circuitos = []
