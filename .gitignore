@@ -48,6 +48,13 @@ coverage.xml
 *.cover
 *.py.cover
 .hypothesis/
+
+# Generated circuit files and outputs (QTransLIFIA)
+/notebooks/algorithms_qasm/
+/notebooks/circuits_qasm/
+/notebooks/circuits_quirk/
+/notebooks/circuits_quirk_original/
+/notebooks/compare/
 .pytest_cache/
 cover/
 

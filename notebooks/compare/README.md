@@ -13,3 +13,4 @@
 - [11  Kickback](11__Kickback.md)
 - [12  Full Adder](12__Full_Adder.md)
 - [13  Multicontroled Gates](13__Multicontroled_Gates.md)
+- [14  Shor 6q](14__Shor_6q.md)
