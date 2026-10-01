@@ -29,11 +29,28 @@ def _build_gate_map(circuito):
 
 
 def _gate_height(gate):
-    """Altura (n qubits) del custom gate = max len de sus cols."""
+    """Altura en qubits de un custom gate con circuito o matriz."""
     cols = gate.get('circuit', {}).get('cols', [])
-    if not cols:
+    if cols:
+        return max(len(c) for c in cols)
+    matrix = gate.get('matrix')
+    if isinstance(matrix, list):
+        dimension = len(matrix)
+    elif isinstance(matrix, str):
+        depth = 0
+        dimension = 0
+        for char in matrix:
+            if char == '{':
+                depth += 1
+                if depth == 2:
+                    dimension += 1
+            elif char == '}':
+                depth -= 1
+    else:
         return 0
-    return max(len(c) for c in cols)
+    if dimension < 1 or dimension & (dimension - 1):
+        return 0
+    return dimension.bit_length() - 1
 
 
 def _matrix_gate_operation(gate):
@@ -42,7 +59,13 @@ def _matrix_gate_operation(gate):
         'U(-pi/2)': 'p(-pi/2)',
         'U(-pi/4)': 'p(-pi/4)',
     }
-    return operations.get(gate.get('name'))
+    name = gate.get('name')
+    if name in operations:
+        return operations[name]
+    match = re.fullmatch(r'(?:cu1|cp)\((.+)\)', name or '', re.IGNORECASE)
+    if match and _gate_height(gate) == 1:
+        return f'p({match.group(1)})'
+    return None
 
 
 def _is_gate_ref(entry, gate_map):
@@ -56,25 +79,42 @@ def _quirk2_col_to_qasm(col, offset, gate_map):
     lines = []
     if '•' in col:
         control_indices = [i for i, value in enumerate(col) if value == '•']
-        target_col = [
-            value for value in col
-            if value != '•' and value not in (1, '1')
-        ]
-        if 'Swap' in target_col:
-            target = 'swap'
-        else:
-            target = _quirk2_col_to_qasm(target_col, offset, gate_map)
-            if isinstance(target, list):
-                target = ''.join(target)
-        target = re.sub(r' q\[\d+\](?=,|;|$)', '', target)
-        target = target.rstrip(';')
-        qubits = [f'q[{i + offset}]' for i in control_indices]
-        qubits.extend(
-            f'q[{i + offset}]'
-            for i, value in enumerate(col)
-            if value != '•' and value not in (1, '1')
-        )
-        lines.append(f'{"ctrl @ " * len(control_indices)}{target} {", ".join(qubits)};')
+        modifier = 'ctrl @ ' * len(control_indices)
+        if 'Swap' in col:
+            swap_indices = [i for i, value in enumerate(col) if value == 'Swap']
+            if len(swap_indices) == 2:
+                qubits = [f'q[{i + offset}]' for i in control_indices + swap_indices]
+                lines.append(f'{modifier}swap {", ".join(qubits)};')
+            return lines
+
+        basic_gates = {
+            'H': 'h', 'X': 'x', 'Y': 'y', 'Z': 'z',
+            'X^½': 'rx(pi/2)', 'X^-½': 'rx(-pi/2)',
+            'X^¼': 'rx(pi/4)', 'X^-¼': 'rx(-pi/4)',
+            'Y^½': 'ry(pi/2)', 'Y^-½': 'ry(-pi/2)',
+            'Y^¼': 'ry(pi/4)', 'Y^-¼': 'ry(-pi/4)',
+            'Z^½': 'p(pi/2)', 'Z^-½': 'p(-pi/2)',
+            'Z^¼': 'p(pi/4)', 'Z^-¼': 'p(-pi/4)',
+        }
+        occupied = set(control_indices)
+        for index, value in enumerate(col):
+            if index in occupied or value in (1, '1', None, 'Measure'):
+                continue
+            if isinstance(value, str) and _is_gate_ref(value, gate_map):
+                gate_id = value.split(':')[0]
+                gate = gate_map[gate_id]
+                target = _matrix_gate_operation(gate) or gate.get('name', gate_id)
+                gate_height = _gate_height(gate) or 1
+            else:
+                target = basic_gates.get(value)
+                gate_height = 1
+            if target is None:
+                continue
+            target_indices = range(index, index + gate_height)
+            qubits = [f'q[{i + offset}]' for i in control_indices]
+            qubits.extend(f'q[{i + offset}]' for i in target_indices)
+            lines.append(f'{modifier}{target} {", ".join(qubits)};')
+            occupied.update(target_indices)
     else:
         if 'Swap' in col:
             swap_indices = [k for k, g in enumerate(col) if g == 'Swap']
