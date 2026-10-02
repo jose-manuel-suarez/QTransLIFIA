@@ -1,0 +1,16 @@
+OPENQASM 3.0;
+include "stdgates.inc";
+qreg q[10];
+creg c[10];
+ctrl @ ctrl @ x q[1], q[2], q[3];
+ctrl @ x q[1], q[2];
+ctrl @ ctrl @ x q[4], q[5], q[6];
+ctrl @ x q[4], q[5];
+ctrl @ ctrl @ x q[7], q[8], q[9];
+ctrl @ x q[7], q[8];
+ctrl @ ctrl @ x q[0], q[2], q[3];
+ctrl @ ctrl @ x q[3], q[5], q[6];
+ctrl @ ctrl @ x q[6], q[8], q[9];
+ctrl @ x q[0], q[2];
+ctrl @ x q[3], q[5];
+ctrl @ x q[6], q[8];
