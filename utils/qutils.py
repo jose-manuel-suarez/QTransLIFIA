@@ -357,7 +357,9 @@ def append_custom_gates(custom_gates_info, gate_map):
         lines.append('}')
     return '\n'.join(lines)
 
-def quirk_to_qasm(url, offset=0):
+def quirk_to_qasm(url, offset=0, qasm_version='3.0'):
+    if qasm_version not in {'2.0', '3.0'}:
+        raise ValueError("qasm_version debe ser '2.0' o '3.0'")
     info = quirk_circuit_info(url)
     lines = ['OPENQASM 3.0;', 'include "stdgates.inc";']
     custom_gates_info = info.get('custom_gates_info', [])
@@ -386,7 +388,325 @@ def quirk_to_qasm(url, offset=0):
         # algo=_col_to_qasm_with_gates(col, offset, gate_map)
         algo = _quirk2_col_to_qasm(col, offset, gate_map)
         lines.extend(algo)
-    return '\n'.join(lines)
+    qasm3_source = '\n'.join(lines)
+    if qasm_version == '2.0':
+        return qasm3_to_qasm2(qasm3_source)
+    return qasm3_source
+
+
+def qasm3_to_qasm2(qasm3_source):
+    """Lower a supported OpenQASM 3.0 circuit to standard OpenQASM 2.0."""
+    from qiskit import qasm2, qasm3, transpile
+
+    circuit = qasm3.loads(qasm3_source)
+    lowered_circuit = transpile(
+        circuit,
+        basis_gates=['u1', 'u2', 'u3', 'cx'],
+        optimization_level=0,
+    )
+    return qasm2.dumps(lowered_circuit)
+
+
+def provider_python_source(qasm_source, provider, qasm_version='3.0', shots=1000):
+    """Return executable Python source for a supported quantum provider."""
+    from qiskit import qasm2, qasm3
+
+    providers = {'ibm_qiskit', 'aws_braket', 'pennylane'}
+    if provider not in providers:
+        raise ValueError(f'Provider no soportado: {provider!r}')
+    if qasm_version not in {'2.0', '3.0'}:
+        raise ValueError("qasm_version debe ser '2.0' o '3.0'")
+
+    circuit = qasm2.loads(qasm_source) if qasm_version == '2.0' else qasm3.loads(qasm_source)
+    if provider == 'ibm_qiskit':
+        return _qiskit_python_source(circuit)
+    if provider == 'aws_braket':
+        return _braket_python_source(circuit)
+    return _pennylane_python_source(circuit, shots=shots)
+
+
+def _qiskit_python_source(parsed_circuit):
+    gate_classes = {
+        'h': 'HGate', 'swap': 'SwapGate', 'x': 'XGate', 'y': 'YGate', 'z': 'ZGate',
+    }
+    register_variables = []
+    register_declarations = []
+    qubit_references = {}
+    clbit_references = {}
+
+    for register in parsed_circuit.qregs:
+        variable = f"qreg_{re.sub(r'\\W', '_', register.name)}"
+        register_variables.append(variable)
+        register_declarations.append(
+            f'{variable} = QuantumRegister({len(register)}, {register.name!r})'
+        )
+        for index, bit in enumerate(register):
+            qubit_references[bit] = f'{variable}[{index}]'
+
+    for register in parsed_circuit.cregs:
+        variable = f"creg_{re.sub(r'\\W', '_', register.name)}"
+        register_variables.append(variable)
+        register_declarations.append(
+            f'{variable} = ClassicalRegister({len(register)}, {register.name!r})'
+        )
+        for index, bit in enumerate(register):
+            clbit_references[bit] = f'{variable}[{index}]'
+
+    gate_imports = set()
+    instructions = []
+    for item in parsed_circuit.data:
+        operation = item.operation
+        qubits = [qubit_references[bit] for bit in item.qubits]
+        clbits = [clbit_references[bit] for bit in item.clbits]
+        parameters = [repr(parameter) for parameter in operation.params]
+
+        if operation.name == 'u1':
+            instructions.append(f'circuit.p({parameters[0]}, {qubits[0]})')
+        elif operation.name == 'u2':
+            instructions.append(
+                f'circuit.u(1.5707963267948966, {parameters[0]}, {parameters[1]}, {qubits[0]})'
+            )
+        elif operation.name in {'u3', 'u'}:
+            instructions.append(
+                f'circuit.u({parameters[0]}, {parameters[1]}, {parameters[2]}, {qubits[0]})'
+            )
+        elif operation.name == 'mcx':
+            controls = qubits[:-1]
+            control_state = operation.ctrl_state
+            control_arg = (
+                f', ctrl_state={control_state}'
+                if control_state != (1 << len(controls)) - 1
+                else ''
+            )
+            instructions.append(
+                f"circuit.mcx([{', '.join(controls)}], {qubits[-1]}{control_arg})"
+            )
+        elif hasattr(parsed_circuit, operation.name):
+            arguments = parameters + qubits + clbits
+            instructions.append(f"circuit.{operation.name}({', '.join(arguments)})")
+        else:
+            base_name = operation.base_gate.name
+            if base_name not in gate_classes:
+                raise ValueError(f'Puerta Qiskit controlada no soportada: {operation.name}')
+            gate_class = gate_classes[base_name]
+            gate_imports.add(gate_class)
+            control_state = operation.ctrl_state
+            control_count = operation.num_ctrl_qubits
+            control_args = (
+                f', ctrl_state={control_state}'
+                if control_state != (1 << control_count) - 1
+                else ''
+            )
+            gate_expression = f'{gate_class}().control({control_count}{control_args})'
+            instructions.append(f"circuit.append({gate_expression}, [{', '.join(qubits)}])")
+
+    imports = [
+        '# Importación de paquetes requeridos',
+        'from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister',
+    ]
+    if gate_imports:
+        imports.append(
+            f"from qiskit.circuit.library import {', '.join(sorted(gate_imports))}"
+        )
+
+    python_lines = imports + ['', '# Generación de registros cuánticos y clásicos']
+    python_lines.extend(register_declarations)
+    python_lines.extend(['', '# Creación del circuito cuántico'])
+    python_lines.append(f"circuit = QuantumCircuit({', '.join(register_variables)})")
+    python_lines.extend([''] + instructions)
+    return '\n'.join(python_lines) + '\n'
+
+
+def _braket_python_source(parsed_circuit):
+    instructions = []
+    measurements = []
+    measurement_qubits = set()
+
+    for item in parsed_circuit.data:
+        operation = item.operation
+        qubits = [parsed_circuit.find_bit(bit).index for bit in item.qubits]
+        parameters = [repr(parameter) for parameter in operation.params]
+
+        if operation.name == 'measure':
+            qubit = qubits[0]
+            if qubit in measurement_qubits:
+                raise ValueError(f'Braket no permite medir más de una vez el qubit {qubit}')
+            measurement_qubits.add(qubit)
+            measurements.append((parsed_circuit.find_bit(item.clbits[0]).index, qubit))
+            continue
+
+        if hasattr(operation, 'base_gate'):
+            control_count = operation.num_ctrl_qubits
+            controls = qubits[:control_count]
+            targets = qubits[control_count:]
+            base_name = operation.base_gate.name
+            control_state = operation.ctrl_state
+            control_args = (
+                f', control_state={control_state}'
+                if control_state != (1 << control_count) - 1
+                else ''
+            )
+
+            if base_name == 'p':
+                instructions.append(
+                    f'circuit.cphaseshift({controls!r}, {targets[0]}, {parameters[0]})'
+                )
+            elif base_name == 'u1':
+                arguments = [str(targets[0]), parameters[0], f'control={controls!r}']
+                if control_state != (1 << control_count) - 1:
+                    arguments.append(f'control_state={control_state}')
+                instructions.append(f"circuit.phaseshift({', '.join(arguments)})")
+            elif base_name in {'u2', 'u3', 'u'}:
+                rotation_parameters = (
+                    ['1.5707963267948966'] + parameters
+                    if base_name == 'u2'
+                    else parameters
+                )
+                arguments = [str(targets[0])] + rotation_parameters + [f'control={controls!r}']
+                if control_state != (1 << control_count) - 1:
+                    arguments.append(f'control_state={control_state}')
+                instructions.append(f"circuit.u({', '.join(arguments)})")
+            elif base_name == 'swap':
+                instructions.append(
+                    f'circuit.swap({targets[0]}, {targets[1]}, '
+                    f'control={controls!r}{control_args})'
+                )
+            elif base_name in {'h', 'rx', 'ry', 'rz', 'x', 'y', 'z'}:
+                arguments = [str(targets[0])] + parameters + [f'control={controls!r}']
+                if control_state != (1 << control_count) - 1:
+                    arguments.append(f'control_state={control_state}')
+                instructions.append(f"circuit.{base_name}({', '.join(arguments)})")
+            else:
+                raise ValueError(f'Puerta Braket controlada no soportada: {operation.name}')
+            continue
+
+        if operation.name == 'swap':
+            instructions.append(f'circuit.swap({qubits[0]}, {qubits[1]})')
+        elif operation.name == 'u1':
+            instructions.append(f'circuit.phaseshift({qubits[0]}, {parameters[0]})')
+        elif operation.name == 'u2':
+            instructions.append(
+                f'circuit.u({qubits[0]}, 1.5707963267948966, {parameters[0]}, {parameters[1]})'
+            )
+        elif operation.name in {'u3', 'u'}:
+            instructions.append(
+                f'circuit.u({qubits[0]}, {parameters[0]}, {parameters[1]}, {parameters[2]})'
+            )
+        elif operation.name in {'h', 'rx', 'ry', 'rz', 'x', 'y', 'z'}:
+            arguments = [str(qubits[0])] + parameters
+            instructions.append(f"circuit.{operation.name}({', '.join(arguments)})")
+        else:
+            raise ValueError(f'Puerta Braket no soportada: {operation.name}')
+
+    python_lines = [
+        '# Importación de paquetes requeridos',
+        'from braket.circuits import Circuit',
+        '',
+        '# Creación del circuito AWS Braket',
+        'circuit = Circuit()',
+        '',
+        '# Puertas migradas desde OpenQASM',
+        *instructions,
+    ]
+    if measurements:
+        python_lines.append('')
+        python_lines.append('# Mediciones en orden clásico, diferidas al final')
+        python_lines.extend(
+            f'circuit.measure([{qubit}])'
+            for _, qubit in sorted(measurements)
+        )
+    return '\n'.join(python_lines) + '\n'
+
+
+def _pennylane_python_source(parsed_circuit, shots=1000):
+    pennylane_gates = {
+        'h': 'Hadamard', 'p': 'PhaseShift', 'rx': 'RX', 'ry': 'RY',
+        'rz': 'RZ', 'swap': 'SWAP', 'x': 'PauliX', 'y': 'PauliY', 'z': 'PauliZ',
+        'u1': 'PhaseShift', 'u2': 'U3', 'u3': 'U3', 'u': 'U3',
+    }
+
+    def gate_parameters(operation_name, parameters):
+        if operation_name == 'u2':
+            return ['1.5707963267948966'] + parameters
+        if operation_name in {'u3', 'u'}:
+            return parameters
+        if operation_name == 'u1':
+            return parameters
+        return parameters
+
+    instructions = []
+    measurement_variables = {}
+    measurement_count = 0
+
+    for item in parsed_circuit.data:
+        operation = item.operation
+        qubits = [parsed_circuit.find_bit(bit).index for bit in item.qubits]
+        parameters = [repr(parameter) for parameter in operation.params]
+
+        if operation.name == 'measure':
+            classical_index = parsed_circuit.find_bit(item.clbits[0]).index
+            variable = f'measurement_{classical_index}_{measurement_count}'
+            measurement_count += 1
+            measurement_variables[classical_index] = variable
+            instructions.append(f'{variable} = qml.measure(wires={qubits[0]})')
+            continue
+
+        if hasattr(operation, 'base_gate'):
+            control_count = operation.num_ctrl_qubits
+            controls = qubits[:control_count]
+            targets = qubits[control_count:]
+            base_name = operation.base_gate.name
+            gate_name = pennylane_gates.get(base_name)
+            if gate_name is None:
+                raise ValueError(f'Puerta PennyLane controlada no soportada: {operation.name}')
+
+            control_values = ''
+            if operation.ctrl_state != (1 << control_count) - 1:
+                values = tuple(
+                    int(value)
+                    for value in f'{operation.ctrl_state:0{control_count}b}'
+                )
+                control_values = f', control_values={values!r}'
+            gate_call = f'qml.ctrl(qml.{gate_name}, control={controls!r}{control_values})'
+            if base_name == 'swap':
+                arguments = [f'wires={targets!r}']
+            else:
+                arguments = gate_parameters(base_name, parameters) + [f'wires={targets[0]}']
+            instructions.append(f"{gate_call}({', '.join(arguments)})")
+            continue
+
+        gate_name = pennylane_gates.get(operation.name)
+        if gate_name is None:
+            raise ValueError(f'Puerta PennyLane no soportada: {operation.name}')
+        if operation.name == 'swap':
+            arguments = [f'wires={qubits!r}']
+        else:
+            arguments = gate_parameters(operation.name, parameters) + [f'wires={qubits[0]}']
+        instructions.append(f"qml.{gate_name}({', '.join(arguments)})")
+
+    measured_classical_bits = sorted(measurement_variables)
+    device_shots = shots if measured_classical_bits else None
+    python_lines = [
+        '# Importación de paquetes requeridos',
+        'import pennylane as qml',
+        '',
+        f"device = qml.device('default.qubit', wires={parsed_circuit.num_qubits}, shots={device_shots!r})",
+        '',
+        '@qml.qnode(device)',
+        'def circuit():',
+        *[f'    {instruction}' for instruction in instructions],
+    ]
+
+    if measured_classical_bits:
+        python_lines.append('    return (')
+        python_lines.extend(
+            f'        qml.sample({measurement_variables[classical_index]}),'
+            for classical_index in measured_classical_bits
+        )
+        python_lines.append('    )')
+    else:
+        python_lines.append('    return qml.state()')
+    return '\n'.join(python_lines) + '\n'
 
 
 def quirk_circuit_info(url):
@@ -621,10 +941,26 @@ def _zx_gate_matrix(token, gate_map, time):
             return ((1 + 0j, 0j), (0j, cmath.exp(1j * angle)))
         return _zx_rotation_matrix(operation.lower()[-1], angle)
 
-    match = re.fullmatch(r'U\((.+)\)', name, re.IGNORECASE)
+    match = re.fullmatch(r'(u1|u2|u3|u)\((.+)\)', name, re.IGNORECASE)
     if match:
-        angle = _zx_parse_angle(match.group(1))
-        return ((1 + 0j, 0j), (0j, cmath.exp(1j * angle)))
+        operation, expression = match.groups()
+        parameters = [_zx_parse_angle(value.strip()) for value in expression.split(',')]
+        operation = operation.lower()
+        if operation == 'u1' and len(parameters) == 1:
+            theta, phi, lam = 0.0, 0.0, parameters[0]
+        elif operation == 'u2' and len(parameters) == 2:
+            theta, (phi, lam) = math.pi / 2, parameters
+        elif operation in ('u3', 'u') and len(parameters) == 3:
+            theta, phi, lam = parameters
+        else:
+            raise ValueError(f'Cantidad de parámetros inválida para {operation}: {expression}')
+
+        cosine = math.cos(theta / 2)
+        sine = math.sin(theta / 2)
+        return (
+            (cosine, -cmath.exp(1j * lam) * sine),
+            (cmath.exp(1j * phi) * sine, cmath.exp(1j * (phi + lam)) * cosine),
+        )
 
     if gate.get('circuit'):
         raise ValueError(f'Custom gate compuesto no soportado todavía: {name}')
@@ -687,6 +1023,67 @@ def quirk_to_zx_graph(url, offset=0, time=0.5):
             )
 
     return circuit.to_graph()
+
+
+def capture_quirk_circuit(url, output_path, timeout=15):
+    """Captura la vista completa de un circuito Quirk en un archivo PNG."""
+    import base64
+    from pathlib import Path
+
+    try:
+        from selenium import webdriver
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.ui import WebDriverWait
+    except ImportError as exc:
+        raise RuntimeError('Instala Selenium con `pip install selenium` para capturar circuitos Quirk') from exc
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--window-size=1920,1080')
+
+    driver = None
+    try:
+        driver = webdriver.Chrome(options=options)
+        driver.set_page_load_timeout(timeout)
+        driver.get(url)
+        wait = WebDriverWait(driver, timeout)
+        wait.until(EC.presence_of_element_located((By.TAG_NAME, 'canvas')))
+        wait.until(lambda browser: browser.execute_script('return document.readyState') == 'complete')
+
+        page_size = driver.execute_script("""
+            const root = document.documentElement;
+            const body = document.body;
+            return {
+                width: Math.max(root.scrollWidth, body.scrollWidth, root.clientWidth),
+                height: Math.max(root.scrollHeight, body.scrollHeight, root.clientHeight)
+            };
+        """)
+        screenshot = driver.execute_cdp_cmd('Page.captureScreenshot', {
+            'format': 'png',
+            'fromSurface': True,
+            'captureBeyondViewport': True,
+            'clip': {
+                'x': 0,
+                'y': 0,
+                'width': page_size['width'],
+                'height': page_size['height'],
+                'scale': 1,
+            },
+        })
+        output_path.write_bytes(base64.b64decode(screenshot['data']))
+        return True
+    except Exception as exc:
+        print(f'Error capturando {url}: {exc}')
+        return False
+    finally:
+        if driver is not None:
+            driver.quit()
 
 
 def qasm_to_zx_graph(qasm_code):
