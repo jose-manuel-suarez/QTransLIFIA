@@ -72,6 +72,223 @@ def _matrix_gate_operation(gate):
     return None
 
 
+# Gates estándar de OpenQASM 3 (stdgates.inc) utilizables en el sitio de uso.
+_STANDARD_GATES = frozenset({
+    'p', 'x', 'y', 'z', 'h', 's', 'sdg', 't', 'tdg', 'sx', 'rx', 'ry', 'rz',
+    'u', 'cx', 'cy', 'cz', 'ch', 'cp', 'crx', 'cry', 'crz', 'cswap',
+    'ccx', 'ccy', 'ccz', 'swap', 'id',
+})
+# Gates estándar que no llevan argumentos (name plano, p.ej. "X", "H").
+_NO_ARGUMENT_GATES = frozenset({
+    'x', 'y', 'z', 'h', 's', 'sdg', 't', 'tdg', 'sx', 'swap', 'id',
+})
+# Palabras reservadas de OpenQASM que no pueden usarse como nombre de gate.
+_QASM_RESERVED_WORDS = frozenset({
+    'gate', 'qreg', 'creg', 'include', 'OPENQASM', 'barrier', 'measure',
+    'reset', 'ctrl', 'inv', 'pow', 'if', 'else', 'for', 'while', 'return',
+    'break', 'continue', 'const', 'input', 'output', 'qubit', 'bit', 'let',
+})
+
+
+def _sanitize_gate_name(raw_name, fallback='custom_gate'):
+    """Convierte un nombre de custom gate en un identificador QASM válido."""
+    cleaned = re.sub(r'[^A-Za-z0-9_]+', '_', str(raw_name or ''))
+    cleaned = re.sub(r'_+', '_', cleaned).strip('_')
+    if not cleaned:
+        cleaned = re.sub(r'[^A-Za-z0-9_]+', '_', str(fallback or '')).strip('_')
+    if not cleaned:
+        cleaned = 'custom_gate'
+    if not re.match(r'[A-Za-z_]', cleaned):
+        cleaned = f'gate_{cleaned}'
+    if cleaned in _QASM_RESERVED_WORDS or cleaned in _STANDARD_GATES:
+        cleaned = f'{cleaned}_gate'
+    return cleaned
+
+
+def _resolve_gate_names(gate_map):
+    """id/name del gate_map -> identificador QASM único por custom gate.
+
+    Se usa tanto en la declaración `gate ...` como en el sitio de uso para
+    garantizar que ambas referencias coincidan siempre.
+    """
+    names = {}
+    identifier_by_object = {}
+    used = set()
+    for key in sorted(gate_map):
+        gate = gate_map[key]
+        object_id = id(gate)
+        if object_id not in identifier_by_object:
+            raw = gate.get('name') or gate.get('id') or 'custom_gate'
+            identifier = _sanitize_gate_name(raw)
+            base = identifier
+            suffix = 2
+            while identifier in used:
+                identifier = f'{base}_{suffix}'
+                suffix += 1
+            used.add(identifier)
+            identifier_by_object[object_id] = identifier
+        names[key] = identifier_by_object[object_id]
+    return names
+
+
+def _named_gate_operation(gate):
+    """Operación QASM si el `name` del gate es una llamada a un gate estándar."""
+    name = str(gate.get('name') or '').strip()
+    if not name:
+        return None
+    match = re.fullmatch(r'([A-Za-z_][A-Za-z0-9_]*)\((.*)\)', name)
+    if match:
+        operator, arguments = match.group(1), match.group(2)
+        if operator == 'U':
+            operator = 'u' if len(arguments.split(',')) == 3 else None
+            if operator is None:
+                return None
+        if operator == 'cu1':
+            # cu1 no existe en stdgates.inc de QASM 3: p (1 qubit) o cp (2).
+            operator = 'cp' if _gate_height(gate) == 2 else 'p'
+        elif operator not in _STANDARD_GATES:
+            return None
+        elif operator == 'cp' and _gate_height(gate) == 1:
+            operator = 'p'
+        return f'{operator}({arguments})'
+    lowered = name.lower()
+    if lowered in _NO_ARGUMENT_GATES:
+        return lowered
+    return None
+
+
+def _split_top_level(text):
+    """Divide un texto por comas que no estén anidadas dentro de llaves."""
+    parts, depth, current = [], 0, []
+    for char in text:
+        if char == '{':
+            depth += 1
+        elif char == '}':
+            depth -= 1
+        if char == ',' and depth == 0:
+            parts.append(''.join(current))
+            current = []
+        else:
+            current.append(char)
+    parts.append(''.join(current))
+    return parts
+
+
+def _to_complex(value):
+    if isinstance(value, complex):
+        return value
+    if isinstance(value, (int, float)):
+        return complex(value)
+    text = str(value).strip()
+    text = text.replace('√½', '0.7071067811865476')
+    text = text.replace('√2', '1.4142135623730951')
+    text = text.replace('½', '0.5').replace('¼', '0.25').replace('¾', '0.75')
+    text = text.replace('−', '-')  # signo menos Unicode
+    if 'i' in text and 'j' not in text:
+        text = text.replace('i', 'j')  # notación compleja de Quirk: ...+0.006i
+    return complex(text)
+
+
+def _matrix_to_rows(matrix):
+    """Normaliza `matrix` (string de Quirk o lista) a filas de complex, o None."""
+    try:
+        if isinstance(matrix, str):
+            text = matrix.strip()
+            if not (text.startswith('{') and text.endswith('}')):
+                return None
+            rows = []
+            for row_text in _split_top_level(text[1:-1]):
+                row_text = row_text.strip()
+                if not (row_text.startswith('{') and row_text.endswith('}')):
+                    return None
+                rows.append([_to_complex(entry) for entry in _split_top_level(row_text[1:-1])])
+            return rows
+        if isinstance(matrix, list):
+            return [[_to_complex(entry) for entry in row] for row in matrix]
+    except (ValueError, TypeError, IndexError):
+        return None
+    return None
+
+
+def _diagonal_matrix_operation(gate):
+    """p(θ) para matrices de fase 2x2 {{1,0},{0,e^(iθ)}} sin name utilizable."""
+    rows = _matrix_to_rows(gate.get('matrix'))
+    if not rows or len(rows) != 2 or any(len(row) != 2 for row in rows):
+        return None
+    (a, b), (c, d) = rows
+    if abs(b) > 1e-9 or abs(c) > 1e-9:
+        return None
+    if abs(a - 1) > 1e-6:  # fase global distinta de 1: no equivale a p()
+        return None
+    return f'p({cmath.phase(d)!r})'
+
+
+def _resolve_matrix_operation(gate, gate_id):
+    """Operación OpenQASM equivalente a un custom gate definido con 'matrix'.
+
+    Se usa para construir el cuerpo de su declaración `gate ...` (y para
+    validar que el gate es traducible antes de referenciarlo).
+    """
+    for resolver in (
+        _matrix_gate_operation,
+        _named_gate_operation,
+        _diagonal_matrix_operation,
+    ):
+        operation = resolver(gate)
+        if operation:
+            return operation
+    raise ValueError(
+        f"Custom gate {gate_id!r} (name={gate.get('name')!r}) definido solo con "
+        "'matrix' no es convertible a OpenQASM: agrega un name con forma "
+        "'op(args)' de stdgates.inc o una matriz de fase 2x2 {{1,0},{0,z}}"
+    )
+
+
+# Cantidad de qubits que ocupa cada gate estándar (para el cuerpo de la
+# declaración `gate` de un custom gate definido con 'matrix').
+_OPERATION_ARITIES = {
+    'cx': 2, 'cy': 2, 'cz': 2, 'ch': 2, 'cp': 2, 'crx': 2, 'cry': 2,
+    'crz': 2, 'cswap': 2, 'swap': 2,
+    'ccx': 3, 'ccy': 3, 'ccz': 3,
+}
+
+
+def _operation_arity(operation, default):
+    match = re.match(r'([A-Za-z_][A-Za-z0-9_]*)', operation)
+    if not match:
+        return default
+    name = match.group(1).lower()
+    if name in _OPERATION_ARITIES:
+        return _OPERATION_ARITIES[name]
+    if name in _STANDARD_GATES:
+        return 1
+    return default
+
+
+def _gate_operation(gate, gate_id, gate_names):
+    """Identificador OpenQASM para usar un custom gate en el sitio de uso.
+
+    Todos los custom gates (con 'circuit.cols' o con 'matrix') se declaran
+    arriba como submódulos `gate ...`; aquí se devuelve ese mismo
+    identificador para que la declaración y la llamada coincidan siempre.
+    """
+    base = str(gate_id).split(':')[0]
+    identifier = (
+        gate_names.get(base)
+        or gate_names.get(gate_id)
+        or _sanitize_gate_name(gate.get('name') or gate_id)
+    )
+    if gate.get('circuit', {}).get('cols'):
+        return identifier
+    if gate.get('matrix') is None:
+        raise ValueError(
+            f"Custom gate {gate_id!r} no define 'circuit' ni 'matrix': "
+            "no hay forma de traducirlo a OpenQASM"
+        )
+    _resolve_matrix_operation(gate, gate_id)  # valida que sea traducible
+    return identifier
+
+
 def _is_gate_ref(entry, gate_map):
     if not isinstance(entry, str):
         return False
@@ -79,8 +296,10 @@ def _is_gate_ref(entry, gate_map):
     return base in gate_map
 
 
-def _quirk2_col_to_qasm(col, offset, gate_map):
+def _quirk2_col_to_qasm(col, offset, gate_map, gate_names=None):
     lines = []
+    if gate_names is None:
+        gate_names = _resolve_gate_names(gate_map)
     if '•' in col:
         control_indices = [i for i, value in enumerate(col) if value == '•']
         modifier = 'ctrl @ ' * len(control_indices)
@@ -107,7 +326,7 @@ def _quirk2_col_to_qasm(col, offset, gate_map):
             if isinstance(value, str) and _is_gate_ref(value, gate_map):
                 gate_id = value.split(':')[0]
                 gate = gate_map[gate_id]
-                target = _matrix_gate_operation(gate) or gate.get('name', gate_id)
+                target = _gate_operation(gate, gate_id, gate_names)
                 gate_height = _gate_height(gate) or 1
             else:
                 target = basic_gates.get(value)
@@ -126,25 +345,22 @@ def _quirk2_col_to_qasm(col, offset, gate_map):
                 lines.append(f'swap q[{swap_indices[0] + offset}], q[{swap_indices[1] + offset}];')
             return lines
         else:
-            gate_index = next(
-                (
-                    index for index, value in enumerate(col)
-                    if isinstance(value, str)
-                    and _is_gate_ref(value, gate_map)
-                ),
-                None,
-            )
-            gate_reference = col[gate_index] if gate_index is not None else None
-            gate_id = gate_reference.split(':')[0] if gate_reference else None
-            gate = gate_map.get(gate_id) if gate_id is not None else None
-            if gate is not None:
-                gate_name = _matrix_gate_operation(gate) or gate.get('name', gate_id)
+            occupied = set()
+            for index, value in enumerate(col):
+                if index in occupied or value in (1, '1', None):
+                    continue
+                if not (isinstance(value, str) and _is_gate_ref(value, gate_map)):
+                    continue
+                gate_id = value.split(':')[0]
+                gate = gate_map[gate_id]
+                operation = _gate_operation(gate, gate_id, gate_names)
                 gate_height = _gate_height(gate) or 1
                 qubits = ', '.join(
-                    f'q[{index + offset}]'
-                    for index in range(gate_index, gate_index + gate_height)
+                    f'q[{i + offset}]'
+                    for i in range(index, index + gate_height)
                 )
-                return [f'{gate_name} {qubits};']
+                lines.append(f'{operation} {qubits};')
+                occupied.update(range(index, index + gate_height))
             basic_gates = {
                 'Measure': f'c[{offset}] = measure q[{offset}];',
                 'H': f'h q[{offset}];',
@@ -165,7 +381,9 @@ def _quirk2_col_to_qasm(col, offset, gate_map):
                 'Z^-¼': f'p(-pi/4) q[{offset}];',
             }
             for index, value in enumerate(col):
-                if value in (1, '1'):
+                if index in occupied or value in (1, '1', None):
+                    continue
+                if isinstance(value, str) and _is_gate_ref(value, gate_map):
                     continue
                 if value in basic_gates:
                     qi = index + offset
@@ -282,6 +500,7 @@ def _col_to_qasm_with_gates(col, offset, gate_map, depth=0):
         return _quirk2_col_to_qasm(col, offset, gate_map)
 
     lines = []
+    gate_names = _resolve_gate_names(gate_map)
     occupied = set()
     for idx, entry in enumerate(col):
         if not isinstance(entry, str):
@@ -292,6 +511,14 @@ def _col_to_qasm_with_gates(col, offset, gate_map, depth=0):
         gate = gate_map[base]
         gate_cols = gate.get('circuit', {}).get('cols', [])
         if not gate_cols:
+            # Custom gate con 'matrix': se expande como una sola operación.
+            operation = _gate_operation(gate, base, gate_names)
+            gate_height = _gate_height(gate) or 1
+            qubits = ', '.join(
+                f'q[{i + offset}]' for i in range(idx, idx + gate_height)
+            )
+            lines.append(f'{operation} {qubits};')
+            occupied.update(range(idx, idx + gate_height))
             continue
         if ':' in entry:
             try:
@@ -328,7 +555,7 @@ def _col_to_qasm_with_gates(col, offset, gate_map, depth=0):
         if any(isinstance(x, str) and _is_gate_ref(x, gate_map) for x in leftover_col):
             lines.extend(_col_to_qasm_with_gates(leftover_col, offset, gate_map, depth + 1))
         else:
-            lines.extend(_quirk2_col_to_qasm(leftover_col, offset))
+            lines.extend(_quirk2_col_to_qasm(leftover_col, offset, gate_map))
     return lines
 
 def primeras_letras(n):
@@ -343,17 +570,93 @@ def replace_params(lines):
             lines[index] = re.sub(r'q\[(\d+)\]', lambda m: string.ascii_lowercase[int(m.group(1))], line)
     return lines
 
-def append_custom_gates(custom_gates_info, gate_map):
-    lines = []
+def append_custom_gates(custom_gates_info, gate_map, gate_names=None):
+    """Declaraciones `gate` (submódulos OpenQASM) de los custom gates.
+
+    - Gates con 'circuit.cols': el cuerpo sale de sus columnas.
+    - Gates con 'matrix': el cuerpo sale de la operación equivalente
+      (name estándar o la matriz de fase misma).
+
+    El identificador usado aquí es siempre el mismo que el que usan los
+    llamados (_gate_operation), para que declaración y llamada coincidan.
+    """
+    if gate_names is None:
+        gate_names = _resolve_gate_names(gate_map)
+
+    declarations = []
     for custom_gate_info in custom_gates_info:
-     #print(f"Custom gate: {custom_gate['name']} (ID: {custom_gate['id']})")
+        gate_id = str(custom_gate_info.get('id') or '').split(':')[0]
+        name = gate_names.get(gate_id) or _sanitize_gate_name(
+            custom_gate_info.get('name') or gate_id
+        )
         cols = custom_gate_info.get("circuit_cols")
-        if cols is None:
-            # Gates con matrix (no circuit) no son declarables en QASM
+        if cols:
+            n_qubits = (
+                custom_gate_info.get('n_qubits')
+                or _gate_height(custom_gate_info)
+                or 1
+            )
+            body = []
+            for col in cols:
+                body.extend(replace_params(_quirk2_col_to_qasm(col, 0, gate_map, gate_names)))
+        elif custom_gate_info.get('matrix') is not None:
+            # Gates con 'matrix' (sin circuit): cuerpo = operación equivalente.
+            operation = _resolve_matrix_operation(custom_gate_info, gate_id)
+            n_qubits = (
+                custom_gate_info.get('n_qubits')
+                or _gate_height(custom_gate_info)
+                or 1
+            )
+            letters = primeras_letras(n_qubits).split(',')
+            arity = min(_operation_arity(operation, n_qubits), len(letters))
+            body = [f'{operation} {", ".join(letters[:arity])};']
+        else:
+            # Sin 'circuit' ni 'matrix': no hay definición posible; solo se
+            # falla si además se referencia en el circuito (_gate_operation).
             continue
-        lines.append(f'gate {custom_gate_info["name"]} {primeras_letras(custom_gate_info["n_qubits"])} {{')
+        declarations.append({
+            'id': gate_id,
+            'name': name,
+            'n_qubits': n_qubits,
+            'body': body,
+            'cols': cols or [],
+        })
+
+    # Ordena las declaraciones: primero las que no referencian a otras
+    # pendientes (OpenQASM exige declarar antes de usar).
+    declared_ids = {decl['id'] for decl in declarations}
+
+    def refs_of(cols):
+        found = set()
         for col in cols:
-            lines.extend(replace_params(_quirk2_col_to_qasm(col, 0, gate_map)))
+            for value in col:
+                if isinstance(value, str) and _is_gate_ref(value, gate_map):
+                    ref_id = value.split(':')[0]
+                    if ref_id in declared_ids:
+                        found.add(ref_id)
+        return found
+
+    ordered = []
+    emitted = set()
+    remaining = declarations
+    while remaining:
+        next_round = []
+        for decl in remaining:
+            pending = refs_of(decl['cols']) - emitted - {decl['id']}
+            if pending:
+                next_round.append(decl)
+            else:
+                ordered.append(decl)
+                emitted.add(decl['id'])
+        if len(next_round) == len(remaining):
+            ordered.extend(next_round)  # referencia cíclica: orden original
+            break
+        remaining = next_round
+
+    lines = []
+    for decl in ordered:
+        lines.append(f"gate {decl['name']} {primeras_letras(decl['n_qubits'])} {{")
+        lines.extend(decl['body'])
         lines.append('}')
     return '\n'.join(lines)
 
@@ -361,14 +664,17 @@ def quirk_to_qasm(url, offset=0, qasm_version='3.0'):
     if qasm_version not in {'2.0', '3.0'}:
         raise ValueError("qasm_version debe ser '2.0' o '3.0'")
     info = quirk_circuit_info(url)
-    lines = ['OPENQASM 3.0;', 'include "stdgates.inc";']
+    lines = ['OPENQASM 3.0;', 'include "stdgates.inc";', '']
     custom_gates_info = info.get('custom_gates_info', [])
 
     circuito = parse_quirk_url(url)
     gate_map = _build_gate_map(circuito)
+    gate_names = _resolve_gate_names(gate_map)
     cols = circuito.get('cols', [])
     if len(custom_gates_info) > 0:
-        lines.append(append_custom_gates(custom_gates_info, gate_map))
+        declarations = append_custom_gates(custom_gates_info, gate_map, gate_names)
+        if declarations:
+            lines.append(declarations)
     if not cols:
         n = offset
     else:
@@ -386,7 +692,7 @@ def quirk_to_qasm(url, offset=0, qasm_version='3.0'):
     lines.extend([f'qreg q[{n}];', f'creg c[{n}];'])
     for col in cols:
         # algo=_col_to_qasm_with_gates(col, offset, gate_map)
-        algo = _quirk2_col_to_qasm(col, offset, gate_map)
+        algo = _quirk2_col_to_qasm(col, offset, gate_map, gate_names)
         lines.extend(algo)
     qasm3_source = '\n'.join(lines)
     if qasm_version == '2.0':
@@ -454,10 +760,8 @@ def _qiskit_python_source(parsed_circuit):
 
     gate_imports = set()
     instructions = []
-    for item in parsed_circuit.data:
-        operation = item.operation
-        qubits = [qubit_references[bit] for bit in item.qubits]
-        clbits = [clbit_references[bit] for bit in item.clbits]
+
+    def emit(operation, qubits, clbits, depth=0):
         parameters = [repr(parameter) for parameter in operation.params]
 
         if operation.name == 'u1':
@@ -484,10 +788,11 @@ def _qiskit_python_source(parsed_circuit):
         elif hasattr(parsed_circuit, operation.name):
             arguments = parameters + qubits + clbits
             instructions.append(f"circuit.{operation.name}({', '.join(arguments)})")
-        else:
+        elif (
+            getattr(operation, 'base_gate', None) is not None
+            and operation.base_gate.name in gate_classes
+        ):
             base_name = operation.base_gate.name
-            if base_name not in gate_classes:
-                raise ValueError(f'Puerta Qiskit controlada no soportada: {operation.name}')
             gate_class = gate_classes[base_name]
             gate_imports.add(gate_class)
             control_state = operation.ctrl_state
@@ -499,6 +804,28 @@ def _qiskit_python_source(parsed_circuit):
             )
             gate_expression = f'{gate_class}().control({control_count}{control_args})'
             instructions.append(f"circuit.append({gate_expression}, [{', '.join(qubits)}])")
+        elif operation.definition is not None and depth < 10:
+            # Custom gate declarado en OpenQASM (o controlado sin equivalencia
+            # directa): se expande su cuerpo en línea respetando el orden.
+            definition = operation.definition
+            qubit_positions = {bit: index for index, bit in enumerate(definition.qubits)}
+            clbit_positions = {bit: index for index, bit in enumerate(definition.clbits)}
+            for sub_item in definition.data:
+                emit(
+                    sub_item.operation,
+                    [qubits[qubit_positions[bit]] for bit in sub_item.qubits],
+                    [clbits[clbit_positions[bit]] for bit in sub_item.clbits],
+                    depth + 1,
+                )
+        else:
+            raise ValueError(f'Puerta Qiskit no soportada: {operation.name}')
+
+    for item in parsed_circuit.data:
+        emit(
+            item.operation,
+            [qubit_references[bit] for bit in item.qubits],
+            [clbit_references[bit] for bit in item.clbits],
+        )
 
     imports = [
         '# Importación de paquetes requeridos',
@@ -522,9 +849,7 @@ def _braket_python_source(parsed_circuit):
     measurements = []
     measurement_qubits = set()
 
-    for item in parsed_circuit.data:
-        operation = item.operation
-        qubits = [parsed_circuit.find_bit(bit).index for bit in item.qubits]
+    def emit(operation, qubits, clbits, depth=0):
         parameters = [repr(parameter) for parameter in operation.params]
 
         if operation.name == 'measure':
@@ -532,10 +857,14 @@ def _braket_python_source(parsed_circuit):
             if qubit in measurement_qubits:
                 raise ValueError(f'Braket no permite medir más de una vez el qubit {qubit}')
             measurement_qubits.add(qubit)
-            measurements.append((parsed_circuit.find_bit(item.clbits[0]).index, qubit))
-            continue
+            measurements.append((clbits[0], qubit))
+            return
 
-        if hasattr(operation, 'base_gate'):
+        if (
+            getattr(operation, 'base_gate', None) is not None
+            and operation.base_gate.name
+            in {'p', 'u1', 'u2', 'u3', 'u', 'swap', 'h', 'rx', 'ry', 'rz', 'x', 'y', 'z'}
+        ):
             control_count = operation.num_ctrl_qubits
             controls = qubits[:control_count]
             targets = qubits[control_count:]
@@ -578,7 +907,7 @@ def _braket_python_source(parsed_circuit):
                 instructions.append(f"circuit.{base_name}({', '.join(arguments)})")
             else:
                 raise ValueError(f'Puerta Braket controlada no soportada: {operation.name}')
-            continue
+            return
 
         if operation.name == 'swap':
             instructions.append(f'circuit.swap({qubits[0]}, {qubits[1]})')
@@ -595,8 +924,27 @@ def _braket_python_source(parsed_circuit):
         elif operation.name in {'h', 'rx', 'ry', 'rz', 'x', 'y', 'z'}:
             arguments = [str(qubits[0])] + parameters
             instructions.append(f"circuit.{operation.name}({', '.join(arguments)})")
+        elif operation.definition is not None and depth < 10:
+            # Custom gate declarado en OpenQASM: expandir su cuerpo en línea.
+            definition = operation.definition
+            qubit_positions = {bit: index for index, bit in enumerate(definition.qubits)}
+            clbit_positions = {bit: index for index, bit in enumerate(definition.clbits)}
+            for sub_item in definition.data:
+                emit(
+                    sub_item.operation,
+                    [qubits[qubit_positions[bit]] for bit in sub_item.qubits],
+                    [clbits[clbit_positions[bit]] for bit in sub_item.clbits],
+                    depth + 1,
+                )
         else:
             raise ValueError(f'Puerta Braket no soportada: {operation.name}')
+
+    for item in parsed_circuit.data:
+        emit(
+            item.operation,
+            [parsed_circuit.find_bit(bit).index for bit in item.qubits],
+            [parsed_circuit.find_bit(bit).index for bit in item.clbits],
+        )
 
     python_lines = [
         '# Importación de paquetes requeridos',
@@ -638,27 +986,27 @@ def _pennylane_python_source(parsed_circuit, shots=1000):
     measurement_variables = {}
     measurement_count = 0
 
-    for item in parsed_circuit.data:
-        operation = item.operation
-        qubits = [parsed_circuit.find_bit(bit).index for bit in item.qubits]
+    def emit(operation, qubits, clbits, depth=0):
+        nonlocal measurement_count
         parameters = [repr(parameter) for parameter in operation.params]
 
         if operation.name == 'measure':
-            classical_index = parsed_circuit.find_bit(item.clbits[0]).index
+            classical_index = clbits[0]
             variable = f'measurement_{classical_index}_{measurement_count}'
             measurement_count += 1
             measurement_variables[classical_index] = variable
             instructions.append(f'{variable} = qml.measure(wires={qubits[0]})')
-            continue
+            return
 
-        if hasattr(operation, 'base_gate'):
+        if (
+            getattr(operation, 'base_gate', None) is not None
+            and pennylane_gates.get(operation.base_gate.name) is not None
+        ):
             control_count = operation.num_ctrl_qubits
             controls = qubits[:control_count]
             targets = qubits[control_count:]
             base_name = operation.base_gate.name
             gate_name = pennylane_gates.get(base_name)
-            if gate_name is None:
-                raise ValueError(f'Puerta PennyLane controlada no soportada: {operation.name}')
 
             control_values = ''
             if operation.ctrl_state != (1 << control_count) - 1:
@@ -673,16 +1021,36 @@ def _pennylane_python_source(parsed_circuit, shots=1000):
             else:
                 arguments = gate_parameters(base_name, parameters) + [f'wires={targets[0]}']
             instructions.append(f"{gate_call}({', '.join(arguments)})")
-            continue
+            return
 
         gate_name = pennylane_gates.get(operation.name)
         if gate_name is None:
+            if operation.definition is not None and depth < 10:
+                # Custom gate declarado en OpenQASM: expandir su cuerpo en línea.
+                definition = operation.definition
+                qubit_positions = {bit: index for index, bit in enumerate(definition.qubits)}
+                clbit_positions = {bit: index for index, bit in enumerate(definition.clbits)}
+                for sub_item in definition.data:
+                    emit(
+                        sub_item.operation,
+                        [qubits[qubit_positions[bit]] for bit in sub_item.qubits],
+                        [clbits[clbit_positions[bit]] for bit in sub_item.clbits],
+                        depth + 1,
+                    )
+                return
             raise ValueError(f'Puerta PennyLane no soportada: {operation.name}')
         if operation.name == 'swap':
             arguments = [f'wires={qubits!r}']
         else:
             arguments = gate_parameters(operation.name, parameters) + [f'wires={qubits[0]}']
         instructions.append(f"qml.{gate_name}({', '.join(arguments)})")
+
+    for item in parsed_circuit.data:
+        emit(
+            item.operation,
+            [parsed_circuit.find_bit(bit).index for bit in item.qubits],
+            [parsed_circuit.find_bit(bit).index for bit in item.clbits],
+        )
 
     measured_classical_bits = sorted(measurement_variables)
     device_shots = shots if measured_classical_bits else None
@@ -774,7 +1142,8 @@ def quirk_circuit_info(url):
             info['n_qubits'] = _gate_height(g)
             info['n_cols'] = len(g.get('circuit', {}).get('cols', []))
         else:
-            info['n_qubits'] = None
+            # Gates con 'matrix': la altura sale de la dimensión de la matriz
+            info['n_qubits'] = _gate_height(g) if g.get('matrix') is not None else None
             info['n_cols'] = None
         custom_gates_info.append(info)
 
@@ -1116,33 +1485,105 @@ def qasm_to_zx_graph(qasm_code):
         re.IGNORECASE,
     )
 
-    for line_number, raw_line in enumerate(qasm_code.splitlines(), start=1):
-        line = raw_line.split('//', 1)[0].strip()
-        if not line or line.startswith(('OPENQASM', 'include', 'qreg', 'creg', 'qubit', 'bit')):
+    # Extrae las declaraciones `gate <nombre> <params> { ... }` (submódulos
+    # OpenQASM) y se queda solo con las sentencias del circuito.
+    declarations = {}
+    circuit_statements = []
+    raw_lines = qasm_code.splitlines()
+    index = 0
+    while index < len(raw_lines):
+        line = raw_lines[index].split('//', 1)[0].strip()
+        declaration_match = re.match(
+            r'gate\s+([A-Za-z_]\w*)\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s*\{$',
+            line,
+        )
+        if declaration_match:
+            declaration_name = declaration_match.group(1)
+            parameter_names = [part.strip() for part in declaration_match.group(2).split(',')]
+            body = []
+            index += 1
+            while index < len(raw_lines) and raw_lines[index].strip() != '}':
+                body_line = raw_lines[index].split('//', 1)[0].strip()
+                if body_line:
+                    body.append(body_line)
+                index += 1
+            declarations[declaration_name] = (parameter_names, body)
+            index += 1  # salta el '}'
             continue
-        if measurement_pattern.fullmatch(line):
-            continue
+        if line:
+            circuit_statements.append((index + 1, line))
+        index += 1
 
-        match = statement_pattern.fullmatch(line)
+    def process(statement, line_number, mapping=None, extra_controls=(), depth=0):
+        if statement.startswith(('OPENQASM', 'include', 'qreg', 'creg', 'qubit', 'bit')):
+            return
+        if measurement_pattern.fullmatch(statement):
+            return
+
+        match = statement_pattern.fullmatch(statement)
         if match is None:
-            raise ValueError(f'Instrucción OpenQASM no reconocida en línea {line_number}: {line}')
+            raise ValueError(
+                f'Instrucción OpenQASM no reconocida en línea {line_number}: {statement}'
+            )
 
         operands_text = match.group('operands').strip()
-        if not operand_pattern.fullmatch(operands_text):
-            raise ValueError(f'Operandos OpenQASM no reconocidos en línea {line_number}: {line}')
-        qubits = [int(value) for value in re.findall(r'\[(\d+)\]', operands_text)]
+        if mapping is None:
+            # Contexto principal: operandos con formato qreg[i].
+            if not operand_pattern.fullmatch(operands_text):
+                raise ValueError(
+                    f'Operandos OpenQASM no reconocidos en línea {line_number}: {statement}'
+                )
+            qubits = [int(value) for value in re.findall(r'\[(\d+)\]', operands_text)]
+        else:
+            # Cuerpo de un custom gate: operandos son letras (a, b, ...).
+            qubits = []
+            for token in operands_text.split(','):
+                token = token.strip()
+                if not re.fullmatch(r'[a-z]', token) or ord(token) - ord('a') >= len(mapping):
+                    raise ValueError(
+                        f'Operando de custom gate no reconocido en línea '
+                        f'{line_number}: {statement}'
+                    )
+                qubits.append(mapping[ord(token) - ord('a')])
         if any(qubit >= n_qubits for qubit in qubits):
-            raise ValueError(f'Índice de qubit fuera del registro en línea {line_number}: {line}')
+            raise ValueError(f'Índice de qubit fuera del registro en línea {line_number}: {statement}')
 
         gate_name = match.group('gate').lower()
         parameters = match.group('params')
         modifier_controls = match.group('modifiers').lower().count('ctrl')
+
+        # Custom gate declarado: expandir su cuerpo con los qubits mapeados.
+        # Los controles de la llamada aplican a cada sentencia del cuerpo
+        # (c-(A·B) == (c-A)·(c-B)), y se suman a los controles heredados.
+        declaration = declarations.get(match.group('gate'))
+        if declaration is not None:
+            if depth >= 10:
+                raise ValueError(
+                    f'Custom gates anidados demasiado profundos en línea {line_number}'
+                )
+            if parameters is not None:
+                raise ValueError(
+                    f'Parámetros inesperados para el custom gate en línea {line_number}: {statement}'
+                )
+            parameter_names, body = declaration
+            if len(qubits) != modifier_controls + len(parameter_names):
+                raise ValueError(
+                    f'Cantidad de qubits inválida para el custom gate en línea '
+                    f'{line_number}: {statement}'
+                )
+            body_mapping = qubits[modifier_controls:]
+            body_controls = tuple(extra_controls) + tuple(qubits[:modifier_controls])
+            for body_line in body:
+                process(body_line, line_number, body_mapping, body_controls, depth + 1)
+            return
+
         if gate_name == 'swap':
             if len(qubits) < 2 or len(qubits) != modifier_controls + 2:
-                raise ValueError(f'Cantidad de qubits inválida para swap en línea {line_number}: {line}')
+                raise ValueError(f'Cantidad de qubits inválida para swap en línea {line_number}: {statement}')
             controls, targets = qubits[:-2], qubits[-2:]
             if len(controls) != modifier_controls:
-                raise ValueError(f'Controles incompatibles en línea {line_number}: {line}')
+                raise ValueError(f'Controles incompatibles en línea {line_number}: {statement}')
+            controls = list(extra_controls) + controls
             if controls:
                 first, second = targets
                 _zx_append_mcx(circuit, controls + [first], second)
@@ -1150,7 +1591,7 @@ def qasm_to_zx_graph(qasm_code):
                 _zx_append_mcx(circuit, controls + [first], second)
             else:
                 circuit.add_gate('SWAP', *targets)
-            continue
+            return
 
         controlled_aliases = {
             'cx': 'x', 'cy': 'y', 'cz': 'z', 'ch': 'h',
@@ -1159,28 +1600,32 @@ def qasm_to_zx_graph(qasm_code):
         }
         if gate_name in controlled_aliases:
             if modifier_controls:
-                raise ValueError(f'No se admite combinar alias controlado y ctrl @ en línea {line_number}: {line}')
+                raise ValueError(f'No se admite combinar alias controlado y ctrl @ en línea {line_number}: {statement}')
             controls, target = qubits[:-1], qubits[-1]
             gate_name = controlled_aliases[gate_name]
         elif modifier_controls:
             if len(qubits) != modifier_controls + 1:
-                raise ValueError(f'Cantidad de controles incompatible en línea {line_number}: {line}')
+                raise ValueError(f'Cantidad de controles incompatible en línea {line_number}: {statement}')
             controls, target = qubits[:-1], qubits[-1]
         else:
             if len(qubits) != 1:
-                raise ValueError(f'Cantidad de qubits inválida en línea {line_number}: {line}')
+                raise ValueError(f'Cantidad de qubits inválida en línea {line_number}: {statement}')
             controls, target = [], qubits[0]
+        controls = list(extra_controls) + controls
 
         if gate_name in ('rx', 'ry', 'rz', 'p'):
             if parameters is None:
-                raise ValueError(f'Falta el ángulo de {gate_name} en línea {line_number}: {line}')
+                raise ValueError(f'Falta el ángulo de {gate_name} en línea {line_number}: {statement}')
             gate_token = f'{gate_name}({parameters})'
         else:
             if parameters is not None:
-                raise ValueError(f'Parámetros inesperados para {gate_name} en línea {line_number}: {line}')
+                raise ValueError(f'Parámetros inesperados para {gate_name} en línea {line_number}: {statement}')
             gate_token = gate_name.upper()
 
         matrix = _zx_gate_matrix(gate_token, {}, time=0.5)
         _zx_append_unitary(circuit, target, matrix, controls)
+
+    for line_number, statement in circuit_statements:
+        process(statement, line_number)
 
     return circuit.to_graph()

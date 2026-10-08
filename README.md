@@ -250,7 +250,7 @@ El servidor escucha en `http://localhost:8081`. Endpoints POST disponibles:
 
 La colección de Postman está en `postman/Quirk_Translator_IBM_AWS.postman_collection_original.json`.
 
-## Pruebas
+## Pruebas Unitarias del proyecto
 
 Ejecuta la suite del pipeline con:
 

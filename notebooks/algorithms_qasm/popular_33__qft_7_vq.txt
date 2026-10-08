@@ -1,30 +1,42 @@
 OPENQASM 3.0;
 include "stdgates.inc";
 
+gate cu1_pi_8 a {
+p(pi/8) a;
+}
+gate cu1_pi_16 a {
+p(pi/16) a;
+}
+gate cu1_pi_32 a {
+p(pi/32) a;
+}
+gate cu1_pi_64 a {
+p(pi/64) a;
+}
 qreg q[7];
 creg c[7];
 h q[0];
 ctrl @ p(pi/2) q[0], q[1];
 ctrl @ p(pi/4) q[0], q[2];
-ctrl @ p(pi/8) q[0], q[3];
-ctrl @ p(pi/16) q[0], q[4];
-ctrl @ p(pi/32) q[0], q[5];
-ctrl @ p(pi/64) q[0], q[6];
+ctrl @ cu1_pi_8 q[0], q[3];
+ctrl @ cu1_pi_16 q[0], q[4];
+ctrl @ cu1_pi_32 q[0], q[5];
+ctrl @ cu1_pi_64 q[0], q[6];
 h q[1];
 ctrl @ p(pi/2) q[1], q[2];
 ctrl @ p(pi/4) q[1], q[3];
-ctrl @ p(pi/8) q[1], q[4];
-ctrl @ p(pi/16) q[1], q[5];
-ctrl @ p(pi/32) q[1], q[6];
+ctrl @ cu1_pi_8 q[1], q[4];
+ctrl @ cu1_pi_16 q[1], q[5];
+ctrl @ cu1_pi_32 q[1], q[6];
 h q[2];
 ctrl @ p(pi/2) q[2], q[3];
 ctrl @ p(pi/4) q[2], q[4];
-ctrl @ p(pi/8) q[2], q[5];
-ctrl @ p(pi/16) q[2], q[6];
+ctrl @ cu1_pi_8 q[2], q[5];
+ctrl @ cu1_pi_16 q[2], q[6];
 h q[3];
 ctrl @ p(pi/2) q[3], q[4];
 ctrl @ p(pi/4) q[3], q[5];
-ctrl @ p(pi/8) q[3], q[6];
+ctrl @ cu1_pi_8 q[3], q[6];
 h q[4];
 ctrl @ p(pi/2) q[4], q[5];
 ctrl @ p(pi/4) q[4], q[6];
