@@ -24,7 +24,8 @@ def _configured_path(variable_name, default):
     configured_value = os.getenv(variable_name)
     path = Path(configured_value).expanduser() if configured_value else Path(default)
     if not path.is_absolute():
-        path = PROJECT_ROOT / path
+        # Un separador inicial ("/output") denota una ruta relativa a la raíz del proyecto.
+        path = PROJECT_ROOT / Path(str(path).lstrip("/\\"))
     return path.resolve()
 
 
@@ -90,17 +91,18 @@ DEFAULT_INPUT_MODE = os.getenv("QTRANS_INPUT_MODE", "batch").strip().casefold()
 if DEFAULT_INPUT_MODE not in {"batch", "algorithm"}:
     raise ValueError("QTRANS_INPUT_MODE debe ser 'batch' o 'algorithm'")
 DEFAULT_INPUT_FILE = os.getenv("QTRANS_INPUT_FILE") or None
-DEFAULT_INPUT_DIR = _configured_path("QTRANS_INPUT_DIR", "notebooks/input")
-DEFAULT_OUTPUT_DIR = _configured_path("QTRANS_OUTPUT_DIR", "notebooks/output")
-DEFAULT_QASM_DIR = _configured_path("QTRANS_QASM_DIR", "notebooks/algorithms_qasm")
+DEFAULT_INPUT_DIR = _configured_path("QTRANS_INPUT_DIR", "/input")
+DEFAULT_OUTPUT_DIR = _configured_path("QTRANS_OUTPUT_DIR", "/output")
+DEFAULT_QASM_DIR = _configured_path("QTRANS_QASM_DIR", "/algorithms_qasm")
+DEFAULT_VISUAL_DIR = _configured_path("QTRANS_VISUAL_DIR", "/output/imgs")
 DEFAULT_QUIRK_IMAGES_DIR = _configured_path(
-    "QTRANS_QUIRK_IMAGES_DIR", "notebooks/circuits_quirk"
+    "QTRANS_QUIRK_IMAGES_DIR", DEFAULT_VISUAL_DIR / "circuits_quirk"
 )
 DEFAULT_QASM_IMAGES_DIR = _configured_path(
-    "QTRANS_QASM_IMAGES_DIR", "notebooks/circuits_qasm"
+    "QTRANS_QASM_IMAGES_DIR", DEFAULT_VISUAL_DIR / "circuits_qasm"
 )
 DEFAULT_COMPARE_DIR = _configured_path("QTRANS_COMPARE_DIR", "notebooks/compare")
-DEFAULT_ZX_DIR = _configured_path("QTRANS_ZX_DIR", "notebooks/ZXCalculus")
+DEFAULT_ZX_DIR = _configured_path("QTRANS_ZX_DIR", "/ZXCalculus")
 DEFAULT_MIGRATED_DIR = _configured_path(
     "QTRANS_MIGRATED_DIR", DEFAULT_OUTPUT_DIR / "migrated_circuits"
 )
@@ -308,12 +310,12 @@ def _write_comparison_docs(records, quirk_images_dir, qasm_images_dir, compare_d
         quirk_image = quirk_images_dir / f"{name}.png"
         qasm_image = qasm_images_dir / f"{name}.png"
         quirk_link = (
-            f"../{quirk_images_dir.name}/{quirk_image.name}"
+            Path(os.path.relpath(quirk_image, compare_dir)).as_posix()
             if quirk_image.is_file()
             else None
         )
         qasm_link = (
-            f"../{qasm_images_dir.name}/{qasm_image.name}"
+            Path(os.path.relpath(qasm_image, compare_dir)).as_posix()
             if qasm_image.is_file()
             else None
         )
@@ -646,6 +648,7 @@ def run_pipeline(
         "provider_scripts_generated": len(provider_scripts),
         "output_directories": {
             "qasm": qasm_dir,
+            "visual": DEFAULT_VISUAL_DIR,
             "quirk_images": quirk_images_dir,
             "qasm_images": qasm_images_dir,
             "comparison": compare_dir,

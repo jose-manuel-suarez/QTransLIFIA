@@ -11,12 +11,14 @@ QTransLIFIA es un proyecto cuyo objetivo es la traducción de circuitos cuántic
 │   ├── algorithms_qasm/		   # Algoritmos en formato textual (.txt) en QASM
 │   ├── compare/				   # Informes Markdown de comparación visual entre circuitos (.md)
 |	├── ZXCalculus/				   # Directorio de comparación de equivalencia utilizando ZXCalculo
-│   └── circuits_quirk/			   # Circuito Quirk original diseñado por el usuario
+│   └── imgs/					   # Imágenes (.png/.jpg): circuitos Quirk y OpenQASM
 ├── notebooks/
 │   ├── input/                     # Datos usados por los cuadernos
 │   ├── algorithms_qasm/           # Fuentes OpenQASM 3.0
-│   ├── circuits_qasm/             # Diagramas OpenQASM
-│   ├── circuits_quirk/            # Diagramas Quirk
+│   ├── imgs/                      # Imágenes generadas (.png/.jpg)
+│   │   ├── circuits_quirk/        # Diagramas Quirk
+│   │   ├── circuits_qasm/         # Diagramas OpenQASM
+│   │   └── circuits_quirk_original/ # Capturas originales de Quirk
 │   ├── output/migrated_circuits/  # Código Qiskit, Braket y PennyLane
 │   ├── ZXCalculus/                # Grafos y análisis ZXCalculo
 │   └── QTrans_LIFIA_algorithms_jose.ipynb		# Notebook con lógica fundamental del pipeline funcional (traducción y comparación)
@@ -66,8 +68,9 @@ QTRANS_INPUT_FILE=
 QTRANS_INPUT_DIR=notebooks/input
 QTRANS_OUTPUT_DIR=notebooks/output
 QTRANS_QASM_DIR=notebooks/algorithms_qasm
-QTRANS_QUIRK_IMAGES_DIR=notebooks/circuits_quirk
-QTRANS_QASM_IMAGES_DIR=notebooks/circuits_qasm
+QTRANS_VISUAL_DIR=/output/imgs
+QTRANS_QUIRK_IMAGES_DIR=/output/imgs/circuits_quirk
+QTRANS_QASM_IMAGES_DIR=/output/imgs/circuits_qasm
 QTRANS_COMPARE_DIR=notebooks/compare
 QTRANS_ZX_DIR=notebooks/ZXCalculus
 QTRANS_MIGRATED_DIR=notebooks/output/migrated_circuits
@@ -93,8 +96,9 @@ Todas las rutas relativas se resuelven desde la raíz del proyecto. Los valores 
 | `QTRANS_INPUT_DIR`            | Directorio de JSON de entrada.                                                                                 | `notebooks/input`                          |
 | `QTRANS_OUTPUT_DIR`           | Raíz de los resultados del pipeline.                                                                           | `notebooks/output`                         |
 | `QTRANS_QASM_DIR`             | Archivos OpenQASM generados.                                                                                   | `notebooks/algorithms_qasm`                |
-| `QTRANS_QUIRK_IMAGES_DIR`     | Capturas PNG de Quirk.                                                                                         | `notebooks/circuits_quirk`                 |
-| `QTRANS_QASM_IMAGES_DIR`      | Diagramas PNG de los circuitos OpenQASM.                                                                       | `notebooks/circuits_qasm`                  |
+| `QTRANS_VISUAL_DIR`           | Raíz de las imágenes (`.png`/`.jpg`); contiene los subdirectorios `circuits_quirk`, `circuits_qasm` y `circuits_quirk_original`. | `/output/imgs`                             |
+| `QTRANS_QUIRK_IMAGES_DIR`     | Capturas PNG de Quirk (default relativo a `QTRANS_VISUAL_DIR`).                                                | `/output/imgs/circuits_quirk`              |
+| `QTRANS_QASM_IMAGES_DIR`      | Diagramas PNG de los circuitos OpenQASM (default relativo a `QTRANS_VISUAL_DIR`).                              | `/output/imgs/circuits_qasm`               |
 | `QTRANS_COMPARE_DIR`          | Informes Markdown de comparación visual.                                                                       | `notebooks/compare`                        |
 | `QTRANS_ZX_DIR`               | Grafos, comparativas e imágenes ZX.                                                                            | `notebooks/ZXCalculus`                     |
 | `QTRANS_MIGRATED_DIR`         | Raíz de los scripts por provider; crea un subdirectorio por provider.                                          | `notebooks/output/migrated_circuits`       |
@@ -162,7 +166,7 @@ Para consultar todos los argumentos:
 python qtrans.py --help
 ```
 
-El resultado es OpenQASM (según `QTRANS_QASM_VERSION`, `3.0` por defecto) en `QTRANS_QASM_DIR` (`notebooks/algorithms_qasm/` por defecto) y, cuando las capturas están activas, imágenes PNG en `QTRANS_QUIRK_IMAGES_DIR` (`notebooks/circuits_quirk/` por defecto). Los errores de captura se contabilizan y no cancelan la conversión del JSON.
+El resultado es OpenQASM (según `QTRANS_QASM_VERSION`, `3.0` por defecto) en `QTRANS_QASM_DIR` (`notebooks/algorithms_qasm/` por defecto) y, cuando las capturas están activas, imágenes PNG en `QTRANS_QUIRK_IMAGES_DIR` (`output/imgs/circuits_quirk/` por defecto, derivado de `QTRANS_VISUAL_DIR`). Los errores de captura se contabilizan y no cancelan la conversión del JSON.
 
 ## Flujo de Ejecución
 
