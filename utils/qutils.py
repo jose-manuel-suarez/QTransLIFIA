@@ -1272,6 +1272,15 @@ def _zx_gate_matrix(token, gate_map, time):
     gate = gate_map.get(token.split(':', 1)[0], {})
     name = gate.get('name', token)
 
+    matrix_rows = _matrix_to_rows(gate.get('matrix'))
+    if matrix_rows is not None:
+        if len(matrix_rows) != 2 or any(len(row) != 2 for row in matrix_rows):
+            raise ValueError(f'Matriz no soportada en el grafo ZX (se esperaba 2x2): {name}')
+        return (
+            (matrix_rows[0][0], matrix_rows[0][1]),
+            (matrix_rows[1][0], matrix_rows[1][1]),
+        )
+
     if name == 'H':
         scale = 1 / math.sqrt(2)
         return ((scale, scale), (scale, -scale))
@@ -1613,7 +1622,7 @@ def qasm_to_zx_graph(qasm_code):
             controls, target = [], qubits[0]
         controls = list(extra_controls) + controls
 
-        if gate_name in ('rx', 'ry', 'rz', 'p'):
+        if gate_name in ('rx', 'ry', 'rz', 'p', 'u1', 'u2', 'u3', 'u'):
             if parameters is None:
                 raise ValueError(f'Falta el ángulo de {gate_name} en línea {line_number}: {statement}')
             gate_token = f'{gate_name}({parameters})'

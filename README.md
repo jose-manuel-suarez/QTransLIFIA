@@ -6,30 +6,48 @@ QTransLIFIA es un proyecto cuyo objetivo es la traducción de circuitos cuántic
 
 ```text
 .
-├── input/                         # JSON de entrada del CLI
-├── output/                        # OpenQASM y capturas generadas por el CLI
-│   ├── algorithms_qasm/		   # Algoritmos en formato textual (.txt) en QASM
-│   ├── compare/				   # Informes Markdown de comparación visual entre circuitos (.md)
-|	├── ZXCalculus/				   # Directorio de comparación de equivalencia utilizando ZXCalculo
-│   └── imgs/					   # Imágenes (.png/.jpg): circuitos Quirk y OpenQASM
+├── input/                                # JSON de entrada del CLI
 ├── notebooks/
-│   ├── input/                     # Datos usados por los cuadernos
-│   ├── algorithms_qasm/           # Fuentes OpenQASM 3.0
-│   ├── imgs/                      # Imágenes generadas (.png/.jpg)
-│   │   ├── circuits_quirk/        # Diagramas Quirk
-│   │   ├── circuits_qasm/         # Diagramas OpenQASM
-│   │   └── circuits_quirk_original/ # Capturas originales de Quirk
-│   ├── output/migrated_circuits/  # Código Qiskit, Braket y PennyLane
-│   ├── ZXCalculus/                # Grafos y análisis ZXCalculo
-│   └── QTrans_LIFIA_algorithms_jose.ipynb		# Notebook con lógica fundamental del pipeline funcional (traducción y comparación)
-├── utils/qutils.py                # Traducción Quirk/OpenQASM, grafos y captura
-├── qtrans.py                      # API Python y CLI del pipeline
-├── translator.py                  # API HTTP heredada
-├── requirements.txt			   # Librerías requeridas por el proyecto
-└── requirements_original.txt	   # Librerías originales requeridas por el proyecto
+│   ├── input/                            # JSON de entrada usados por los cuadernos
+│   ├── output/                           # Salidas agrupadas por corrida (no versionado)
+│   │   └── run_DD_MM_YYYY__HH/           # Una carpeta por fecha y hora (sin minutos)
+│   │       ├── algorithms_qasm/          # Algoritmos traducidos a OpenQASM (.txt)
+│   │       ├── imgs/                     # Imágenes (.png) de la corrida
+│   │       │   ├── circuits_quirk/       # Capturas PNG de los circuitos originales
+│   │       │   └── circuits_qasm/        # Diagramas PNG de los circuitos OpenQASM
+│   │       ├── circuits/                 # Scripts Python migrados por ecosistema
+│   │       │   ├── qiskit/
+│   │       │   ├── aws_braket/
+│   │       │   └── pennylane/
+│   │       ├── compare/                  # Informes Markdown de comparación visual (.md)
+│   │       └── ZXCalculus/               # Equivalencia con cálculo ZX
+│   │           ├── algorithms_base/      # Grafos ZX construidos desde Quirk
+│   │           ├── algorithms_qasm/      # Grafos ZX construidos desde OpenQASM
+│   │           └── graphs/               # Diagramas SVG de los grafos
+│   └── QTrans_LIFIA_algorithms_jose.ipynb  # Notebook con la lógica del pipeline (traducción y comparación)
+├── output/                               # Salidas del CLI (estructura plana, configurable vía QTRANS_*DIR)
+├── utils/qutils.py                       # Traducción Quirk/OpenQASM, grafos ZX y captura
+├── qtrans.py                             # API Python y CLI del pipeline
+├── translator.py                         # API HTTP heredada
+├── requirements.txt                      # Librerías requeridas por el proyecto
+└── requirements_original.txt             # Librerías originales requeridas por el proyecto
 ```
 
+### Estampa de corrida (`run_DD_MM_YYYY__HH`)
+
+En el flujo del **cuaderno Jupyter**, todas las salidas se agrupan bajo `output/run_<estampa>/`, donde `<estampa>` es la fecha y la **hora** en que se inicia la ejecución, **sin minutos** (`DD_MM_YYYY__HH`, p. ej. `run_10_10_2026__13`).
+
+- Ejecutar el flujo varias veces **dentro de la misma hora** reutiliza el mismo directorio y **sobrescribe** los archivos generados, evitando crear una carpeta nueva por cada reintento.
+- Al cambiar la hora se crea una nueva carpeta `run_*`, preservando el historial de corridas anteriores.
+- Las carpetas generadas están excluidas del control de versiones (`.gitignore`: `/output/` y `/notebooks/output/`).
+
+El **CLI** (`qtrans.py`) no usa la estampa de corrida: escribe en los directorios configurados por las variables `QTRANS_*DIR` (por defecto, `notebooks/output`, `notebooks/algorithms_qasm`, `notebooks/ZXCalculus`, etc.).
+
 Los cuadernos mantienen sus datos y resultados dentro de `notebooks/`. Por defecto el CLI también usa `notebooks/input` y `notebooks/output`; las carpetas `input/` y `output/` de la raíz pueden configurarse vía `.env` o CLI.
+
+### Versión de OpenQASM en el cuaderno
+
+La celda de generación de QASM está parametrizada por la variable `QASM_VERSION` (defecto `'3.0'`, acepta `'2.0'`). Cada archivo OpenQASM se escribe en `.../algorithms_qasm` con el sufijo de versión, por ejemplo `1__Shor_v3.0.txt` o `1__Shor_v2.0.txt`, lo que permite que ambas versiones coexistan en el mismo directorio de corrida. Las celdas de imágenes, grafos ZX y migración procesan **solo** los `.txt` de la versión activa (filtran por `QASM_VERSION_SUFFIX`, igual a `_v3.0` por defecto) y quitan el sufijo al derivar sus nombres, por lo que sus artefactos conservan el nombre sin versión y las comparaciones siguen funcionando igual.
 
 ## Instalación
 
@@ -230,13 +248,17 @@ La función devuelve un resumen con los archivos procesados, algoritmos, archivo
 
 Los cuadernos se conservan como flujo alternativo e independiente del CLI. Abre `notebooks/QTrans_LIFIA_algorithms_jose.ipynb`, selecciona un kernel con las dependencias instaladas y ejecuta las celdas en orden. La primera celda verifica e instala los paquetes necesarios en el kernel.
 
-El cuaderno principal lee `notebooks/input/algorithms.json` y `notebooks/input/popular_algorithms.json`, genera OpenQASM y diagramas bajo `notebooks/`, y crea los scripts migrados en:
+El cuaderno principal lee `notebooks/input/algorithms.json` y `notebooks/input/popular_algorithms.json` y escribe todas sus salidas bajo una única carpeta de corrida `notebooks/output/run_DD_MM_YYYY__HH/` (fecha y hora sin minutos):
 
-- `notebooks/output/migrated_circuits/qiskit/`
-- `notebooks/output/migrated_circuits/aws_braket/`
-- `notebooks/output/migrated_circuits/pennylane/`
+- `algorithms_qasm/` — QASM traducido
+- `imgs/circuits_quirk/` y `imgs/circuits_qasm/` — diagramas PNG
+- `compare/` — informes Markdown de comparación visual
+- `ZXCalculus/{algorithms_base,algorithms_qasm,graphs}/` — grafos ZX y SVG
+- `circuits/qiskit/`, `circuits/aws_braket/`, `circuits/pennylane/` — scripts migrados
 
-Los scripts Braket requieren `amazon-braket-sdk`; los scripts PennyLane requieren `pennylane`. Las celdas de migración leen los archivos OpenQASM de `notebooks/algorithms_qasm/`.
+Cada celda imprime en su log el directorio de la corrida (`DIRECTORIO DE LA CORRIDA: ...`) para ubicar los artefactos. Las celdas de migración leen los archivos OpenQASM de la carpeta `algorithms_qasm/` de esa misma corrida.
+
+Los scripts Braket requieren `amazon-braket-sdk`; los scripts PennyLane requieren `pennylane`.
 
 ## API HTTP Heredada
 
