@@ -1,10 +1,7 @@
-Flask==2.0.1
-Flask-Cors==3.0.10
+# Dependencias del pipeline (qtrans.py) y de las utilidades (utils/qutils.py)
 python-dotenv==1.0.0
 numpy>=1.24.0
 pyzx>=0.10.7
-Werkzeug==2.3.4
-
 qiskit
 qiskit-aer
 qiskit-qasm3-import
@@ -12,3 +9,12 @@ matplotlib
 pylatexenc
 pandas
 selenium
+
+# API HTTP heredada (translator.py)
+Flask==2.0.1
+Flask-Cors==3.0.10
+Werkzeug==2.3.4
+
+# Ecosistemas de migración opcionales (solo para ejecutar los scripts generados)
+# amazon-braket-sdk
+# pennylane

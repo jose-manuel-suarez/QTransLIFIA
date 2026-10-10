@@ -1,138 +1,101 @@
 # QTransLIFIA
 
-QTransLIFIA es un proyecto cuyo objetivo es la traducción de circuitos cuánticos desde [Quirk](https://algassert.com/quirk) a cualquier ecosistema objetivo ([IBM Qiskit](https://www.ibm.com/quantum/qiskit), [AWS Braket](https://aws.amazon.com/braket/getting-started/) o [Pennylane](https://pennylane.ai/codebook/pennylane-fundamentals)) utilizando como lenguaje "pivote" de representación intermedia a [OpenQASM](https://openqasm.com/language/standard_library.html) y ofrece dos formas de trabajo: un pipeline Python/CLI y cuadernos Jupyter para exploración, visualización y migración a otros frameworks o ecosistemas de desarrollo cuántico.
+QTransLIFIA traduce circuitos cuánticos desde [Quirk](https://algassert.com/quirk) a cualquier ecosistema objetivo ([IBM Qiskit](https://www.ibm.com/quantum/qiskit), [AWS Braket](https://aws.amazon.com/braket/getting-started/) o [Pennylane](https://pennylane.ai/codebook/pennylane-fundamentals)) utilizando como lenguaje "pivote" de representación intermedia a [OpenQASM](https://openqasm.com/language/standard_library.html).
 
-## Estructura
+El proyecto ofrece **dos formas de ejecución**, independientes entre sí pero con el mismo flujo funcional y la misma estructura de salida:
+
+| Modo | Punto de entrada | Entrada (default) | Salida (default) | Recomendado para |
+| --- | --- | --- | --- | --- |
+| **Librería Python** | `qtrans.py` (CLI + API) | `input/` | `output/run_DD_MM_YYYY__HH_MM/` | Automatización, scripts, integración en otros programas |
+| **Cuaderno Jupyter** | `notebooks/QTrans_LIFIA_algorithms_jose.ipynb` | `notebooks/input/` | `notebooks/output/run_DD_MM_YYYY__HH/` | Exploración, visualización paso a paso y docencia |
+
+Ambos modos comparten: lectura de JSON con URLs de Quirk, traducción a OpenQASM, capturas PNG, diagramas, comparaciones visuales, grafos ZX y generación de scripts migrados.
+
+## Estructura del proyecto
 
 ```text
 .
-├── input/                                # JSON de entrada del CLI
+├── input/                                # JSON de entrada de la librería/CLI
+├── output/                               # Corridas de la librería/CLI (no versionado)
+│   └── run_DD_MM_YYYY__HH_MM/            # Una carpeta por corrida (fecha y hora con minutos)
 ├── notebooks/
-│   ├── input/                            # JSON de entrada usados por los cuadernos
-│   ├── output/                           # Salidas agrupadas por corrida (no versionado)
-│   │   └── run_DD_MM_YYYY__HH/           # Una carpeta por fecha y hora (sin minutos)
-│   │       ├── algorithms_qasm/          # Algoritmos traducidos a OpenQASM (.txt)
-│   │       ├── imgs/                     # Imágenes (.png) de la corrida
-│   │       │   ├── circuits_quirk/       # Capturas PNG de los circuitos originales
-│   │       │   └── circuits_qasm/        # Diagramas PNG de los circuitos OpenQASM
-│   │       ├── circuits/                 # Scripts Python migrados por ecosistema
-│   │       │   ├── qiskit/
-│   │       │   ├── aws_braket/
-│   │       │   └── pennylane/
-│   │       ├── compare/                  # Informes Markdown de comparación visual (.md)
-│   │       └── ZXCalculus/               # Equivalencia con cálculo ZX
-│   │           ├── algorithms_base/      # Grafos ZX construidos desde Quirk
-│   │           ├── algorithms_qasm/      # Grafos ZX construidos desde OpenQASM
-│   │           └── graphs/               # Diagramas SVG de los grafos
-│   └── QTrans_LIFIA_algorithms_jose.ipynb  # Notebook con la lógica del pipeline (traducción y comparación)
-├── output/                               # Salidas del CLI (estructura plana, configurable vía QTRANS_*DIR)
-├── utils/qutils.py                       # Traducción Quirk/OpenQASM, grafos ZX y captura
+│   ├── input/                            # JSON de entrada del cuaderno
+│   ├── output/                           # Corridas del cuaderno (no versionado)
+│   │   └── run_DD_MM_YYYY__HH/
+│   └── QTrans_LIFIA_algorithms_jose.ipynb  # Cuaderno con la lógica del pipeline
+├── utils/
+│   ├── __init__.py
+│   ├── qutils.py                         # Traducción Quirk/OpenQASM, grafos ZX y captura
+│   ├── main.py
+│   └── extract_urls.py
+├── test/
+│   ├── test_qtrans.py                    # Pruebas del pipeline/CLI
+│   └── test_qasm.py                      # Pruebas de traducción OpenQASM
 ├── qtrans.py                             # API Python y CLI del pipeline
 ├── translator.py                         # API HTTP heredada
-├── requirements.txt                      # Librerías requeridas por el proyecto
-└── requirements_original.txt             # Librerías originales requeridas por el proyecto
+├── pyproject.toml                        # Empaquetado (pip install)
+├── requirements.txt                      # Librerías requeridas
+└── requirements_original.txt             # Librerías originales requeridas
 ```
 
-### Estampa de corrida (`run_DD_MM_YYYY__HH`)
+### Salidas: directorio de corrida (`run_<estampa>`)
 
-En el flujo del **cuaderno Jupyter**, todas las salidas se agrupan bajo `output/run_<estampa>/`, donde `<estampa>` es la fecha y la **hora** en que se inicia la ejecución, **sin minutos** (`DD_MM_YYYY__HH`, p. ej. `run_10_10_2026__13`).
+En **ambos modos** todas las salidas se agrupan bajo un único directorio de corrida, donde `<estampa>` codifica la fecha y la hora de inicio. La única diferencia es el formato de la estampa y la raíz:
+
+- **Librería/CLI** → `output/run_DD_MM_YYYY__HH_MM/` (fecha y hora **con minutos**, p. ej. `run_10_10_2026__13_45`), configurable con `QTRANS_OUTPUT_DIR`. **Cada ejecución crea su propio directorio**, por lo que en `output/` solo quedan carpetas `run_*` (una por corrida).
+- **Cuaderno** → `notebooks/output/run_DD_MM_YYYY__HH/` (fecha y hora **sin minutos**).
+
+Dentro de la corrida la estructura es idéntica:
+
+Dentro de la corrida la estructura es idéntica:
+
+```text
+run_<estampa>/
+├── algorithms_qasm/            # OpenQASM traducido (*.txt con sufijo _v<ver>)
+├── imgs/
+│   ├── circuits_quirk/         # Capturas PNG de los circuitos Quirk originales
+│   ├── circuits_qasm/          # Diagramas PNG de los circuitos OpenQASM
+│   └── visual_comparations/    # Informes Markdown de comparación Quirk/QASM
+├── migrated_circuits/          # Scripts Python migrados por ecosistema
+│   ├── qiskit/
+│   │   └── imgs/               # PNG estilo IBM Quantum Composer
+│   ├── aws_braket/
+│   └── pennylane/
+└── ZXCalculus/                 # Equivalencia con cálculo ZX
+    ├── algorithms_base/        # Grafos ZX construidos desde Quirk (*.json)
+    ├── algorithms_qasm/        # Grafos ZX construidos desde OpenQASM (*.json)
+    ├── graphs/                 # Diagramas SVG de los grafos
+    └── comparison_results.csv  # Resultados de equivalencia
+```
 
 - Ejecutar el flujo varias veces **dentro de la misma hora** reutiliza el mismo directorio y **sobrescribe** los archivos generados, evitando crear una carpeta nueva por cada reintento.
 - Al cambiar la hora se crea una nueva carpeta `run_*`, preservando el historial de corridas anteriores.
 - Las carpetas generadas están excluidas del control de versiones (`.gitignore`: `/output/` y `/notebooks/output/`).
 
-El **CLI** (`qtrans.py`) no usa la estampa de corrida: escribe en los directorios configurados por las variables `QTRANS_*DIR` (por defecto, `notebooks/output`, `notebooks/algorithms_qasm`, `notebooks/ZXCalculus`, etc.).
+### Versión de OpenQASM
 
-Los cuadernos mantienen sus datos y resultados dentro de `notebooks/`. Por defecto el CLI también usa `notebooks/input` y `notebooks/output`; las carpetas `input/` y `output/` de la raíz pueden configurarse vía `.env` o CLI.
-
-### Versión de OpenQASM en el cuaderno
-
-La celda de generación de QASM y las celdas de migración leen la variable `QTRANS_QASM_VERSION` desde `.env` (`QASM_VERSION`; defecto `'3.0'`, acepta `'2.0'`) mediante `load_dotenv()`. Cada archivo OpenQASM se escribe en `.../algorithms_qasm` con el sufijo de versión, por ejemplo `1__Shor_v3.0.txt` o `1__Shor_v2.0.txt`, lo que permite que ambas versiones coexistan en el mismo directorio de corrida. Las celdas de imágenes, grafos ZX y migración procesan **solo** los `.txt` de la versión activa (filtran por `QASM_VERSION_SUFFIX`, igual a `_v3.0` por defecto) y quitan el sufijo al derivar sus nombres, por lo que sus artefactos conservan el nombre sin versión y las comparaciones siguen funcionando igual.
+Tanto la librería/CLI como el cuaderno leen `QTRANS_QASM_VERSION` desde `.env` (`2.0` o `3.0`, defecto `3.0`). Cada archivo OpenQASM se escribe con el sufijo de versión, por ejemplo `1__Shor_v3.0.txt` o `1__Shor_v2.0.txt`, lo que permite que ambas versiones coexistan en la misma corrida. Las etapas posteriores (imágenes, grafos ZX y migración) procesan **solo** los `.txt` de la versión activa (filtran por el sufijo) y quitan el sufijo al derivar sus nombres, de modo que sus artefactos conservan el nombre sin versión.
 
 ## Instalación
 
 Se recomienda Python 3.12, que es la versión usada en el entorno de desarrollo.
 
-Generación del entorno de ejecución:
 ```bash
 python -m venv .venv
-```
 
-Activación del entorno:
-
-```bash
 # Windows PowerShell
 .venv\Scripts\Activate.ps1
-
 # macOS / Linux
 source .venv/bin/activate
-```
 
-Instalacion de dependencias requeridas:
-
-```bash
 python -m pip install -r requirements.txt
 ```
 
 Para capturar circuitos Quirk como PNG se necesita Chrome o Chromium disponible en el equipo. Selenium inicia el navegador en modo headless.
 
-## Configuración
+## Entrada: formato JSON
 
-El CLI carga `.env` desde la raíz del proyecto. Plantilla base: `.env.example` (cópiala como `.env` para configuración local).
-
-```dotenv
-QTRANS_INPUT_MODE=batch
-QTRANS_INPUT_FILE=
-QTRANS_INPUT_DIR=notebooks/input
-QTRANS_OUTPUT_DIR=notebooks/output
-QTRANS_QASM_DIR=notebooks/algorithms_qasm
-QTRANS_VISUAL_DIR=/output/imgs
-QTRANS_QUIRK_IMAGES_DIR=/output/imgs/circuits_quirk
-QTRANS_QASM_IMAGES_DIR=/output/imgs/circuits_qasm
-QTRANS_COMPARE_DIR=notebooks/compare
-QTRANS_ZX_DIR=notebooks/ZXCalculus
-QTRANS_MIGRATED_DIR=notebooks/output/migrated_circuits
-QTRANS_CAPTURE_IMAGES=true
-QTRANS_GENERATE_QASM_IMAGES=true
-QTRANS_GENERATE_COMPARISON=true
-QTRANS_GENERATE_ZX=true
-QTRANS_GENERATE_ZX_IMAGES=true
-QTRANS_VERBOSE=false
-QTRANS_QASM_VERSION=3.0
-QTRANS_ZX_TIME=0.5
-QTRANS_SHOTS=1000
-QTRANS_CAPTURE_TIMEOUT=15
-QTRANS_TARGET_PROVIDERS=ibm_qiskit
-```
-
-Todas las rutas relativas se resuelven desde la raíz del proyecto. Los valores de arriba son los defaults incorporados en `qtrans.py`; `.env` permite cambiarlos para la ejecución local y `.env.example` sirve como plantilla compartible.
-
-| Variable                      | Utilización                                                                                                    | Default                                    |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `QTRANS_INPUT_MODE`           | `batch` procesa todos los JSON del directorio; `algorithm` procesa un solo archivo.                            | `batch`                                    |
-| `QTRANS_INPUT_FILE`           | Archivo JSON seleccionado en modo `algorithm`; puede pasarse también por CLI.                                   |                                            |
-| `QTRANS_INPUT_DIR`            | Directorio de JSON de entrada.                                                                                 | `notebooks/input`                          |
-| `QTRANS_OUTPUT_DIR`           | Raíz de los resultados del pipeline.                                                                           | `notebooks/output`                         |
-| `QTRANS_QASM_DIR`             | Archivos OpenQASM generados.                                                                                   | `notebooks/algorithms_qasm`                |
-| `QTRANS_VISUAL_DIR`           | Raíz de las imágenes (`.png`/`.jpg`); contiene los subdirectorios `circuits_quirk`, `circuits_qasm` y `circuits_quirk_original`. | `/output/imgs`                             |
-| `QTRANS_QUIRK_IMAGES_DIR`     | Capturas PNG de Quirk (default relativo a `QTRANS_VISUAL_DIR`).                                                | `/output/imgs/circuits_quirk`              |
-| `QTRANS_QASM_IMAGES_DIR`      | Diagramas PNG de los circuitos OpenQASM (default relativo a `QTRANS_VISUAL_DIR`).                              | `/output/imgs/circuits_qasm`               |
-| `QTRANS_COMPARE_DIR`          | Informes Markdown de comparación visual.                                                                       | `notebooks/compare`                        |
-| `QTRANS_ZX_DIR`               | Grafos, comparativas e imágenes ZX.                                                                            | `notebooks/ZXCalculus`                     |
-| `QTRANS_MIGRATED_DIR`         | Raíz de los scripts por provider; crea un subdirectorio por provider.                                          | `notebooks/output/migrated_circuits`       |
-| `QTRANS_TARGET_PROVIDERS`     | Lista separada por comas: `ibm_qiskit`, `aws_braket`, `pennylane`.                                             | `ibm_qiskit`                               |
-| `QTRANS_QASM_VERSION`         | Formato fuente generado: `2.0` o `3.0`.                                                                        | `3.0`                                      |
-| `QTRANS_CAPTURE_IMAGES`       | Activa capturas de Quirk. Booleano (`true/false`, `yes/no`, `on/off`, `1/0`).                                 | `true`                                     |
-| `QTRANS_GENERATE_QASM_IMAGES` | Activa diagramas de los circuitos QASM. Booleano.                                                              | `true`                                     |
-| `QTRANS_GENERATE_COMPARISON`  | Activa páginas de comparación Quirk/QASM. Booleano.                                                            | `true`                                     |
-| `QTRANS_GENERATE_ZX`          | Activa conversión y comparación de grafos ZX. Booleano.                                                        | `true`                                     |
-| `QTRANS_GENERATE_ZX_IMAGES`   | Activa diagramas SVG de grafos ZX. Booleano.                                                                   | `true`                                     |
-| `QTRANS_VERBOSE`              | Muestra el resultado de cada etapa del pipeline. Booleano.                                                     | `false`                                    |
-| `QTRANS_ZX_TIME`              | Snapshot temporal Quirk para gates como `Rxft`, en el rango `0..1`.                                            | `0.5`                                      |
-| `QTRANS_SHOTS`                | Número de shots para los QNodes PennyLane con mediciones. Entero positivo.                                     | `1000`                                     |
-| `QTRANS_CAPTURE_TIMEOUT`      | Timeout de carga/captura del navegador Selenium, en segundos. Entero positivo.                                 | `15`                                       |
-
-Coloca en `QTRANS_INPUT_DIR` (`notebooks/input/` por defecto) uno o más archivos `.json`. Cada archivo debe ser un objeto cuyas claves son nombres de algoritmos y cuyos valores incluyen una URL de Quirk:
+Coloca en el directorio de entrada (`input/` para la librería, `notebooks/input/` para el cuaderno) uno o más archivos `.json`. Cada archivo debe ser un objeto cuyas claves son nombres de algoritmos y cuyos valores incluyen una URL de Quirk:
 
 ```json
 {
@@ -144,13 +107,79 @@ Coloca en `QTRANS_INPUT_DIR` (`notebooks/input/` por defecto) uno o más archivo
 }
 ```
 
-En cuanto a las parametrizaciones:
+- `url` es obligatorio; `offset` y `desc` son opcionales.
+- El modo batch procesa los JSON del **primer nivel** del directorio (no busca recursivamente).
+- Si el nombre del archivo es `popular_algorithms.json`, los nombres de salida llevan el prefijo `popular_`.
 
-`url` es obligatorio; `offset` y `desc` son opcionales. El modo batch procesa los JSON del primer nivel de `QTRANS_INPUT_DIR` (no busca recursivamente). Si el nombre del archivo es `popular_algorithms.json`, los nombres de salida llevan el prefijo `popular_`.
+## Configuración (`.env`)
 
-## CLI
+Ambos modos cargan `.env` desde la raíz del proyecto (`load_dotenv()`). Plantilla base: `.env.example` (cópiala como `.env` para configuración local). Todas las rutas relativas se resuelven desde la raíz del proyecto.
 
-Ejecuta los comandos desde la raíz del repositorio.
+```dotenv
+QTRANS_INPUT_MODE=batch
+QTRANS_INPUT_FILE=
+QTRANS_INPUT_DIR=input
+QTRANS_OUTPUT_DIR=output
+QTRANS_RUN_LABEL=
+QTRANS_CAPTURE_IMAGES=true
+QTRANS_GENERATE_QASM_IMAGES=true
+QTRANS_GENERATE_COMPARISON=true
+QTRANS_GENERATE_COMPOSER_IMAGES=true
+QTRANS_GENERATE_ZX=true
+QTRANS_GENERATE_ZX_IMAGES=true
+QTRANS_VERBOSE=true
+QTRANS_QASM_VERSION=3.0
+QTRANS_ZX_TIME=0.5
+QTRANS_SHOTS=1000
+QTRANS_CAPTURE_TIMEOUT=15
+QTRANS_TARGET_PROVIDERS=ibm_qiskit
+```
+
+| Variable | Utilización | Default |
+| --- | --- | --- |
+| `QTRANS_INPUT_MODE` | `batch` procesa todos los JSON del directorio; `algorithm` procesa un solo archivo. | `batch` |
+| `QTRANS_INPUT_FILE` | Archivo JSON seleccionado en modo `algorithm`; puede pasarse también por CLI. | |
+| `QTRANS_INPUT_DIR` | Directorio de JSON de entrada. | `input` |
+| `QTRANS_OUTPUT_DIR` | Raíz de las corridas (dentro se crea `run_<estampa>`). | `output` |
+| `QTRANS_RUN_LABEL` | Etiqueta explícita de la corrida. Vacío = automático `DD_MM_YYYY__HH_MM`. | _(vacío)_ |
+| `QTRANS_CAPTURE_IMAGES` | Activa capturas PNG de Quirk. Booleano (`true/false`, `yes/no`, `on/off`, `1/0`). | `true` |
+| `QTRANS_GENERATE_QASM_IMAGES` | Activa diagramas PNG de los circuitos OpenQASM. Booleano. | `true` |
+| `QTRANS_GENERATE_COMPARISON` | Activa informes Markdown de comparación Quirk/QASM. Booleano. | `true` |
+| `QTRANS_GENERATE_COMPOSER_IMAGES` | Activa PNG de los circuitos migrados a Qiskit, con estilo IBM Quantum Composer. Booleano. | `true` |
+| `QTRANS_GENERATE_ZX` | Activa conversión y comparación de grafos ZX. Booleano. | `true` |
+| `QTRANS_GENERATE_ZX_IMAGES` | Activa diagramas SVG de los grafos ZX. Booleano. | `true` |
+| `QTRANS_VERBOSE` | Muestra el resultado de cada etapa del pipeline. Booleano. | `true` |
+| `QTRANS_QASM_VERSION` | Formato fuente generado: `2.0` o `3.0`. | `3.0` |
+| `QTRANS_ZX_TIME` | Snapshot temporal Quirk para gates como `Rxft`, en el rango `0..1`. | `0.5` |
+| `QTRANS_SHOTS` | Número de shots para los QNodes PennyLane con mediciones. Entero positivo. | `1000` |
+| `QTRANS_CAPTURE_TIMEOUT` | Timeout de carga/captura del navegador Selenium, en segundos. Entero positivo. | `15` |
+| `QTRANS_TARGET_PROVIDERS` | Lista separada por comas: `ibm_qiskit`, `aws_braket`, `pennylane`. | `ibm_qiskit` |
+
+---
+
+## Modo 1 — Ejecución como Librería Python (`qtrans.py`)
+
+`qtrans.py` es el pipeline completo: se puede usar como **CLI** de línea de comandos o importar como **API** desde código Python.
+
+### Instalación del paquete
+
+`qtrans.py` está empaquetado con `pyproject.toml`, por lo que puede instalarse con `pip` (expone el comando `qtrans`, el módulo `qtrans`, `translator` y el paquete `utils`):
+
+```bash
+# Desde el repositorio (uso local)
+pip install -e .
+
+# o incluyendo extras opcionales
+pip install -e ".[providers]"   # amazon-braket-sdk, pennylane
+pip install -e ".[http]"        # Flask, Flask-Cors, Werkzeug
+pip install -e ".[notebook]"    # jupyter, ipykernel, qiskit-aer
+```
+
+Extras disponibles: `providers`, `http`, `notebook`, `dev`.
+
+### Uso como CLI
+
+Ejecuta los comandos desde la raíz del repositorio (o usa el comando `qtrans` si instalaste el paquete).
 
 Procesar todos los JSON de `QTRANS_INPUT_DIR`:
 
@@ -163,8 +192,6 @@ Procesar un único JSON:
 ```bash
 python qtrans.py --input-mode algorithm --input-file algorithms.json
 ```
-
-`--input-file` acepta un nombre relativo a `QTRANS_INPUT_DIR`, una ruta relativa al directorio actual o una ruta absoluta. Las opciones `--input-dir`, `--qasm-dir` y `--quirk-images-dir` permiten reemplazar las rutas configuradas.
 
 Omitir las capturas PNG:
 
@@ -184,32 +211,107 @@ Para consultar todos los argumentos:
 python qtrans.py --help
 ```
 
-El resultado es OpenQASM (según `QTRANS_QASM_VERSION`, `3.0` por defecto) en `QTRANS_QASM_DIR` (`notebooks/algorithms_qasm/` por defecto) y, cuando las capturas están activas, imágenes PNG en `QTRANS_QUIRK_IMAGES_DIR` (`output/imgs/circuits_quirk/` por defecto, derivado de `QTRANS_VISUAL_DIR`). Los errores de captura se contabilizan y no cancelan la conversión del JSON.
+| Argumento | Descripción |
+| --- | --- |
+| `--input-mode {batch,algorithm}` | Estrategia de entrada (default: `QTRANS_INPUT_MODE`). |
+| `--input-file` | Archivo JSON en modo `algorithm`. Acepta nombre relativo a `--input-dir`, ruta relativa al CWD o ruta absoluta. |
+| `--input-dir` | Directorio de JSON de entrada (default: `input`). |
+| `--output-dir` | Raíz de las corridas; dentro se crea `run_<estampa>` (default: `output`). |
+| `--run-label` | Etiqueta de la corrida (default: `DD_MM_YYYY__HH_MM`, fecha y hora con minutos). |
+| `--qasm-version {2.0,3.0}` | Versión de OpenQASM generada (default: `3.0`). |
+| `--providers` | Ecosistemas objetivo separados por comas: `ibm_qiskit`, `aws_braket`, `pennylane`. |
+| `--shots` | Shots para los QNodes PennyLane (default: `1000`). |
+| `--zx-time` | Snapshot temporal Quirk para gates como `Rxft`, rango `0..1` (default: `0.5`). |
+| `--capture-timeout` | Timeout del navegador Selenium, en segundos (default: `15`). |
+| `--capture-images` / `--no-capture` | Fuerza / omite las capturas PNG de Quirk. |
+| `--no-qasm-images` | Omite los diagramas PNG de los circuitos OpenQASM. |
+| `--no-comparison` | Omite los informes Markdown de comparación visual. |
+| `--no-composer-images` | Omite las imágenes estilo IBM Quantum Composer. |
+| `--no-zx` | Omite la conversión y comparación de grafos ZX. |
+| `--no-zx-images` | Omite los diagramas SVG de los grafos ZX. |
+| `--verbose` / `--quiet` | Activa / silencia las trazas por etapa. El log **está activado por defecto** (equivale a `QTRANS_VERBOSE=true`). |
 
-## Flujo de Ejecución
+### Uso como API
 
-Pipeline que ejecuta el CLI/API, indicando qué genera cada parametrización:
+`qtrans.py` expone `run_pipeline`, que ejecuta el flujo completo y devuelve un resumen:
+
+```python
+from qtrans import run_pipeline
+
+batch_result = run_pipeline(input_mode="batch")
+single_result = run_pipeline(
+    input_mode="algorithm",
+    input_file="algorithms.json",
+    capture_images=False,
+)
+```
+
+Parámetros principales de `run_pipeline`:
+
+| Parámetro | Descripción |
+| --- | --- |
+| `input_mode`, `input_file`, `input_dir` | Entrada (equivalentes a las opciones del CLI). |
+| `output_dir`, `run_label`, `run_dir` | Raíz de la corrida, etiqueta y directorio explícito de corrida. |
+| `qasm_version`, `target_providers`, `shots`, `zx_time` | Configuración funcional. |
+| `capture_images`, `generate_qasm_images`, `generate_comparison`, `generate_composer_images`, `generate_zx`, `generate_zx_images` | Interruptores por etapa (`None` = tomar el valor del `.env`). |
+| `qasm_dir`, `quirk_images_dir`, `qasm_images_dir`, `compare_dir`, `zx_dir`, `migrated_dir`, `composer_images_dir` | Sobrescriben las rutas derivadas de la corrida. |
+| `verbose`, `capture_timeout` | Diagnóstico y timeout de captura. |
+
+El resumen devuelto incluye, entre otros: `input_mode`, `qasm_version`, `target_providers`, `run_dir`, `files_processed`, `algorithms_processed`, `qasm_generated`, `captures_succeeded`, `captures_failed`, `qasm_images_generated`, `comparison_docs_generated`, `composer_images_generated`, `zx_base_graphs_generated`, `zx_qasm_graphs_generated`, `zx_comparisons`, `zx_images_generated`, `provider_scripts_generated`, `output_directories` y `errors`.
+
+### Salida
+
+OpenQASM (según `QTRANS_QASM_VERSION`) en `output/run_<estampa>/algorithms_qasm/` y, cuando las etapas están activas, capturas PNG, diagramas, comparaciones, grafos ZX y scripts migrados, siguiendo la estructura de corrida descrita arriba. Los errores de captura o de cualquier etapa se contabilizan y **no cancelan** las demás generaciones.
+
+---
+
+## Modo 2 — Ejecución con Cuadernos Jupyter
+
+Los cuadernos se conservan como flujo alternativo e independiente de la librería. Abre `notebooks/QTrans_LIFIA_algorithms_jose.ipynb`, selecciona un kernel con las dependencias instaladas y ejecuta las celdas en orden. La primera celda verifica e instala los paquetes necesarios en el kernel.
+
+### Flujo del cuaderno
+
+El cuaderno principal lee `notebooks/input/algorithms.json` y `notebooks/input/popular_algorithms.json` y escribe todas sus salidas bajo una única carpeta de corrida `notebooks/output/run_DD_MM_YYYY__HH/`. La estructura de carpetas se crea de forma **perezosa**: cada celda crea, bajo demanda, el directorio que necesita o genera, en lugar de crear todo el árbol al inicio:
+
+- `algorithms_qasm/` — QASM traducido (lo crea la celda de generación de QASM).
+- `imgs/circuits_quirk/` y `imgs/circuits_qasm/` — diagramas PNG.
+- `imgs/visual_comparations/` — informes Markdown de comparación visual.
+- `ZXCalculus/{algorithms_base,algorithms_qasm,graphs}/` — grafos ZX y SVG.
+- `migrated_circuits/qiskit/`, `migrated_circuits/aws_braket/`, `migrated_circuits/pennylane/` — scripts migrados.
+- `migrated_circuits/qiskit/imgs/` — imágenes `.png` de cada circuito migrado a Qiskit, renderizadas con el estilo de IBM Quantum Composer (`circuit.draw(output='mpl', style='iqp')`).
+
+Cada celda imprime en su log el directorio de la corrida (`DIRECTORIO DE LA CORRIDA: ...`) para ubicar los artefactos. Las celdas de migración leen los archivos OpenQASM de la carpeta `algorithms_qasm/` de esa misma corrida.
+
+Los scripts Braket requieren `amazon-braket-sdk`; los scripts PennyLane requieren `pennylane`.
+
+---
+
+## Flujo de ejecución (pipeline)
+
+Pipeline común a ambos modos, indicando qué genera cada parametrización:
 
 ```mermaid
 flowchart TD
     subgraph ENTRADA["1. Entrada\nQTRANS_INPUT_MODE · QTRANS_INPUT_FILE · QTRANS_INPUT_DIR"]
-        M["batch: todos los *.json de QTRANS_INPUT_DIR"]
-        A["algorithm: solo QTRANS_INPUT_FILE"]
+        M["batch: todos los *.json del directorio"]
+        A["algorithm: solo el archivo indicado"]
     end
 
-    ENTRADA --> C["2. Parseo de cada JSON:\nurl de Quirk (+ offset, desc)"]
+    ENTRADA --> RUN["2. Creación de la corrida\nrun_<estampa> (o QTRANS_RUN_LABEL)"]
+    RUN --> C["3. Parseo de cada JSON:\nurl de Quirk (+ offset, desc)"]
 
-    C --> Q["3. Traducción a OpenQASM\nQTRANS_QASM_VERSION=2.0|3.0\n→ QTRANS_QASM_DIR (*.qasm/.txt)"]
-    C -->|QTRANS_CAPTURE_IMAGES=true| CAP["4. Captura de circuito Quirk\nQTRANS_CAPTURE_TIMEOUT=15s\n→ QTRANS_QUIRK_IMAGES_DIR (*.png)"]
+    C --> Q["4. Traducción a OpenQASM\nQTRANS_QASM_VERSION=2.0|3.0\n→ algorithms_qasm/*_v&lt;ver&gt;.txt"]
+    C -->|QTRANS_CAPTURE_IMAGES=true| CAP["5. Captura de circuito Quirk\nQTRANS_CAPTURE_TIMEOUT=15s\n→ imgs/circuits_quirk/*.png"]
 
-    Q -->|QTRANS_GENERATE_QASM_IMAGES=true| QI["Diagramas QASM\n→ QTRANS_QASM_IMAGES_DIR (*.png)"]
-    CAP --> CQ["Informe comparativo\nQTRANS_GENERATE_COMPARISON=true\n→ QTRANS_COMPARE_DIR (*.md)"]
+    Q -->|QTRANS_GENERATE_QASM_IMAGES=true| QI["Diagramas QASM\n→ imgs/circuits_qasm/*.png"]
+    CAP --> CQ["Comparación visual\nQTRANS_GENERATE_COMPARISON=true\n→ imgs/visual_comparations/*.md"]
     QI --> CQ
-    Q --> ZX["Grafos ZX\nQTRANS_GENERATE_ZX=true · QTRANS_ZX_TIME=0.5\n→ QTRANS_ZX_DIR"]
-    ZX -->|QTRANS_GENERATE_ZX_IMAGES=true| ZXI["Imágenes ZX SVG\n→ QTRANS_ZX_DIR"]
-    Q --> P["Scripts migrados por provider\nQTRANS_TARGET_PROVIDERS=ibm_qiskit,aws_braket,pennylane\nQTRANS_SHOTS=1000\n→ QTRANS_MIGRATED_DIR/&lt;provider&gt;/*.py"]
+    Q --> ZX["Grafos ZX\nQTRANS_GENERATE_ZX=true · QTRANS_ZX_TIME=0.5\n→ ZXCalculus/"]
+    ZX -->|QTRANS_GENERATE_ZX_IMAGES=true| ZXI["SVG de grafos\n→ ZXCalculus/graphs/*.svg"]
+    Q --> P["Scripts migrados\nQTRANS_TARGET_PROVIDERS=ibm_qiskit,aws_braket,pennylane\nQTRANS_SHOTS=1000\n→ migrated_circuits/&lt;eco&gt;/*.py"]
+    P -->|QTRANS_GENERATE_COMPOSER_IMAGES=true| CI["PNG estilo IBM Composer (Qiskit)\n→ migrated_circuits/qiskit/imgs/*.png"]
 
-    V["QTRANS_VERBOSE=true → trazas por etapa en consola"] -.-> ENTRADA
+    V["QTRANS_VERBOSE=true → trazas por etapa en consola"] -.-> RUN
     V -.-> Q
 ```
 
@@ -217,51 +319,24 @@ Resumen de generaciones activables por parámetro:
 
 | Parámetro | Valor | Artefacto generado |
 | --- | --- | --- |
-| `QTRANS_QASM_VERSION` | `2.0` / `3.0` | Código OpenQASM en `QTRANS_QASM_DIR` |
-| `QTRANS_CAPTURE_IMAGES` | `true/false` | PNG de Quirk en `QTRANS_QUIRK_IMAGES_DIR` |
-| `QTRANS_GENERATE_QASM_IMAGES` | `true/false` | PNG de circuitos QASM en `QTRANS_QASM_IMAGES_DIR` |
-| `QTRANS_GENERATE_COMPARISON` | `true/false` | Informes `.md` en `QTRANS_COMPARE_DIR` |
-| `QTRANS_GENERATE_ZX` | `true/false` | Grafos ZX y análisis en `QTRANS_ZX_DIR` |
-| `QTRANS_GENERATE_ZX_IMAGES` | `true/false` | SVG de grafos ZX en `QTRANS_ZX_DIR` |
-| `QTRANS_TARGET_PROVIDERS` | `ibm_qiskit`, `aws_braket`, `pennylane` | Scripts Python migrados en `QTRANS_MIGRATED_DIR/<provider>/` |
+| `QTRANS_QASM_VERSION` | `2.0` / `3.0` | Código OpenQASM en `algorithms_qasm/` |
+| `QTRANS_CAPTURE_IMAGES` | `true/false` | PNG de Quirk en `imgs/circuits_quirk/` |
+| `QTRANS_GENERATE_QASM_IMAGES` | `true/false` | PNG de circuitos QASM en `imgs/circuits_qasm/` |
+| `QTRANS_GENERATE_COMPARISON` | `true/false` | Informes `.md` en `imgs/visual_comparations/` |
+| `QTRANS_GENERATE_ZX` | `true/false` | Grafos ZX y análisis en `ZXCalculus/` |
+| `QTRANS_GENERATE_ZX_IMAGES` | `true/false` | SVG de grafos ZX en `ZXCalculus/graphs/` |
+| `QTRANS_TARGET_PROVIDERS` | `ibm_qiskit`, `aws_braket`, `pennylane` | Scripts Python en `migrated_circuits/<eco>/` |
+| `QTRANS_GENERATE_COMPOSER_IMAGES` | `true/false` | PNG estilo IBM Composer en `migrated_circuits/qiskit/imgs/` |
 
-Los errores de captura o de alguna etapa no cancelan las demás generaciones: se contabilizan en el resumen final.
+## Migración a ecosistemas objetivo
 
-## Uso Como Librería
+Los scripts migrados se generan en Python ejecutable, uno por algoritmo y ecosistema:
 
-`qtrans.py` también expone `run_pipeline` para integrar la traducción en código Python:
+- **IBM Qiskit** (`migrated_circuits/qiskit/`): usa puertas nativas (`h`, `x`, `y`, `z`, `s`, `sdg`, `t`, `tdg`, `sx`, `id`, `cx`, ...) en lugar de `circuit.u(...)` siempre que el `u1/u2/u3` corresponda a una puerta estándar. Produce además las imágenes estilo IBM Quantum Composer en `imgs/`.
+- **AWS Braket** (`migrated_circuits/aws_braket/`): requiere `amazon-braket-sdk`.
+- **PennyLane** (`migrated_circuits/pennylane/`): QNodes con `QTRANS_SHOTS` shots; requiere `pennylane`.
 
-```python
-from qtrans import run_pipeline
-
-batch_result = run_pipeline(input_mode="batch")
-single_result = run_pipeline(
-		input_mode="algorithm",
-		input_file="algorithms.json",
-		capture_images=False,
-)
-```
-
-La función devuelve un resumen con los archivos procesados, algoritmos, archivos QASM, capturas y errores. También se puede pasar `input_dir`, `qasm_dir` y `quirk_images_dir` como argumentos.
-
-## Cuadernos Jupyter
-
-Los cuadernos se conservan como flujo alternativo e independiente del CLI. Abre `notebooks/QTrans_LIFIA_algorithms_jose.ipynb`, selecciona un kernel con las dependencias instaladas y ejecuta las celdas en orden. La primera celda verifica e instala los paquetes necesarios en el kernel.
-
-El cuaderno principal lee `notebooks/input/algorithms.json` y `notebooks/input/popular_algorithms.json` y escribe todas sus salidas bajo una única carpeta de corrida `notebooks/output/run_DD_MM_YYYY__HH/` (fecha y hora sin minutos). La estructura de carpetas se crea de forma perezosa: cada celda crea, bajo demanda, el directorio que necesita o genera, en lugar de crear todo el árbol al inicio:
-
-- `algorithms_qasm/` — QASM traducido (lo crea la celda de generación de QASM)
-- `imgs/circuits_quirk/` y `imgs/circuits_qasm/` — diagramas PNG
-- `imgs/visual_comparations/` — informes Markdown de comparación visual
-- `ZXCalculus/{algorithms_base,algorithms_qasm,graphs}/` — grafos ZX y SVG
-- `migrated_circuits/qiskit/`, `migrated_circuits/aws_braket/`, `migrated_circuits/pennylane/` — scripts migrados
-- `migrated_circuits/qiskit/imgs/` — imágenes `.png` de cada circuito migrado a Qiskit, renderizadas con el estilo de IBM Quantum Composer (`circuit.draw(output='mpl', style='iqp')`)
-
-Cada celda imprime en su log el directorio de la corrida (`DIRECTORIO DE LA CORRIDA: ...`) para ubicar los artefactos. Las celdas de migración leen los archivos OpenQASM de la carpeta `algorithms_qasm/` de esa misma corrida.
-
-Los scripts Braket requieren `amazon-braket-sdk`; los scripts PennyLane requieren `pennylane`.
-
-## API HTTP Heredada
+## API HTTP heredada
 
 `translator.py` conserva la API Flask usada por las integraciones existentes. Se inicia con:
 
@@ -277,9 +352,9 @@ El servidor escucha en `http://localhost:8081`. Endpoints POST disponibles:
 
 La colección de Postman está en `postman/Quirk_Translator_IBM_AWS.postman_collection_original.json`.
 
-## Pruebas Unitarias del proyecto
+## Pruebas
 
-Ejecuta la suite del pipeline con:
+Ejecuta la suite del proyecto con:
 
 ```bash
 python -m unittest discover -s test -p "test_*.py" -v
