@@ -47,7 +47,7 @@ Los cuadernos mantienen sus datos y resultados dentro de `notebooks/`. Por defec
 
 ### Versión de OpenQASM en el cuaderno
 
-La celda de generación de QASM está parametrizada por la variable `QASM_VERSION` (defecto `'3.0'`, acepta `'2.0'`). Cada archivo OpenQASM se escribe en `.../algorithms_qasm` con el sufijo de versión, por ejemplo `1__Shor_v3.0.txt` o `1__Shor_v2.0.txt`, lo que permite que ambas versiones coexistan en el mismo directorio de corrida. Las celdas de imágenes, grafos ZX y migración procesan **solo** los `.txt` de la versión activa (filtran por `QASM_VERSION_SUFFIX`, igual a `_v3.0` por defecto) y quitan el sufijo al derivar sus nombres, por lo que sus artefactos conservan el nombre sin versión y las comparaciones siguen funcionando igual.
+La celda de generación de QASM y las celdas de migración leen la variable `QTRANS_QASM_VERSION` desde `.env` (`QASM_VERSION`; defecto `'3.0'`, acepta `'2.0'`) mediante `load_dotenv()`. Cada archivo OpenQASM se escribe en `.../algorithms_qasm` con el sufijo de versión, por ejemplo `1__Shor_v3.0.txt` o `1__Shor_v2.0.txt`, lo que permite que ambas versiones coexistan en el mismo directorio de corrida. Las celdas de imágenes, grafos ZX y migración procesan **solo** los `.txt` de la versión activa (filtran por `QASM_VERSION_SUFFIX`, igual a `_v3.0` por defecto) y quitan el sufijo al derivar sus nombres, por lo que sus artefactos conservan el nombre sin versión y las comparaciones siguen funcionando igual.
 
 ## Instalación
 
@@ -248,13 +248,14 @@ La función devuelve un resumen con los archivos procesados, algoritmos, archivo
 
 Los cuadernos se conservan como flujo alternativo e independiente del CLI. Abre `notebooks/QTrans_LIFIA_algorithms_jose.ipynb`, selecciona un kernel con las dependencias instaladas y ejecuta las celdas en orden. La primera celda verifica e instala los paquetes necesarios en el kernel.
 
-El cuaderno principal lee `notebooks/input/algorithms.json` y `notebooks/input/popular_algorithms.json` y escribe todas sus salidas bajo una única carpeta de corrida `notebooks/output/run_DD_MM_YYYY__HH/` (fecha y hora sin minutos):
+El cuaderno principal lee `notebooks/input/algorithms.json` y `notebooks/input/popular_algorithms.json` y escribe todas sus salidas bajo una única carpeta de corrida `notebooks/output/run_DD_MM_YYYY__HH/` (fecha y hora sin minutos). La estructura de carpetas se crea de forma perezosa: cada celda crea, bajo demanda, el directorio que necesita o genera, en lugar de crear todo el árbol al inicio:
 
-- `algorithms_qasm/` — QASM traducido
+- `algorithms_qasm/` — QASM traducido (lo crea la celda de generación de QASM)
 - `imgs/circuits_quirk/` y `imgs/circuits_qasm/` — diagramas PNG
-- `compare/` — informes Markdown de comparación visual
+- `imgs/visual_comparations/` — informes Markdown de comparación visual
 - `ZXCalculus/{algorithms_base,algorithms_qasm,graphs}/` — grafos ZX y SVG
-- `circuits/qiskit/`, `circuits/aws_braket/`, `circuits/pennylane/` — scripts migrados
+- `migrated_circuits/qiskit/`, `migrated_circuits/aws_braket/`, `migrated_circuits/pennylane/` — scripts migrados
+- `migrated_circuits/qiskit/imgs/` — imágenes `.png` de cada circuito migrado a Qiskit, renderizadas con el estilo de IBM Quantum Composer (`circuit.draw(output='mpl', style='iqp')`)
 
 Cada celda imprime en su log el directorio de la corrida (`DIRECTORIO DE LA CORRIDA: ...`) para ubicar los artefactos. Las celdas de migración leen los archivos OpenQASM de la carpeta `algorithms_qasm/` de esa misma corrida.
 

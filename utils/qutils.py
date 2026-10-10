@@ -731,6 +731,30 @@ def provider_python_source(qasm_source, provider, qasm_version='3.0', shots=1000
     return _pennylane_python_source(circuit, shots=shots)
 
 
+_HALF_PI = 1.5707963267948966
+_PI = 3.141592653589793
+
+
+def _native_gate_for_u(theta, phi, lam):
+    """Return the native Qiskit gate name when (theta, phi, lam) is standard."""
+    targets = {
+        'h': (_HALF_PI, 0.0, _PI),
+        'x': (_PI, 0.0, _PI),
+        'y': (_PI, _HALF_PI, _HALF_PI),
+        'z': (0.0, 0.0, _PI),
+        's': (0.0, 0.0, _HALF_PI),
+        'sdg': (0.0, 0.0, -_HALF_PI),
+        't': (0.0, 0.0, _PI / 4.0),
+        'tdg': (0.0, 0.0, -_PI / 4.0),
+        'sx': (_HALF_PI, 0.0, 0.0),
+        'id': (0.0, 0.0, 0.0),
+    }
+    for name, angles in targets.items():
+        if all(abs(a - b) < 1e-9 for a, b in zip((theta, phi, lam), angles)):
+            return name
+    return None
+
+
 def _qiskit_python_source(parsed_circuit):
     gate_classes = {
         'h': 'HGate', 'swap': 'SwapGate', 'x': 'XGate', 'y': 'YGate', 'z': 'ZGate',
@@ -762,18 +786,33 @@ def _qiskit_python_source(parsed_circuit):
     instructions = []
 
     def emit(operation, qubits, clbits, depth=0):
-        parameters = [repr(parameter) for parameter in operation.params]
+        raw_params = list(operation.params)
+        parameters = [repr(parameter) for parameter in raw_params]
 
-        if operation.name == 'u1':
-            instructions.append(f'circuit.p({parameters[0]}, {qubits[0]})')
-        elif operation.name == 'u2':
-            instructions.append(
-                f'circuit.u(1.5707963267948966, {parameters[0]}, {parameters[1]}, {qubits[0]})'
-            )
-        elif operation.name in {'u3', 'u'}:
-            instructions.append(
-                f'circuit.u({parameters[0]}, {parameters[1]}, {parameters[2]}, {qubits[0]})'
-            )
+        if operation.name in {'u1', 'u2', 'u3', 'u'}:
+            theta, phi, lam = 0.0, 0.0, 0.0
+            if operation.name in {'u3', 'u'}:
+                theta, phi, lam = raw_params
+            elif operation.name == 'u2':
+                theta = _HALF_PI
+                phi, lam = raw_params[0], raw_params[1]
+            else:
+                lam = raw_params[0]
+            native = _native_gate_for_u(theta, phi, lam)
+            if native == 'id':
+                return
+            if native:
+                instructions.append(f'circuit.{native}({qubits[0]})')
+            elif operation.name == 'u1':
+                instructions.append(f'circuit.p({parameters[0]}, {qubits[0]})')
+            elif operation.name == 'u2':
+                instructions.append(
+                    f'circuit.u({repr(_HALF_PI)}, {parameters[0]}, {parameters[1]}, {qubits[0]})'
+                )
+            else:
+                instructions.append(
+                    f'circuit.u({parameters[0]}, {parameters[1]}, {parameters[2]}, {qubits[0]})'
+                )
         elif operation.name == 'mcx':
             controls = qubits[:-1]
             control_state = operation.ctrl_state
