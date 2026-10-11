@@ -27,6 +27,7 @@ Ambos modos comparten: lectura de JSON con URLs de Quirk, traducción a OpenQASM
 │   ├── __init__.py
 │   ├── qutils.py                         # Traducción Quirk/OpenQASM, grafos ZX y captura
 │   ├── main.py
+│   ├── cleanup_outputs.py                # Limpieza de las corridas de salida
 │   └── extract_urls.py
 ├── test/
 │   ├── test_qtrans.py                    # Pruebas del pipeline/CLI
@@ -283,6 +284,45 @@ El cuaderno principal lee `notebooks/input/algorithms.json` y `notebooks/input/p
 Cada celda imprime en su log el directorio de la corrida (`DIRECTORIO DE LA CORRIDA: ...`) para ubicar los artefactos. Las celdas de migración leen los archivos OpenQASM de la carpeta `algorithms_qasm/` de esa misma corrida.
 
 Los scripts Braket requieren `amazon-braket-sdk`; los scripts PennyLane requieren `pennylane`.
+
+---
+
+## Limpieza de salidas (`utils/cleanup_outputs.py`)
+
+Elimina los directorios de corrida (`run_*`) generados por la librería/CLI (`output/`) y por el cuaderno (`notebooks/output/`). Funciona como script de consola o como biblioteca importable.
+
+```bash
+# Ver qué se eliminaría, sin borrar nada
+python utils/cleanup_outputs.py --dry-run
+
+# Borrar las corridas de ambas raíces (pide confirmación)
+python utils/cleanup_outputs.py
+
+# Sin confirmación
+python utils/cleanup_outputs.py -y
+
+# Limpiar solo output/ (ignora notebooks/output/)
+python utils/cleanup_outputs.py --root output -y
+```
+
+| Argumento | Descripción |
+| --- | --- |
+| `--root PATH` | Directorio de salida a limpiar (repetible). Al indicarlo se reemplazan los defaults (`output/`, `notebooks/output/`). |
+| `--all` | Elimina también los archivos sueltos presentes en los directorios de salida. |
+| `--keep N` | Conserva las `N` corridas más recientes de cada directorio (default: `0`). |
+| `--remove-roots` | Elimina también el directorio raíz cuando queda vacío. |
+| `-n`, `--dry-run` | Muestra qué se eliminaría sin borrar nada. |
+| `-y`, `--yes` | No pide confirmación. |
+| `-q`, `--quiet` | Salida reducida. |
+
+Uso como biblioteca:
+
+```python
+from utils.cleanup_outputs import clean_outputs
+
+summary = clean_outputs(roots=["output"], assume_yes=True)
+print(summary["total_bytes"])
+```
 
 ---
 

@@ -148,9 +148,44 @@ DEFAULT_TARGET_PROVIDERS = _parse_target_providers(
 # ---------------------------------------------------------------------------
 # Utilidades internas
 # ---------------------------------------------------------------------------
+_RUN_LABEL_TOKEN_RE = re.compile(r"YYYY|DD|HH|SS|MM")
+
+
+def _format_run_label(label, now=None):
+    """Resuelve los tokens DD/MM/YYYY/HH/MM/SS de una etiqueta con datos reales.
+
+    ``MM`` se interpreta como mes tras DD/YYYY y como minutos tras HH.
+    """
+    now = now or datetime.now()
+    result = []
+    position = 0
+    last_token = None
+    for match in _RUN_LABEL_TOKEN_RE.finditer(label):
+        result.append(label[position:match.start()])
+        token = match.group()
+        if token == "YYYY":
+            value = now.strftime("%Y")
+        elif token == "DD":
+            value = now.strftime("%d")
+        elif token == "HH":
+            value = now.strftime("%H")
+        elif token == "SS":
+            value = now.strftime("%S")
+        else:  # MM
+            value = now.strftime("%M") if last_token == "HH" else now.strftime("%m")
+        result.append(value)
+        last_token = token
+        position = match.end()
+    result.append(label[position:])
+    return "".join(result)
+
+
 def _run_label(run_label=None):
     label = (run_label or "").strip() if isinstance(run_label, str) else run_label
-    return label or DEFAULT_RUN_LABEL or datetime.now().strftime("%d_%m_%Y__%H_%M")
+    label = label or DEFAULT_RUN_LABEL
+    if not label:
+        return datetime.now().strftime("%d_%m_%Y__%H_%M")
+    return _format_run_label(label)
 
 
 def _run_directory(output_dir, run_dir=None, run_label=None):
@@ -505,7 +540,25 @@ def _run_zx_workflow(records, zx_dir, zx_time, generate_images, verbose):
                 "Resultado": result,
             }
         )
-        _log(verbose, "Comparación ZX", f"{name}: {result} ({method}).")
+        _log(
+            verbose,
+            "Comparación ZX",
+            f"Quirk vs OpenQASM de {name}: {result} (método: {method}).",
+        )
+
+    if verbose and comparisons:
+        equivalent = sum(
+            1 for c in comparisons if c["Resultado"].startswith("EQUIVALENTES")
+        )
+        not_demonstrated = sum(
+            1 for c in comparisons if c["Resultado"].startswith("NO DEMOSTRADO")
+        )
+        print(
+            f"[Comparación ZX] Grafos reducidos Quirk vs OpenQASM: "
+            f"{equivalent}/{len(comparisons)} circuitos EQUIVALENTES"
+            + (f", {not_demonstrated} NO DEMOSTRADOS" if not_demonstrated else "")
+            + "."
+        )
 
     comparison_path = zx_dir / "comparison_results.csv"
     with comparison_path.open("w", encoding="utf-8", newline="") as csv_file:
