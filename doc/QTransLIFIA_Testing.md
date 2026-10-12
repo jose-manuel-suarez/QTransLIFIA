@@ -21,7 +21,7 @@ El paso más crítico de todo el flujo es la **traducción Quirk → OpenQASM**:
 | Captura Quirk | PNG en `imgs/circuits_quirk/` | `capture_images` / `QTRANS_CAPTURE_IMAGES` | Referencia visual indisponible |
 | Diagrama OpenQASM | PNG en `imgs/circuits_qasm/` | `generate_qasm_images` / `QTRANS_GENERATE_QASM_IMAGES` | Sin inspección visual del QASM |
 | Comparación visual | Markdown en `imgs/visual_comparations/` | `generate_comparison` / `QTRANS_GENERATE_COMPARISON` | Sin contraste lado a lado |
-| Grafos ZX | JSON + `comparison_results.csv` en `ZXCalculus/` | `generate_zx` / `QTRANS_GENERATE_ZX` | Sin equivalencia semántica automática |
+| Grafos ZX | JSON + `comparison_results.md` en `ZXCalculus/` | `generate_zx` / `QTRANS_GENERATE_ZX` | Sin equivalencia semántica automática |
 | Migración | Scripts en `migrated_circuits/` | `(etapas de migración)` | Backend recibe un circuito incorrecto |
 
 El determinismo de `quirk_to_qasm` (misma URL → mismo OpenQASM) es el prerequisito que convierte a cada una de estas etapas en **comprobable automáticamente** (*golden tests*, *regression tests*, *differential testing*).
@@ -51,7 +51,7 @@ El pipeline incorpora un **verificador semántico automático** basado en el cá
 3. `_run_zx_workflow` (`qtrans.py:466`) compara ambos grafos por circuito:
    - **Circuitos grandes** (> 10 qubits): `zx.Circuit.verify_equality(..., up_to_global_phase=True)`.
    - **Circuitos pequeños** (≤ 10 qubits): `zx.simplify.full_reduce` + `zx.compare_tensors(..., strategy='rw-greedy-linear')`.
-   - Resultado por circuito en `ZXCalculus/comparison_results.csv` (`EQUIVALENTES` / `NO DEMOSTRADO` / `NO COMPARABLES` / `ERROR`).
+   - Resultado por circuito en `ZXCalculus/comparison_results.md` (`EQUIVALENTES` / `NO DEMOSTRADO` / `NO COMPARABLES` / `ERROR`).
 
 Esta estrategia convierte la equivalencia semántica en un **artefacto reproducible del pipeline**, sin depender de herramientas externas ni de ejecución en simuladores. Estado real de qubits distintos, controles duplicados o expansiones incorrectas de *custom gates* quedan expuestos aquí.
 
@@ -73,7 +73,7 @@ Para circuitos de pocos qubits (estados Bell, Toffoli, «la demostración por la
 | Parsing (URL/JSON) | `quirk_circuit_info` como *round-trip* de `parse_quirk_url` | Re-encodeo con `encode_quirk_url` y re-apertura en Quirk |
 | Traducción Quirk → OpenQASM | Verificación estática (3.1) | Equivalencia ZX (3.2) + validación sintáctica con parsers externos |
 | Diagramas OpenQASM | Comprobación visual (3.3) | Contraste de dimensiones vs. circuito Quirk |
-| Grafos ZX | Equivalencia semántica (3.2) | `comparison_results.csv` como reporte auditable |
+| Grafos ZX | Equivalencia semántica (3.2) | `comparison_results.md` como reporte auditable |
 | Migración a ecosistemas | Simulación cruzada entre backends | Comparación de resultados (estados, distribuciones) |
 | Pipeline completo | Tests automatizados (sección 5) | *Golden tests* sobre artefactos de corrida |
 
@@ -97,7 +97,7 @@ Además, el determinismo del traductor habilita en el repositorio (o en CI/CD) e
 ## 6. Recomendaciones Prácticas
 
 - **Aplicar siempre la verificación estática (3.1)** en cada corrida: es la de menor costo y cubre las características esenciales.
-- **Habilitar los grafos ZX (3.2)** en las corridas de validación formal; el reporte `ZXCalculus/comparison_results.csv` es evidencia auditable de equivalencia.
+- **Habilitar los grafos ZX (3.2)** en las corridas de validación formal; el reporte `ZXCalculus/comparison_results.md` es evidencia auditable de equivalencia.
 - **Usar la comprobación visual (3.3)** como inspección rápida en circuitos sencillos y como *sanity check* previa al análisis profundo en circuitos grandes.
 - **Complementar con validación externa**: parser OpenQASM y simulación cruzada en al menos dos ecosistemas destino para confirmar que el IR es consumible y las discrepancias provienen del backend, no de la traducción.
 - **Registrar los errores por etapa**: `run_pipeline` contabiliza errores por etapa sin cancelar las demás, permitiendo detectar *dónde* falla el flujo y aislar la falla.

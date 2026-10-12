@@ -5,9 +5,20 @@ from pathlib import Path
 from unittest.mock import patch
 
 from qtrans import run_pipeline
+from utils.qutils import (
+    encode_quirk_url,
+    provider_python_source,
+    qasm_to_zx_graph,
+    quirk_to_qasm,
+    quirk_to_zx_graph,
+)
 
 
 QUIRK_URL = 'https://algassert.com/quirk#circuit={"cols":[["H"],["Measure"]]}'
+
+
+def quirk_url(circuit):
+    return encode_quirk_url('https://algassert.com/quirk#circuit=' + json.dumps(circuit))
 
 DISABLED_STAGES = dict(
     capture_images=False,
@@ -46,6 +57,10 @@ class QTransPipelineTests(unittest.TestCase):
             input_dir=self.input_dir,
             output_dir=self.output_dir,
             run_label='TEST',
+            input_file=None,
+            input_files=(),
+            qasm_version='3.0',
+            target_providers=('qiskit',),
         )
         options.update(kwargs)
         return run_pipeline(**options)
@@ -82,6 +97,52 @@ class QTransPipelineTests(unittest.TestCase):
         self.assertTrue((self.qasm_dir / '1__Bell_v3.0.txt').is_file())
         self.assertTrue((self.qasm_dir / 'popular_1__Popular_Bell_v3.0.txt').is_file())
         self.assertFalse((self.qasm_dir / 'ignored_v3.0.txt').exists())
+
+    def test_batch_mode_processes_selected_input_files_only(self):
+        self.write_algorithms('algorithms.json', '1. Bell')
+        self.write_algorithms('other.json', '2. Ignored')
+
+        summary = self.run_case(
+            input_mode='batch',
+            input_files=['algorithms.json'],
+            **DISABLED_STAGES,
+        )
+
+        self.assertEqual(summary['files_processed'], 1)
+        self.assertEqual(summary['algorithms_processed'], 1)
+        self.assertTrue((self.qasm_dir / '1__Bell_v3.0.txt').is_file())
+        self.assertFalse((self.qasm_dir / '2__Ignored_v3.0.txt').exists())
+
+    def test_batch_mode_processes_multiple_selected_input_files(self):
+        self.write_algorithms('algorithms.json', '1. Bell')
+        self.write_algorithms('popular_algorithms.json', '1. Popular Bell')
+        self.write_algorithms('other.json', '2. Ignored')
+
+        summary = self.run_case(
+            input_mode='batch',
+            input_files=['algorithms.json', 'popular_algorithms.json'],
+            **DISABLED_STAGES,
+        )
+
+        self.assertEqual(summary['files_processed'], 2)
+        self.assertEqual(summary['algorithms_processed'], 2)
+        self.assertTrue((self.qasm_dir / '1__Bell_v3.0.txt').is_file())
+        self.assertTrue((self.qasm_dir / 'popular_1__Popular_Bell_v3.0.txt').is_file())
+        self.assertFalse((self.qasm_dir / '2__Ignored_v3.0.txt').exists())
+
+    def test_batch_mode_processes_comma_separated_input_files(self):
+        self.write_algorithms('algorithms.json', '1. Bell')
+        self.write_algorithms('popular_algorithms.json', '1. Popular Bell')
+
+        summary = self.run_case(
+            input_mode='batch',
+            input_files=['algorithms.json,popular_algorithms.json'],
+            **DISABLED_STAGES,
+        )
+
+        self.assertEqual(summary['files_processed'], 2)
+        self.assertTrue((self.qasm_dir / '1__Bell_v3.0.txt').is_file())
+        self.assertTrue((self.qasm_dir / 'popular_1__Popular_Bell_v3.0.txt').is_file())
 
     def test_capture_function_is_called_for_each_algorithm(self):
         self.write_algorithms('algorithms.json', '1. Bell')
@@ -120,14 +181,81 @@ class QTransPipelineTests(unittest.TestCase):
 
         self.assertTrue((self.qasm_dir / '1__Bell_v3.0.txt').is_file())
         self.assertTrue((self.run_dir / 'imgs' / 'circuits_qasm' / '1__Bell.png').is_file())
-        self.assertTrue((self.run_dir / 'migrated_circuits' / 'qiskit' / '1__Bell.py').is_file())
-        composer_image = self.run_dir / 'migrated_circuits' / 'qiskit' / 'imgs' / '1__Bell.png'
+        self.assertTrue((self.run_dir / 'migrated_circuits' / 'ibm_qiskit' / '1__Bell.py').is_file())
+        composer_image = self.run_dir / 'migrated_circuits' / 'ibm_qiskit' / 'imgs' / '1__Bell.png'
         self.assertTrue(composer_image.is_file())
         self.assertEqual(summary['composer_images_generated'], 1)
+
+    def test_qasm_v2_output_has_blank_line_after_header(self):
+        self.write_algorithms('algorithms.json', '1. Bell')
+
+        self.run_case(
+            input_mode='algorithm',
+            input_file='algorithms.json',
+            qasm_version='2.0',
+            **DISABLED_STAGES,
+        )
+
+        qasm_text = (self.qasm_dir / '1__Bell_v2.0.txt').read_text(encoding='utf-8')
+        lines = qasm_text.splitlines()
+        self.assertEqual(lines[0], 'OPENQASM 2.0;')
+        self.assertTrue(lines[1].startswith('include'))
+        self.assertEqual(lines[2], '')
 
     def test_invalid_input_mode_is_rejected(self):
         with self.assertRaises(ValueError):
             run_pipeline(input_mode='single')
+
+    def test_qft_native_gate_is_emitted_in_qasm(self):
+        url = quirk_url({'cols': [['QFT3', 1, 1], ['Measure', 'Measure', 'Measure']]})
+        qasm = quirk_to_qasm(url)
+
+        self.assertIn('gate QFT3 a,b,c {', qasm)
+        self.assertIn('QFT3 q[0], q[1], q[2];', qasm)
+        self.assertIn('qreg q[3];', qasm)
+
+        inverse = quirk_to_qasm(quirk_url({'cols': [['QFT3\u2020', 1, 1]]}))
+        self.assertIn('gate QFT3_dg a,b,c {', inverse)
+        self.assertIn('QFT3_dg q[0], q[1], q[2];', inverse)
+
+    def test_qft_zx_graphs_are_equivalent(self):
+        import pyzx as zx
+
+        url = quirk_url({'cols': [['QFT3', 1, 1]]})
+        base = quirk_to_zx_graph(url)
+        qasm_graph = qasm_to_zx_graph(quirk_to_qasm(url))
+        zx.simplify.full_reduce(base)
+        zx.simplify.full_reduce(qasm_graph)
+        self.assertTrue(zx.compare_tensors(base, qasm_graph))
+
+    def test_qft_can_be_controlled(self):
+        circuit = {'cols': [['•', 'QFT2', 1], ['Measure', 'Measure', 'Measure']]}
+        qasm = quirk_to_qasm(quirk_url(circuit))
+        self.assertIn('ctrl @ QFT2 q[0], q[1], q[2];', qasm)
+
+    def test_preserve_custom_gates_generates_local_functions(self):
+        url = quirk_url({'cols': [['QFT3', 1, 1], ['Measure', 'Measure', 'Measure']]})
+        qasm = quirk_to_qasm(url)
+
+        for provider in ('qiskit', 'braket', 'pennylane'):
+            preserved = provider_python_source(qasm, provider, preserve_custom_gates=True)
+            inlined = provider_python_source(qasm, provider, preserve_custom_gates=False)
+            self.assertIn('def QFT3', preserved)
+            self.assertNotIn('def QFT3', inlined)
+            compile(preserved, f'<{provider}-preserved>', 'exec')
+            compile(inlined, f'<{provider}-inlined>', 'exec')
+
+    def test_preserve_custom_gates_flag_flows_to_summary(self):
+        self.write_algorithms('algorithms.json', '1. Bell')
+
+        summary = self.run_case(
+            input_mode='algorithm',
+            input_file='algorithms.json',
+            preserve_custom_gates=False,
+            **DISABLED_STAGES,
+        )
+
+        self.assertFalse(summary['preserve_custom_gates'])
 
 
 if __name__ == '__main__':

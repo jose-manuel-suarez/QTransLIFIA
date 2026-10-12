@@ -50,17 +50,10 @@ coverage.xml
 .hypothesis/
 
 # Generated circuit files and outputs (QTransLIFIA)
-# Salidas por corrida (run_DD_MM_YYYY__HH): no se versionan para evitar acumular
-# miles de archivos generados. Se conserva la trazabilidad del código y los inputs.
+# Salidas por corrida (run_DD_MM_YYYY__HH): no se versionan para evitar acumular miles de archivos generados.
 /output/
 /notebooks/output/
-# Por ahora los siguientes se comentan para que quede trazabilidad y no se pierdan los archivos generados, ademas de poder ser consultados desde GitHub web. En un futuro se podrian eliminar si se considera que no son necesarios.
-#/notebooks/algorithms_qasm/
-#/notebooks/circuits_qasm/
-#/notebooks/circuits_quirk/
-#/notebooks/circuits_quirk_original/
-#/notebooks/popular_algorithms/
-#/notebooks/compare/
+
 .pytest_cache/
 cover/
 

@@ -1,0 +1,6 @@
+{
+	"QFT Nativa Quirk": {
+		"desc": "Compuerta QFT nativa Qurik (3 qubits)",
+		"url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\"],[\"QFT3\"],[\"Measure\",\"Measure\",\"Measure\"]]}"
+	}
+}

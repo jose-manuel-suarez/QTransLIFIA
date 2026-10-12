@@ -72,6 +72,82 @@ def _matrix_gate_operation(gate):
     return None
 
 
+def _unquote_parameters(lines, params):
+    """Quita las comillas que un `!r` añadió alrededor de los placeholders wN."""
+    result = list(lines)
+    for param in params:
+        result = [
+            line.replace(f"'{param}'", param).replace(f'"{param}"', param)
+            for line in result
+        ]
+    return result
+
+
+# Compuertas nativas QFT / QFT† de Quirk (familia de 1..16 cúbits).
+_QFT_TOKEN_RE = re.compile(
+    r'^QFT(?P<inv1>\u2020|\^\u2020)?(?P<span>\d+)(?P<inv2>\u2020|\^\u2020)?$'
+)
+
+
+def _qft_token(value):
+    """Devuelve (span, inverse) si value es una compuerta nativa QFT de Quirk."""
+    if not isinstance(value, str):
+        return None
+    match = _QFT_TOKEN_RE.match(value)
+    if match is None:
+        return None
+    span = int(match.group('span'))
+    if span < 1:
+        return None
+    return span, bool(match.group('inv1') or match.group('inv2'))
+
+
+def _qft_gate_name(span, inverse=False):
+    return f'QFT{span}_dg' if inverse else f'QFT{span}'
+
+
+def _qft_qasm_body(span, inverse=False):
+    """Cuerpo de la compuerta QFT (descomposición estándar H + fases + SWAP)."""
+    args = list(string.ascii_lowercase[:span])
+    lines = []
+    if not inverse:
+        for i in range(span - 1, -1, -1):
+            lines.append(f'h {args[i]};')
+            for j in range(i - 1, -1, -1):
+                lines.append(f'cp(pi / {2 ** (i - j)}) {args[i]}, {args[j]};')
+        for k in range(span // 2):
+            lines.append(f'swap {args[k]}, {args[span - 1 - k]};')
+    else:
+        for k in range(span // 2):
+            lines.append(f'swap {args[k]}, {args[span - 1 - k]};')
+        for i in range(span):
+            for j in range(i):
+                lines.append(f'cp(-pi / {2 ** (i - j)}) {args[i]}, {args[j]};')
+            lines.append(f'h {args[i]};')
+    return lines
+
+
+def _qft_declarations(tokens):
+    """Declaraciones `gate QFTn ...` para los spans QFT usados."""
+    lines = []
+    for span, inverse in sorted(tokens):
+        name = _qft_gate_name(span, inverse)
+        lines.append(f'gate {name} {primeras_letras(span)} {{')
+        lines.extend(_qft_qasm_body(span, inverse))
+        lines.append('}')
+    return lines
+
+
+def _column_extent(col):
+    """Altura efectiva de una columna, contando compuertas nativas QFT."""
+    extent = len(col)
+    for index, value in enumerate(col):
+        info = _qft_token(value)
+        if info is not None:
+            extent = max(extent, index + info[0])
+    return extent
+
+
 # Gates estándar de OpenQASM 3 (stdgates.inc) utilizables en el sitio de uso.
 _STANDARD_GATES = frozenset({
     'p', 'x', 'y', 'z', 'h', 's', 'sdg', 't', 'tdg', 'sx', 'rx', 'ry', 'rz',
@@ -297,6 +373,30 @@ def _is_gate_ref(entry, gate_map):
 
 
 def _quirk2_col_to_qasm(col, offset, gate_map, gate_names=None):
+    if gate_names is None:
+        gate_names = _resolve_gate_names(gate_map)
+    col = list(col)
+    controls = [index for index, value in enumerate(col) if value == '•']
+    qft_lines = []
+    for index, value in enumerate(col):
+        info = _qft_token(value)
+        if info is None:
+            continue
+        span, inverse = info
+        target_wires = [f'q[{index + k + offset}]' for k in range(span)]
+        control_wires = [f'q[{control + offset}]' for control in controls]
+        modifier = 'ctrl @ ' * len(controls)
+        name = _qft_gate_name(span, inverse)
+        qft_lines.append(
+            f'{modifier}{name} {", ".join(control_wires + target_wires)};'
+        )
+        for k in range(span):
+            if index + k < len(col):
+                col[index + k] = 1
+    return qft_lines + _quirk2_col_to_qasm_core(col, offset, gate_map, gate_names)
+
+
+def _quirk2_col_to_qasm_core(col, offset, gate_map, gate_names=None):
     lines = []
     if gate_names is None:
         gate_names = _resolve_gate_names(gate_map)
@@ -671,6 +771,15 @@ def quirk_to_qasm(url, offset=0, qasm_version='3.0'):
     gate_map = _build_gate_map(circuito)
     gate_names = _resolve_gate_names(gate_map)
     cols = circuito.get('cols', [])
+    qft_tokens = {
+        info
+        for col in cols
+        for value in col
+        for info in [_qft_token(value)]
+        if info is not None
+    }
+    if qft_tokens:
+        lines.extend(_qft_declarations(qft_tokens))
     if len(custom_gates_info) > 0:
         declarations = append_custom_gates(custom_gates_info, gate_map, gate_names)
         if declarations:
@@ -678,7 +787,7 @@ def quirk_to_qasm(url, offset=0, qasm_version='3.0'):
     if not cols:
         n = offset
     else:
-        n = max(len(c) for c in cols) + offset
+        n = max(_column_extent(c) for c in cols) + offset
         r = max(
             (
                 gate.get("n_qubits")
@@ -710,25 +819,32 @@ def qasm3_to_qasm2(qasm3_source):
         basis_gates=['u1', 'u2', 'u3', 'cx'],
         optimization_level=0,
     )
-    return qasm2.dumps(lowered_circuit)
+    source = qasm2.dumps(lowered_circuit)
+    lines = source.split('\n')
+    if len(lines) >= 2 and lines[1].startswith('include') and lines[2] != '':
+        lines.insert(2, '')
+    return '\n'.join(lines)
 
 
-def provider_python_source(qasm_source, provider, qasm_version='3.0', shots=1000):
+def provider_python_source(qasm_source, provider, qasm_version='3.0', shots=1000,
+                           preserve_custom_gates=False):
     """Return executable Python source for a supported quantum provider."""
     from qiskit import qasm2, qasm3
 
-    providers = {'ibm_qiskit', 'aws_braket', 'pennylane'}
+    providers = {'qiskit', 'braket', 'pennylane'}
     if provider not in providers:
         raise ValueError(f'Provider no soportado: {provider!r}')
     if qasm_version not in {'2.0', '3.0'}:
         raise ValueError("qasm_version debe ser '2.0' o '3.0'")
 
     circuit = qasm2.loads(qasm_source) if qasm_version == '2.0' else qasm3.loads(qasm_source)
-    if provider == 'ibm_qiskit':
-        return _qiskit_python_source(circuit)
-    if provider == 'aws_braket':
-        return _braket_python_source(circuit)
-    return _pennylane_python_source(circuit, shots=shots)
+    if provider == 'qiskit':
+        return _qiskit_python_source(circuit, preserve_custom_gates=preserve_custom_gates)
+    if provider == 'braket':
+        return _braket_python_source(circuit, preserve_custom_gates=preserve_custom_gates)
+    return _pennylane_python_source(
+        circuit, shots=shots, preserve_custom_gates=preserve_custom_gates
+    )
 
 
 _HALF_PI = 1.5707963267948966
@@ -755,7 +871,7 @@ def _native_gate_for_u(theta, phi, lam):
     return None
 
 
-def _qiskit_python_source(parsed_circuit):
+def _qiskit_python_source(parsed_circuit, preserve_custom_gates=False):
     gate_classes = {
         'h': 'HGate', 'swap': 'SwapGate', 'x': 'XGate', 'y': 'YGate', 'z': 'ZGate',
     }
@@ -784,6 +900,29 @@ def _qiskit_python_source(parsed_circuit):
 
     gate_imports = set()
     instructions = []
+    custom_functions = {}
+
+    def custom_function(operation, qubits):
+        """Define (una sola vez) una función local y emite su llamada."""
+        name = _sanitize_gate_name(operation.name, 'custom_gate')
+        if name not in custom_functions:
+            definition = operation.definition
+            params = [f'w{index}' for index in range(len(definition.qubits))]
+            qubit_positions = {bit: index for index, bit in enumerate(definition.qubits)}
+            clbit_positions = {bit: index for index, bit in enumerate(definition.clbits)}
+            before = len(instructions)
+            for sub_item in definition.data:
+                emit(
+                    sub_item.operation,
+                    [params[qubit_positions[bit]] for bit in sub_item.qubits],
+                    [f'cl{clbit_positions[bit]}' for bit in sub_item.clbits],
+                    1,
+                )
+            body = _unquote_parameters(instructions[before:], params)
+            del instructions[before:]
+            custom_functions[name] = (params, body)
+        arguments = ['circuit'] + [str(qubit) for qubit in qubits]
+        instructions.append(f"{name}({', '.join(arguments)})")
 
     def emit(operation, qubits, clbits, depth=0):
         raw_params = list(operation.params)
@@ -845,7 +984,10 @@ def _qiskit_python_source(parsed_circuit):
             instructions.append(f"circuit.append({gate_expression}, [{', '.join(qubits)}])")
         elif operation.definition is not None and depth < 10:
             # Custom gate declarado en OpenQASM (o controlado sin equivalencia
-            # directa): se expande su cuerpo en línea respetando el orden.
+            # directa): se conserva como función local o se expande en línea.
+            if preserve_custom_gates:
+                custom_function(operation, qubits)
+                return
             definition = operation.definition
             qubit_positions = {bit: index for index, bit in enumerate(definition.qubits)}
             clbit_positions = {bit: index for index, bit in enumerate(definition.clbits)}
@@ -877,16 +1019,47 @@ def _qiskit_python_source(parsed_circuit):
 
     python_lines = imports + ['', '# Generación de registros cuánticos y clásicos']
     python_lines.extend(register_declarations)
+    if custom_functions:
+        python_lines.extend(['', '# Compuertas personalizadas (funciones locales)'])
+        for name, (params, body) in custom_functions.items():
+            python_lines.append(f"def {name}(circuit, {', '.join(params)}):")
+            python_lines.extend(f'    {line}' for line in body)
+            python_lines.append('')
+        if python_lines[-1] == '':
+            python_lines.pop()
     python_lines.extend(['', '# Creación del circuito cuántico'])
     python_lines.append(f"circuit = QuantumCircuit({', '.join(register_variables)})")
     python_lines.extend([''] + instructions)
     return '\n'.join(python_lines) + '\n'
 
 
-def _braket_python_source(parsed_circuit):
+def _braket_python_source(parsed_circuit, preserve_custom_gates=False):
     instructions = []
     measurements = []
     measurement_qubits = set()
+    custom_functions = {}
+
+    def custom_function(operation, qubits):
+        """Define (una sola vez) una función local y emite su llamada."""
+        name = _sanitize_gate_name(operation.name, 'custom_gate')
+        if name not in custom_functions:
+            definition = operation.definition
+            params = [f'w{index}' for index in range(len(definition.qubits))]
+            qubit_positions = {bit: index for index, bit in enumerate(definition.qubits)}
+            clbit_positions = {bit: index for index, bit in enumerate(definition.clbits)}
+            before = len(instructions)
+            for sub_item in definition.data:
+                emit(
+                    sub_item.operation,
+                    [params[qubit_positions[bit]] for bit in sub_item.qubits],
+                    [f'cl{clbit_positions[bit]}' for bit in sub_item.clbits],
+                    1,
+                )
+            body = _unquote_parameters(instructions[before:], params)
+            del instructions[before:]
+            custom_functions[name] = (params, body)
+        arguments = ['circuit'] + [str(qubit) for qubit in qubits]
+        instructions.append(f"{name}({', '.join(arguments)})")
 
     def emit(operation, qubits, clbits, depth=0):
         parameters = [repr(parameter) for parameter in operation.params]
@@ -964,7 +1137,11 @@ def _braket_python_source(parsed_circuit):
             arguments = [str(qubits[0])] + parameters
             instructions.append(f"circuit.{operation.name}({', '.join(arguments)})")
         elif operation.definition is not None and depth < 10:
-            # Custom gate declarado en OpenQASM: expandir su cuerpo en línea.
+            # Custom gate declarado en OpenQASM (o controlado sin equivalencia
+            # directa): se conserva como función local o se expande en línea.
+            if preserve_custom_gates:
+                custom_function(operation, qubits)
+                return
             definition = operation.definition
             qubit_positions = {bit: index for index, bit in enumerate(definition.qubits)}
             clbit_positions = {bit: index for index, bit in enumerate(definition.clbits)}
@@ -988,13 +1165,23 @@ def _braket_python_source(parsed_circuit):
     python_lines = [
         '# Importación de paquetes requeridos',
         'from braket.circuits import Circuit',
+    ]
+    if custom_functions:
+        python_lines.extend(['', '# Compuertas personalizadas (funciones locales)'])
+        for name, (params, body) in custom_functions.items():
+            python_lines.append(f"def {name}(circuit, {', '.join(params)}):")
+            python_lines.extend(f'    {line}' for line in body)
+            python_lines.append('')
+        if python_lines[-1] == '':
+            python_lines.pop()
+    python_lines.extend([
         '',
         '# Creación del circuito AWS Braket',
         'circuit = Circuit()',
         '',
         '# Puertas migradas desde OpenQASM',
         *instructions,
-    ]
+    ])
     if measurements:
         python_lines.append('')
         python_lines.append('# Mediciones en orden clásico, diferidas al final')
@@ -1005,7 +1192,7 @@ def _braket_python_source(parsed_circuit):
     return '\n'.join(python_lines) + '\n'
 
 
-def _pennylane_python_source(parsed_circuit, shots=1000):
+def _pennylane_python_source(parsed_circuit, shots=1000, preserve_custom_gates=False):
     pennylane_gates = {
         'h': 'Hadamard', 'p': 'PhaseShift', 'rx': 'RX', 'ry': 'RY',
         'rz': 'RZ', 'swap': 'SWAP', 'x': 'PauliX', 'y': 'PauliY', 'z': 'PauliZ',
@@ -1024,6 +1211,28 @@ def _pennylane_python_source(parsed_circuit, shots=1000):
     instructions = []
     measurement_variables = {}
     measurement_count = 0
+    custom_functions = {}
+
+    def custom_function(operation, qubits):
+        """Define (una sola vez) una función local y emite su llamada."""
+        name = _sanitize_gate_name(operation.name, 'custom_gate')
+        if name not in custom_functions:
+            definition = operation.definition
+            params = [f'w{index}' for index in range(len(definition.qubits))]
+            qubit_positions = {bit: index for index, bit in enumerate(definition.qubits)}
+            clbit_positions = {bit: index for index, bit in enumerate(definition.clbits)}
+            before = len(instructions)
+            for sub_item in definition.data:
+                emit(
+                    sub_item.operation,
+                    [params[qubit_positions[bit]] for bit in sub_item.qubits],
+                    [f'cl{clbit_positions[bit]}' for bit in sub_item.clbits],
+                    1,
+                )
+            body = _unquote_parameters(instructions[before:], params)
+            del instructions[before:]
+            custom_functions[name] = (params, body)
+        instructions.append(f"{name}({', '.join(str(qubit) for qubit in qubits)})")
 
     def emit(operation, qubits, clbits, depth=0):
         nonlocal measurement_count
@@ -1065,7 +1274,11 @@ def _pennylane_python_source(parsed_circuit, shots=1000):
         gate_name = pennylane_gates.get(operation.name)
         if gate_name is None:
             if operation.definition is not None and depth < 10:
-                # Custom gate declarado en OpenQASM: expandir su cuerpo en línea.
+                # Custom gate declarado en OpenQASM (o controlado sin equivalencia
+                # directa): se conserva como función local o se expande en línea.
+                if preserve_custom_gates:
+                    custom_function(operation, qubits)
+                    return
                 definition = operation.definition
                 qubit_positions = {bit: index for index, bit in enumerate(definition.qubits)}
                 clbit_positions = {bit: index for index, bit in enumerate(definition.clbits)}
@@ -1096,13 +1309,24 @@ def _pennylane_python_source(parsed_circuit, shots=1000):
     python_lines = [
         '# Importación de paquetes requeridos',
         'import pennylane as qml',
+    ]
+    if custom_functions:
+        python_lines.append('')
+        python_lines.append('# Compuertas personalizadas (funciones locales)')
+        for name, (params, body) in custom_functions.items():
+            python_lines.append(f"def {name}({', '.join(params)}):")
+            python_lines.extend(f'    {line}' for line in body)
+            python_lines.append('')
+        if python_lines[-1] == '':
+            python_lines.pop()
+    python_lines.extend([
         '',
         f"device = qml.device('default.qubit', wires={parsed_circuit.num_qubits}, shots={device_shots!r})",
         '',
         '@qml.qnode(device)',
         'def circuit():',
         *[f'    {instruction}' for instruction in instructions],
-    ]
+    ])
 
     if measured_classical_bits:
         python_lines.append('    return (')
@@ -1122,7 +1346,7 @@ def quirk_circuit_info(url):
     gates_defs = circuito.get('gates', [])
     # n_qubits efectivo: max de cols principales y altura de custom gates usados
     if cols:
-        n_qubits = max(len(c) for c in cols) if cols else 0
+        n_qubits = max(_column_extent(c) for c in cols) if cols else 0
         gate_map_eff = _build_gate_map(circuito)
         for col in cols:
             for idx, entry in enumerate(col):
@@ -1398,6 +1622,43 @@ def _zx_append_unitary(circuit, target, matrix, controls=None):
         circuit.add_gate('ZPhase', target, _zx_phase(beta))
 
 
+def _zx_append_qft(circuit, base, span, inverse, controls=()):
+    """Añade la descomposición de la QFT nativa de Quirk al circuito PyZX."""
+    controls = list(controls)
+    args = [base + k for k in range(span)]
+    hadamard = ((0.5 ** 0.5, 0.5 ** 0.5), (0.5 ** 0.5, -0.5 ** 0.5))
+
+    def emit_h(qubit):
+        _zx_append_unitary(circuit, qubit, hadamard, controls)
+
+    def emit_cp(angle, control, target):
+        matrix = ((1 + 0j, 0j), (0j, cmath.exp(1j * angle)))
+        _zx_append_unitary(circuit, target, matrix, controls + [control])
+
+    def emit_swap(first, second):
+        if controls:
+            _zx_append_mcx(circuit, controls + [first], second)
+            _zx_append_mcx(circuit, controls + [second], first)
+            _zx_append_mcx(circuit, controls + [first], second)
+        else:
+            circuit.add_gate('SWAP', first, second)
+
+    if not inverse:
+        for i in range(span - 1, -1, -1):
+            emit_h(args[i])
+            for j in range(i - 1, -1, -1):
+                emit_cp(math.pi / (2 ** (i - j)), args[i], args[j])
+        for k in range(span // 2):
+            emit_swap(args[k], args[span - 1 - k])
+    else:
+        for k in range(span // 2):
+            emit_swap(args[k], args[span - 1 - k])
+        for i in range(span):
+            for j in range(i):
+                emit_cp(-math.pi / (2 ** (i - j)), args[i], args[j])
+            emit_h(args[i])
+
+
 def quirk_to_zx_graph(url, offset=0, time=0.5):
     """Convierte una URL Quirk a un grafo PyZX; time selecciona el snapshot [0, 1]."""
     try:
@@ -1410,7 +1671,7 @@ def quirk_to_zx_graph(url, offset=0, time=0.5):
 
     circuit_data = parse_quirk_url(url)
     cols = circuit_data.get('cols', [])
-    n_qubits = max((len(col) for col in cols), default=0) + offset
+    n_qubits = max((_column_extent(col) for col in cols), default=0) + offset
     circuit = zx.Circuit(n_qubits)
     gate_map = _build_gate_map(circuit_data)
 
@@ -1431,6 +1692,10 @@ def quirk_to_zx_graph(url, offset=0, time=0.5):
 
         for index, token in enumerate(col):
             if token in (1, '1', None, '•', 'Swap', 'Measure'):
+                continue
+            qft_info = _qft_token(token)
+            if qft_info is not None:
+                _zx_append_qft(circuit, index + offset, qft_info[0], qft_info[1], controls)
                 continue
             _zx_append_unitary(
                 circuit,
