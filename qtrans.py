@@ -1,6 +1,6 @@
 """Quirk-to-OpenQASM pipeline de QTransLIFIA (librería + CLI).
 
-Reproduce el flujo del cuaderno ``notebooks/QTrans_LIFIA_algorithms_jose.ipynb``:
+Reproduce el flujo del cuaderno ``notebooks/QTrans.ipynb``:
 lee los JSON de entrada, captura los circuitos Quirk, traduce a OpenQASM,
 genera diagramas y comparaciones, construye y compara grafos ZX y migra cada
 circuito a los ecosistemas objetivo (Qiskit, AWS Braket, PennyLane), incluidas

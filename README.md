@@ -2,12 +2,14 @@
 
 QTransLIFIA traduce circuitos cuánticos desde [Quirk](https://algassert.com/quirk) a cualquier ecosistema objetivo ([IBM Qiskit](https://www.ibm.com/quantum/qiskit), [AWS Braket](https://aws.amazon.com/braket/getting-started/) o [Pennylane](https://pennylane.ai/codebook/pennylane-fundamentals)) utilizando como lenguaje "pivote" de representación intermedia a [OpenQASM](https://openqasm.com/language/standard_library.html).
 
+Desde la perspectiva de la **Ingeniería de Software Cuántica (QSE)**, QTransLIFIA se concibe con atributos de calidad explícitos: **abstracción** y **expresividad** (preservación semántica de las *custom gates* definidas en Quirk), **verificabilidad** y **testing** (equivalencia estructural y por cálculo ZX entre el circuito diseñado y el migrado, con estrategias de comprobación en cada etapa del flujo), y **escalabilidad** y **extensibilidad** (crecimiento hacia nuevos ecosistemas sin reescribir el núcleo). Estos seis atributos se documentan de forma individual y se recopilan en [**doc/QTransLIFIA_QSE.md**](doc/QTransLIFIA_QSE.md).
+
 El proyecto ofrece **dos formas de ejecución**, independientes entre sí pero con el mismo flujo funcional y la misma estructura de salida:
 
 | Modo | Punto de entrada | Entrada (default) | Salida (default) | Recomendado para |
 | --- | --- | --- | --- | --- |
 | **Librería Python** | `qtrans.py` (CLI + API) | `input/` | `output/run_DD_MM_YYYY__HH_MM/` | Automatización, scripts, integración en otros programas |
-| **Cuaderno Jupyter** | `notebooks/QTrans_LIFIA_algorithms_jose.ipynb` | `notebooks/input/` | `notebooks/output/run_DD_MM_YYYY__HH/` | Exploración, visualización paso a paso y docencia |
+| **Cuaderno Jupyter** | `notebooks/QTrans.ipynb` | `notebooks/input/` | `notebooks/output/run_DD_MM_YYYY__HH/` | Exploración, visualización paso a paso y docencia |
 
 Ambos modos comparten: lectura de JSON con URLs de Quirk, traducción a OpenQASM, capturas PNG, diagramas, comparaciones visuales, grafos ZX y generación de scripts migrados.
 
@@ -22,7 +24,7 @@ Ambos modos comparten: lectura de JSON con URLs de Quirk, traducción a OpenQASM
 │   ├── input/                            # JSON de entrada del cuaderno
 │   ├── output/                           # Corridas del cuaderno (no versionado)
 │   │   └── run_DD_MM_YYYY__HH/
-│   └── QTrans_LIFIA_algorithms_jose.ipynb  # Cuaderno con la lógica del pipeline
+│   └── QTrans.ipynb                        # Cuaderno con la lógica del pipeline
 ├── utils/
 │   ├── __init__.py
 │   ├── qutils.py                         # Traducción Quirk/OpenQASM, grafos ZX y captura
@@ -268,7 +270,7 @@ OpenQASM (según `QTRANS_QASM_VERSION`) en `output/run_<estampa>/algorithms_qasm
 
 ## Modo 2 — Ejecución con Cuadernos Jupyter
 
-Los cuadernos se conservan como flujo alternativo e independiente de la librería. Abre `notebooks/QTrans_LIFIA_algorithms_jose.ipynb`, selecciona un kernel con las dependencias instaladas y ejecuta las celdas en orden. La primera celda verifica e instala los paquetes necesarios en el kernel.
+Los cuadernos se conservan como flujo alternativo e independiente de la librería. Abre `notebooks/QTrans.ipynb`, selecciona un kernel con las dependencias instaladas y ejecuta las celdas en orden. La primera celda verifica e instala los paquetes necesarios en el kernel.
 
 ### Flujo del cuaderno
 
