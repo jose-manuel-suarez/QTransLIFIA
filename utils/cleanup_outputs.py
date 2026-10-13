@@ -1,7 +1,8 @@
 """Limpieza de los directorios de salida de QTransLIFIA.
 
 Elimina los directorios de corrida (``run_*``) que genera el pipeline en
-``output/`` y ``notebooks/output/``. Uso desde consola:
+``output/`` (raíz del proyecto, común a la librería/CLI y al cuaderno) y, por
+compatibilidad, en el antiguo ``notebooks/output/``. Uso desde consola:
 
     python utils/cleanup_outputs.py              # pide confirmación y borra run_*
     python utils/cleanup_outputs.py --dry-run    # solo muestra qué eliminaría

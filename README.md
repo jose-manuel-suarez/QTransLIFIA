@@ -1,61 +1,60 @@
 # QTransLIFIA
 
-QTransLIFIA traduce circuitos cuánticos desde [Quirk](https://algassert.com/quirk) a cualquier ecosistema objetivo ([IBM Qiskit](https://www.ibm.com/quantum/qiskit), [AWS Braket](https://aws.amazon.com/braket/getting-started/) o [Pennylane](https://pennylane.ai/codebook/pennylane-fundamentals)) utilizando como lenguaje "pivote" de representación intermedia a [OpenQASM](https://openqasm.com/language/standard_library.html).
+QTransLIFIA traduce circuitos cuánticos desde [Quirk](https://algassert.com/quirk) a cualquier ecosistema objetivo de desarrollo cuántico (actualmente: [IBM Qiskit](https://www.ibm.com/quantum/qiskit), [AWS Braket](https://aws.amazon.com/braket/getting-started/) o [Xanadu Pennylane](https://pennylane.ai/codebook/pennylane-fundamentals)) utilizando como lenguaje "pivote" de representación intermedia a [OpenQASM](https://openqasm.com/language/standard_library.html).
 
-Desde la perspectiva de la **Ingeniería de Software Cuántica (QSE)**, QTransLIFIA se concibe con atributos de calidad explícitos: **abstracción** y **expresividad** (preservación semántica de las *custom gates* definidas en Quirk), **verificabilidad** y **testing** (equivalencia estructural y por cálculo ZX entre el circuito diseñado y el migrado, con estrategias de comprobación en cada etapa del flujo), y **escalabilidad** y **extensibilidad** (crecimiento hacia nuevos ecosistemas sin reescribir el núcleo). Estos seis atributos se documentan de forma individual y se recopilan en [**doc/QTransLIFIA_QSE.md**](doc/QTransLIFIA_QSE.md).
+Desde la perspectiva de la _Ingeniería de Software Cuántica (QSE)_, **QTransLIFIA** se concibe con atributos de calidad explícitos: **abstracción** y **expresividad** (preservación semántica de las *custom gates* definidas en Quirk), **verificabilidad** y **testing** (equivalencia estructural y por cálculo ZX entre el circuito diseñado y el migrado, con estrategias de comprobación en cada etapa del flujo), así como **escalabilidad** y **extensibilidad** (crecimiento hacia nuevos ecosistemas sin reescribir el núcleo). Estos seis atributos se documentan de forma individual y se recopilan en la [**subsección de documentación del proyecto**](doc/QTransLIFIA_QSE.md).
 
-El proyecto ofrece **dos formas de ejecución**, independientes entre sí pero con el mismo flujo funcional y la misma estructura de salida:
+## Flujos de ejecución
+El proyecto ofrece **dos formas de ejecución**, independientes entre sí pero con el mismo flujo funcional y la misma estructura de archivos de entrada y salida:
 
 | Modo | Punto de entrada | Entrada (default) | Salida (default) | Recomendado para |
 | --- | --- | --- | --- | --- |
-| **Librería Python** | `qtrans.py` (CLI + API) | `input/` | `output/run_DD_MM_YYYY__HH_MM/` | Automatización, scripts, integración en otros programas |
-| **Cuaderno Jupyter** | `notebooks/QTrans.ipynb` | `notebooks/input/` | `notebooks/output/run_DD_MM_YYYY__HH/` | Exploración, visualización paso a paso y docencia |
+| **Librería Python** | `qtrans.py` (CLI + API) | `input/` | `output/run_DD_MM_YYYY__HH_MM/` | Automatización, scripts, integración en otros flujos |
+| **Cuaderno Jupyter** | `notebooks/QTrans.ipynb` | `input/` | `output/run_DD_MM_YYYY__HH/` | Exploración, visualización y demostraciones |
 
-Ambos modos comparten: lectura de JSON con URLs de Quirk, traducción a OpenQASM, capturas PNG, diagramas, comparaciones visuales, grafos ZX y generación de scripts migrados.
+> En **ambos modos** `input/` y `output/` se resuelven en la **raíz del proyecto**. El cuaderno lo hace a partir de su propia ubicación (`utils/qutils.py`), por lo que funciona aunque se ejecute desde otra carpeta.
+
+Ambos modos comparten: lectura de JSON con URLs de Quirk, traducción a OpenQASM como lenguaje representacional intermedio, visualización (mediante capturas PNG, diagramas, comparaciones), grafos ZX y generación de scripts migrados.
 
 ## Estructura del proyecto
 
 ```text
 .
-├── input/                                # JSON de entrada de la librería/CLI
-├── output/                               # Corridas de la librería/CLI (no versionado)
-│   └── run_DD_MM_YYYY__HH_MM/            # Una carpeta por corrida (fecha y hora con minutos)
+├── input/                                # JSON de entrada (librería/CLI y cuaderno)
+├── output/                               # Corridas de ambos modos (no versionado)
+│   └── run_<estampa>/                    # Una carpeta por corrida
 ├── notebooks/
-│   ├── input/                            # JSON de entrada del cuaderno
-│   ├── output/                           # Corridas del cuaderno (no versionado)
-│   │   └── run_DD_MM_YYYY__HH/
-│   └── QTrans.ipynb                        # Cuaderno con la lógica del pipeline
+│   └── QTrans.ipynb                      # Cuaderno con la lógica del pipeline
 ├── utils/
 │   ├── __init__.py
-│   ├── qutils.py                         # Traducción Quirk/OpenQASM, grafos ZX y captura
+│   ├── qutils.py                         # Traducción Quirk/OpenQASM, grafos ZX y capturas
 │   ├── main.py
 │   ├── cleanup_outputs.py                # Limpieza de las corridas de salida
 │   └── extract_urls.py
-├── test/
+├── test/                                 # Directorio de pruebas funcionales 
 │   ├── test_qtrans.py                    # Pruebas del pipeline/CLI
 │   └── test_qasm.py                      # Pruebas de traducción OpenQASM
 ├── qtrans.py                             # API Python y CLI del pipeline
-├── translator.py                         # API HTTP heredada
 ├── pyproject.toml                        # Empaquetado (pip install)
 ├── requirements.txt                      # Librerías requeridas
-└── requirements_original.txt             # Librerías originales requeridas
+└── original/                             # Librerías originales heredadas
 ```
 
-### Salidas: directorio de corrida (`run_<estampa>`)
+### Salidas: directorio de corrida (`run_<estampa_fecha_hora>`)
 
-En **ambos modos** todas las salidas se agrupan bajo un único directorio de corrida, donde `<estampa>` codifica la fecha y la hora de inicio. La única diferencia es el formato de la estampa y la raíz:
+En **ambos modos** todas las salidas se agrupan bajo un único directorio de corrida en la **raíz del proyecto** (`output/`), donde `<estampa_fecha_hora>` codifica la fecha y la hora de inicio. La única diferencia entre modos es el formato de la estampa:
 
 - **Librería/CLI** → `output/run_DD_MM_YYYY__HH_MM/` (fecha y hora **con minutos**, p. ej. `run_10_10_2026__13_45`), configurable con `QTRANS_OUTPUT_DIR`. **Cada ejecución crea su propio directorio**, por lo que en `output/` solo quedan carpetas `run_*` (una por corrida).
-- **Cuaderno** → `notebooks/output/run_DD_MM_YYYY__HH/` (fecha y hora **sin minutos**).
+- **Cuaderno** → `output/run_DD_MM_YYYY__HH/` (fecha y hora **sin minutos**). El cuaderno resuelve la raíz del proyecto a partir de su propia ubicación, por lo que **siempre** escribe en `output/` aunque se ejecute desde otra carpeta.
 
-Dentro de la corrida la estructura es idéntica:
+Las entradas también viven en la raíz del proyecto (`input/`) en ambos modos.
 
 Dentro de la corrida la estructura es idéntica:
 
 ```text
-run_<estampa>/
-├── algorithms_qasm/            # OpenQASM traducido (*.txt con sufijo _v<ver>)
-├── imgs/
+run_<estampa_fecha_hora>/
+├── algorithms_qasm/            # OpenQASM traducido (*.txt con sufijo _v<version>)
+├── imgs/                       # Directorio para comparación e información visual
 │   ├── circuits_quirk/         # Capturas PNG de los circuitos Quirk originales
 │   ├── circuits_qasm/          # Diagramas PNG de los circuitos OpenQASM
 │   └── visual_comparations/    # Informes Markdown de comparación Quirk/QASM
@@ -63,8 +62,9 @@ run_<estampa>/
 │   ├── ibm_qiskit/
 │   │   └── imgs/               # PNG estilo IBM Quantum Composer
 │   ├── aws_braket/
-│   └── xanadu_pennylane/
-└── ZXCalculus/                 # Equivalencia con cálculo ZX
+│   ├── xanadu_pennylane/
+|   └── ... otros               # otros a futuro ...
+└── ZXCalculus/                 # Equivalencia de circuitos utilizando cálculo ZX
     ├── algorithms_base/        # Grafos ZX construidos desde Quirk (*.json)
     ├── algorithms_qasm/        # Grafos ZX construidos desde OpenQASM (*.json)
     ├── graphs/                 # Diagramas SVG de los grafos
@@ -73,11 +73,14 @@ run_<estampa>/
 
 - Ejecutar el flujo varias veces **dentro de la misma hora** reutiliza el mismo directorio y **sobrescribe** los archivos generados, evitando crear una carpeta nueva por cada reintento.
 - Al cambiar la hora se crea una nueva carpeta `run_*`, preservando el historial de corridas anteriores.
-- Las carpetas generadas están excluidas del control de versiones (`.gitignore`: `/output/` y `/notebooks/output/`).
+- Las carpetas generadas están excluidas del control de versiones (`.gitignore`: `/output/`, y `/notebooks/output/` por compatibilidad con corridas antiguas). Por cuestión de optimización y tamaño del proyecto, por lo cual no existe trazabilidad a nivel de ejecuciones en el repositorio GitHub.
+- Además se provee un script para limpieza de directorios de salida en `utils/cleanup_outputs.py`.
 
 ### Versión de OpenQASM
 
-Tanto la librería/CLI como el cuaderno leen `QTRANS_QASM_VERSION` desde `.env` (`2.0` o `3.0`, defecto `3.0`). Cada archivo OpenQASM se escribe con el sufijo de versión, por ejemplo `1__Shor_v3.0.txt` o `1__Shor_v2.0.txt`, lo que permite que ambas versiones coexistan en la misma corrida. Las etapas posteriores (imágenes, grafos ZX y migración) procesan **solo** los `.txt` de la versión activa (filtran por el sufijo) y quitan el sufijo al derivar sus nombres, de modo que sus artefactos conservan el nombre sin versión.
+Tanto la librería/CLI como el cuaderno leen `QTRANS_QASM_VERSION` desde `.env` (`2.0` o `3.0`, por defecto `3.0`). Cada archivo OpenQASM se escribe con el sufijo de versión, por ejemplo `1__Shor_v3.0.txt` o `1__Shor_v2.0.txt`, lo que permite que ambas versiones coexistan en la misma corrida. Las etapas posteriores (imágenes, grafos ZX y migración) procesan **solo** los `.txt` de la versión activa (filtran por el sufijo) y quitan el sufijo al derivar sus nombres, de modo que sus artefactos conservan el nombre sin versión.
+
+Esta doble funcionalidad de versiones se admite en principio ya que algunos ecosistemas utilizan de forma nativa la carga desde la versión 2.0 de OpenQASM. A futuro podría configurarse la parametrización como `latest` y que siempre obtenga la más reciente versión de OpenQASM.
 
 ## Instalación
 
@@ -94,11 +97,11 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-Para capturar circuitos Quirk como PNG se necesita Chrome o Chromium disponible en el equipo. Selenium inicia el navegador en modo headless.
+Para capturar circuitos Quirk (parametrización: `QTRANS_CAPTURE_IMAGES`) como PNG se necesita Chrome o Chromium disponible en el equipo. Selenium inicia el navegador en modo headless.
 
 ## Entrada: formato JSON
 
-Coloca en el directorio de entrada (`input/` para la librería, `notebooks/input/` para el cuaderno) uno o más archivos `.json`. Cada archivo debe ser un objeto cuyas claves son nombres de algoritmos y cuyos valores incluyen una URL de Quirk:
+Coloca en el directorio de entrada `input/` de la **raíz del proyecto** (compartido por la librería/CLI y el cuaderno) uno o más archivos `.json` que compondrán la batería de pruebas a abarcar por parte de la librería de migración. Cada archivo debe ser un objeto cuyas claves son nombres de algoritmos y cuyos valores incluyen una URL de Quirk:
 
 ```json
 {
@@ -114,17 +117,20 @@ Coloca en el directorio de entrada (`input/` para la librería, `notebooks/input
 - El modo batch procesa los JSON del **primer nivel** del directorio (no busca recursivamente).
 - Si el nombre del archivo es `popular_algorithms.json`, los nombres de salida llevan el prefijo `popular_`.
 
+Los parámetros: `QTRANS_INPUT_MODE`=(batch | algorithm) toman aquí especial relevancia, además si se configura la funcionalidad como "algorithm", es decir, un único algoritmo, se debe además configurar el parámetro: `QTRANS_INPUT_FILES`, que admite una lista de archivos .json con circuitos individuales.
+
 ## Configuración (`.env`)
 
 Ambos modos cargan `.env` desde la raíz del proyecto (`load_dotenv()`). Plantilla base: `.env.example` (cópiala como `.env` para configuración local). Todas las rutas relativas se resuelven desde la raíz del proyecto.
 
+Un ejemplo de configuración aceptada sería:
 ```dotenv
-QTRANS_INPUT_MODE=batch
-QTRANS_INPUT_FILE=
+QTRANS_INPUT_MODE=algorithm
+QTRANS_INPUT_FILE=test_quirk.json
 QTRANS_INPUT_FILES=
 QTRANS_INPUT_DIR=input
 QTRANS_OUTPUT_DIR=output
-QTRANS_RUN_LABEL=
+QTRANS_RUN_LABEL=DD_MM_YYYY__HH_MM
 QTRANS_CAPTURE_IMAGES=true
 QTRANS_GENERATE_QASM_IMAGES=true
 QTRANS_GENERATE_COMPARISON=true
@@ -134,7 +140,6 @@ QTRANS_GENERATE_ZX_IMAGES=true
 QTRANS_VERBOSE=true
 QTRANS_QASM_VERSION=3.0
 QTRANS_ZX_TIME=0.5
-QTRANS_ZX_TIMEOUT=120
 QTRANS_SHOTS=1000
 QTRANS_CAPTURE_TIMEOUT=15
 QTRANS_TARGET_PROVIDERS=qiskit
@@ -289,7 +294,7 @@ Los cuadernos se conservan como flujo alternativo e independiente de la librerí
 
 ### Flujo del cuaderno
 
-El cuaderno principal lee `notebooks/input/algorithms.json` y `notebooks/input/popular_algorithms.json` y escribe todas sus salidas bajo una única carpeta de corrida `notebooks/output/run_DD_MM_YYYY__HH/`. La estructura de carpetas se crea de forma **perezosa**: cada celda crea, bajo demanda, el directorio que necesita o genera, en lugar de crear todo el árbol al inicio:
+El cuaderno principal lee `input/algorithms.json` e `input/popular_algorithms.json` y escribe todas sus salidas bajo una única carpeta de corrida `output/run_DD_MM_YYYY__HH/`. Tanto `input/` como `output/` se resuelven siempre en la **raíz del proyecto** (a partir de la ubicación del cuadernillo), con independencia del directorio de trabajo desde el que se ejecute. La estructura de carpetas se crea de forma **perezosa**: cada celda crea, bajo demanda, el directorio que necesita o genera, en lugar de crear todo el árbol al inicio:
 
 - `algorithms_qasm/` — QASM traducido (lo crea la celda de generación de QASM).
 - `imgs/circuits_quirk/` y `imgs/circuits_qasm/` — diagramas PNG.
@@ -306,7 +311,7 @@ Los scripts Braket requieren `amazon-braket-sdk`; los scripts PennyLane requiere
 
 ## Limpieza de salidas (`utils/cleanup_outputs.py`)
 
-Elimina los directorios de corrida (`run_*`) generados por la librería/CLI (`output/`) y por el cuaderno (`notebooks/output/`). Funciona como script de consola o como biblioteca importable.
+Elimina los directorios de corrida (`run_*`) generados por ambos modos en `output/` (y, por compatibilidad, en el antiguo `notebooks/output/`). Funciona como script de consola o como biblioteca importable.
 
 ```bash
 # Ver qué se eliminaría, sin borrar nada
@@ -318,13 +323,13 @@ python utils/cleanup_outputs.py
 # Sin confirmación
 python utils/cleanup_outputs.py -y
 
-# Limpiar solo output/ (ignora notebooks/output/)
+# Limpiar solo output/ (ignora el antiguo notebooks/output/)
 python utils/cleanup_outputs.py --root output -y
 ```
 
 | Argumento | Descripción |
 | --- | --- |
-| `--root PATH` | Directorio de salida a limpiar (repetible). Al indicarlo se reemplazan los defaults (`output/`, `notebooks/output/`). |
+| `--root PATH` | Directorio de salida a limpiar (repetible). Al indicarlo se reemplazan los defaults (`output/`, y el antiguo `notebooks/output/`). |
 | `--all` | Elimina también los archivos sueltos presentes en los directorios de salida. |
 | `--keep N` | Conserva las `N` corridas más recientes de cada directorio (default: `0`). |
 | `--remove-roots` | Elimina también el directorio raíz cuando queda vacío. |
@@ -396,6 +401,7 @@ Los scripts migrados se generan en Python ejecutable, uno por algoritmo y ecosis
 
 ## API HTTP heredada
 
+Por trazabilidad se creó el directorio `original/` para conservar circuitos y requerimientos iniciales provistos por UnEx.
 `translator.py` conserva la API Flask usada por las integraciones existentes. Se inicia con:
 
 ```bash
@@ -410,7 +416,7 @@ El servidor escucha en `http://localhost:8081`. Endpoints POST disponibles:
 
 La colección de Postman está en `postman/Quirk_Translator_IBM_AWS.postman_collection_original.json`.
 
-## Pruebas
+## Pruebas funcionales y de integración
 
 Ejecuta la suite del proyecto con:
 

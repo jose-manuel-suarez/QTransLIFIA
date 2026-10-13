@@ -2,7 +2,7 @@
 
 ## 1. Propósito del Proyecto
 
-QTransLIFIA es un traductor de circuitos cuánticos definidos en **Quirk** (mediante su URL con JSON embebido) utilizando el lenguaje **OpenQASM** como lenguaje "pivote" en la traducción. Su objetivo principal es realizar una migración con alta fidelidad semántica, preservando tanto la estructura del circuito como la expresividad algorítmica definida por el usuario.
+QTransLIFIA es un traductor de circuitos cuánticos definidos utilizando la herramienta interactiva: **Quirk** (mediante su URL con JSON embebido) y a partir de la utilización del lenguaje **OpenQASM** como lenguaje "pivote" en la traducción. Su objetivo principal es realizar una migración con alta fidelidad semántica, preservando tanto la estructura del circuito como la expresividad algorítmica definida por el usuario.
 
 ## 2. Características Determinantes
 
@@ -55,8 +55,10 @@ QTransLIFIA, en cambio, **transfiere esa abstracción**: mantiene la estructura 
 
 ### 3.4 Reutilización Conceptual de las Abstracciones
 
-Al preservar las *custom gates*, estas dejan de ser un artefacto puramente visual para convertirse en **entidades trasladables, reutilizables y analizables** fuera de Quirk. Esto eleva el nivel de abstracción del proceso de migración: no se traduce únicamente una secuencia de puertas, sino también la **jerarquía de diseño** con la que fue concebido el algoritmo cuántico.
+Al preservar las *custom gates*, estas dejan de ser un artefacto puramente visual para convertirse en **entidades trasladables, reutilizables y analizables** fuera de Quirk. Es decir, módulos funcionales e identificables perfectamente reutilizables, afectando positivamente el mantenimiento del software cuántico y su expresividad. Esto eleva el nivel de abstracción del proceso de migración: no se traduce únicamente una secuencia de puertas, sino también la **jerarquía de diseño** con la que fue concebido el algoritmo cuántico por parte del ingeniero.
 
 ## 4. Conclusión
 
 QTransLIFIA adopta un enfoque de **traducción semántica con preservación de abstracciones**, en lugar de una mera transliteración sintáctica. La conservación sistemática de las *custom gates* definidas por el usuario, junto con un modelo de análisis estructurado y una clara separación entre dominios, constituyen sus características determinantes. Esto garantiza que la **expresividad algorítmica** del circuito original se mantenga íntegra al migrar hacia OpenQASM 2.0+ y, posteriormente, hacia cualquier ecosistema destino. Además debemos considerar la modularidad de funcionalidad y reutilización inherente cuando se conservan las funcionalidades locales asociadas a la definición de las compuertas definidas por el usuario.
+
+A nivel de conservación de expresividad y nivel de abstracción, ahora los ingenieros cuánticos pueden definir o importar sobre Quirk sus compuertas personalizadas y probadas, no siendo una limitante la traducción al ecosistema destino sino más bien significando una transferencia de dichos módulos funcionales.

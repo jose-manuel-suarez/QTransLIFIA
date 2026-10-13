@@ -409,6 +409,7 @@ def _generate_composer_images(records, images_dir, qasm_version, verbose):
         figure = None
         try:
             circuit = _load_qasm_circuit(record["qasm_source"], qasm_version)
+            # proveedor y loads
             figure = circuit.draw(output="mpl", filename=str(image_path), style="iqp")
             generated.append(image_path)
             _log(verbose, "Composer PNG", f"Generado {image_path.name}.")

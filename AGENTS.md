@@ -28,6 +28,7 @@ Retorna `{n_qubits, n_cols, gates, custom_gates, custom_gate_ids, custom_gate_na
 ## Entorno
 - Windows, shell del usuario **Git Bash** (activar: `source .venv/Scripts/activate`; PowerShell: `.venv\Scripts\Activate.ps1`); usar `curl.exe` no `curl`; evitar `python -c` con JSON complejo → scripts `.py` temporales (ejecutar con `.venv/Scripts/python.exe -u`).
 - Venv: `.venv/Scripts/python.exe` (Python 3.12). Consola `cp1252` → `•`/`½` mostrarán `�` pero la lógica funciona (UTF-8 en disco).
+- Rutas: `input/` y `output/` se resuelven **siempre en la raíz del proyecto**, tanto en `qtrans.py` como en `notebooks/QTrans.ipynb` (que descubre la raíz con `PROJECT_ROOT` a partir de `utils/qutils.py`, no del cwd). No existe `notebooks/input` ni `notebooks/output`.
 
 ## Tests
 - `.venv/Scripts/python.exe -m unittest discover -s test -p "test_*.py"` (14 tests: pipeline + QFT + `preserve_custom_gates`).

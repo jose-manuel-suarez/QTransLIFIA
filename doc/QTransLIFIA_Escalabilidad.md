@@ -2,7 +2,7 @@
 
 ## 1. Introducción
 
-La escalabilidad en QTransLIFIA se entiende como la capacidad del traductor para crecer en complejidad (más qubits, más columnas, jerarquías de *custom gates* más profundas) y, fundamentalmente, para integrarse con distintos ecosistemas cuánticos sin necesidad de modificar la lógica central de traducción Quirk → OpenQASM 2.0.
+La escalabilidad en QTransLIFIA se entiende como la capacidad del traductor para crecer en complejidad (más qubits, más columnas, jerarquías de *custom gates* más profundas) y, fundamentalmente, para integrarse con distintos ecosistemas cuánticos sin necesidad de modificar la lógica central de traducción Quirk → OpenQASM.
 
 ## 2. Escalabilidad Arquitectónica
 
@@ -15,15 +15,15 @@ El proceso de traducción sigue una tubería claramente definida, compuesta por 
 3. **Construcción de mapa de puertas** (`_build_gate_map`): Resuelve identificadores (`id`, `name`) para puertas nativas y personalizadas.
 4. **Cálculo geométrico** (`_gate_height`): Determina la altura ocupada por cada puerta para garantizar asignación correcta de qubits.
 5. **Expansión de *custom gates*** (`_col_to_qasm_with_gates`): Resuelve recursivamente las definiciones internas preservando conectividad y controles.
-6. **Generación OpenQASM** (`quirk_col_to_qasm`, `quirk_to_qasm`): Emite el código OpenQASM 2.0 resultante.
+6. **Generación OpenQASM** (`quirk_col_to_qasm`, `quirk_to_qasm`): Emite el código OpenQASM resultante.
 
 Esta modularización permite escalar el sistema por evolución de cada etapa, sin introducir acoplamiento entre dominio Quirk, resolución interna y formato destino.
 
 ### 2.2 Separación entre Lógica Quirk y Lógica OpenQASM
 
-Al centralizar la emisión exclusivamente en las funciones `quirk_to_qasm` y `quirk_col_to_qasm`, la lógica específica de Quirk queda contenida en el *parser* y en el resolutor de *custom gates*. La capa de generación es responsable únicamente de producir sintaxis OpenQASM 2.0 válida. Este desacoplamiento es la base para escalar hacia múltiples formatos o versiones en el futuro.
+Al centralizar la emisión exclusivamente en las funciones `quirk_to_qasm` y `quirk_col_to_qasm`, la lógica específica de Quirk queda contenida en el *parser* y en el resolutor de *custom gates*. La capa de generación es responsable únicamente de producir sintaxis OpenQASM válida. Este desacoplamiento es la base para escalar hacia múltiples formatos o versiones en el futuro, así como pilar para la interoperabilidad.
 
-## 3. Escalabilidad Funcional con Respecto al Circuito
+## 3. Escalabilidad funcional con respecto al circuito
 
 ### 3.1 Escalado en Número de Qubits y Columnas
 
