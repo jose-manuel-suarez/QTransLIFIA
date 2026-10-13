@@ -108,7 +108,8 @@ def _qft_gate_name(span, inverse=False):
 
 def _qft_qasm_body(span, inverse=False):
     """Cuerpo de la compuerta QFT (descomposición estándar H + fases + SWAP)."""
-    args = list(string.ascii_lowercase[:span])
+    arg_list = primeras_letras(span).split(',')
+    args = [a.strip() for a in arg_list]
     lines = []
     if not inverse:
         for i in range(span - 1, -1, -1):
@@ -659,8 +660,23 @@ def _col_to_qasm_with_gates(col, offset, gate_map, depth=0):
     return lines
 
 def primeras_letras(n):
-    """Retorna las primeras n letras del abecedario separadas por coma."""
-    return ','.join(string.ascii_lowercase[:n])
+    """Retorna las primeras n letras del abecedario separadas por coma (nombres seguros para parámetros)."""
+    names = []
+    i = 0
+    base_chars = string.ascii_lowercase
+    j = 0
+    while len(names) < n and j < 200:
+        c = base_chars[i % len(base_chars)]
+        if i >= len(base_chars):
+            c = base_chars[i % len(base_chars)] + str(i // len(base_chars))
+        # avoid common gate names as params
+        if c not in {'h', 's', 't', 'x', 'y', 'z', 'p', 'u', 'rx', 'ry', 'rz', 'cx', 'cp', 'swap', 'id'}:
+            names.append(c)
+        else:
+            names.append(c + '_')
+        i += 1
+        j += 1
+    return ','.join(names[:n])
 
 def replace_params(lines):
     if not lines:
@@ -851,6 +867,34 @@ _HALF_PI = 1.5707963267948966
 _PI = 3.141592653589793
 
 
+def _angle_to_expr(val):
+    """Convert angle to Python expression using math.pi when close to pi multiples."""
+    if val == 0:
+        return '0'
+    sign = -1 if val < 0 else 1
+    v = abs(val)
+    for k in range(0, 25):
+        denom = 2 ** k
+        target = math.pi / denom
+        if abs(v - target) < 1e-8:
+            if k == 0:
+                expr = 'math.pi'
+            else:
+                expr = f'math.pi/{denom}'
+            return f'-{expr}' if sign < 0 else expr
+    for n in range(1, 40):
+        for k in range(0, 20):
+            denom = 2 ** k
+            target = math.pi * n / denom
+            if abs(v - target) < 1e-8:
+                if k == 0:
+                    expr = 'math.pi' if n == 1 else f'{n}*math.pi'
+                else:
+                    expr = f'{n}*math.pi/{denom}'
+                return f'-{expr}' if sign < 0 else expr
+    return repr(val)
+
+
 def _native_gate_for_u(theta, phi, lam):
     """Return the native Qiskit gate name when (theta, phi, lam) is standard."""
     targets = {
@@ -926,7 +970,7 @@ def _qiskit_python_source(parsed_circuit, preserve_custom_gates=False):
 
     def emit(operation, qubits, clbits, depth=0):
         raw_params = list(operation.params)
-        parameters = [repr(parameter) for parameter in raw_params]
+        parameters = [_angle_to_expr(parameter) for parameter in raw_params]
 
         if operation.name in {'u1', 'u2', 'u3', 'u'}:
             theta, phi, lam = 0.0, 0.0, 0.0
@@ -946,7 +990,7 @@ def _qiskit_python_source(parsed_circuit, preserve_custom_gates=False):
                 instructions.append(f'circuit.p({parameters[0]}, {qubits[0]})')
             elif operation.name == 'u2':
                 instructions.append(
-                    f'circuit.u({repr(_HALF_PI)}, {parameters[0]}, {parameters[1]}, {qubits[0]})'
+                    f'circuit.u(math.pi/2, {parameters[0]}, {parameters[1]}, {qubits[0]})'
                 )
             else:
                 instructions.append(
@@ -1010,6 +1054,7 @@ def _qiskit_python_source(parsed_circuit, preserve_custom_gates=False):
 
     imports = [
         '# Importación de paquetes requeridos',
+        'import math',
         'from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister',
     ]
     if gate_imports:
@@ -1062,7 +1107,7 @@ def _braket_python_source(parsed_circuit, preserve_custom_gates=False):
         instructions.append(f"{name}({', '.join(arguments)})")
 
     def emit(operation, qubits, clbits, depth=0):
-        parameters = [repr(parameter) for parameter in operation.params]
+        parameters = [_angle_to_expr(parameter) for parameter in operation.params]
 
         if operation.name == 'measure':
             qubit = qubits[0]
@@ -1099,7 +1144,7 @@ def _braket_python_source(parsed_circuit, preserve_custom_gates=False):
                 instructions.append(f"circuit.phaseshift({', '.join(arguments)})")
             elif base_name in {'u2', 'u3', 'u'}:
                 rotation_parameters = (
-                    ['1.5707963267948966'] + parameters
+                    ['math.pi/2'] + parameters
                     if base_name == 'u2'
                     else parameters
                 )
@@ -1127,7 +1172,7 @@ def _braket_python_source(parsed_circuit, preserve_custom_gates=False):
             instructions.append(f'circuit.phaseshift({qubits[0]}, {parameters[0]})')
         elif operation.name == 'u2':
             instructions.append(
-                f'circuit.u({qubits[0]}, 1.5707963267948966, {parameters[0]}, {parameters[1]})'
+                f'circuit.u({qubits[0]}, math.pi/2, {parameters[0]}, {parameters[1]})'
             )
         elif operation.name in {'u3', 'u'}:
             instructions.append(
@@ -1164,6 +1209,7 @@ def _braket_python_source(parsed_circuit, preserve_custom_gates=False):
 
     python_lines = [
         '# Importación de paquetes requeridos',
+        'import math',
         'from braket.circuits import Circuit',
     ]
     if custom_functions:
@@ -1201,7 +1247,7 @@ def _pennylane_python_source(parsed_circuit, shots=1000, preserve_custom_gates=F
 
     def gate_parameters(operation_name, parameters):
         if operation_name == 'u2':
-            return ['1.5707963267948966'] + parameters
+            return ['math.pi/2'] + parameters
         if operation_name in {'u3', 'u'}:
             return parameters
         if operation_name == 'u1':
@@ -1236,7 +1282,7 @@ def _pennylane_python_source(parsed_circuit, shots=1000, preserve_custom_gates=F
 
     def emit(operation, qubits, clbits, depth=0):
         nonlocal measurement_count
-        parameters = [repr(parameter) for parameter in operation.params]
+        parameters = [_angle_to_expr(parameter) for parameter in operation.params]
 
         if operation.name == 'measure':
             classical_index = clbits[0]
@@ -1308,6 +1354,7 @@ def _pennylane_python_source(parsed_circuit, shots=1000, preserve_custom_gates=F
     device_shots = shots if measured_classical_bits else None
     python_lines = [
         '# Importación de paquetes requeridos',
+        'import math',
         'import pennylane as qml',
     ]
     if custom_functions:
