@@ -23,8 +23,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from utils.qutils import (
+    PROVIDER_DIRECTORY,
+    SUPPORTED_PROVIDERS,
     capture_quirk_circuit,
+    parse_providers,
     provider_python_source,
+    providers_from_env,
     qasm_to_zx_graph,
     quirk_to_qasm,
     quirk_to_zx_graph,
@@ -81,35 +85,6 @@ def _configured_qasm_version():
     return version
 
 
-SUPPORTED_PROVIDERS = ("qiskit", "braket", "pennylane")
-# Nombre del subdirectorio por provider (coincide con el cuaderno).
-PROVIDER_DIRECTORY = {
-    "qiskit": "ibm_qiskit",
-    "braket": "aws_braket",
-    "pennylane": "xanadu_pennylane",
-}
-
-
-def _parse_target_providers(value):
-    values = value.split(",") if isinstance(value, str) else value
-    providers = []
-    for provider_value in values:
-        for provider in str(provider_value).split(","):
-            normalized = provider.strip().casefold()
-            if not normalized:
-                continue
-            if normalized not in SUPPORTED_PROVIDERS:
-                raise ValueError(
-                    f"Provider no soportado: {normalized!r}; opciones: "
-                    f"{', '.join(SUPPORTED_PROVIDERS)}"
-                )
-            if normalized not in providers:
-                providers.append(normalized)
-    if not providers:
-        raise ValueError("target_providers debe contener al menos un provider")
-    return tuple(providers)
-
-
 def _parse_input_files(value):
     """Convierte una lista separada por comas de JSON en tupla de nombres."""
     if value is None:
@@ -150,9 +125,7 @@ DEFAULT_ZX_TIME = _configured_float("QTRANS_ZX_TIME", 0.5, minimum=0.0, maximum=
 DEFAULT_ZX_TIMEOUT = _configured_int("QTRANS_ZX_TIMEOUT", 120)
 DEFAULT_SHOTS = _configured_int("QTRANS_SHOTS", 1000)
 DEFAULT_CAPTURE_TIMEOUT = _configured_int("QTRANS_CAPTURE_TIMEOUT", 15)
-DEFAULT_TARGET_PROVIDERS = _parse_target_providers(
-    os.getenv("QTRANS_TARGET_PROVIDERS", "qiskit")
-)
+DEFAULT_TARGET_PROVIDERS = providers_from_env()
 DEFAULT_PRESERVE_CUSTOM_GATES = _configured_bool("QTRANS_PRESERVE_CUSTOM_GATES", True)
 
 
@@ -754,7 +727,7 @@ def run_pipeline(
         verbose = DEFAULT_VERBOSE
     if target_providers is None:
         target_providers = DEFAULT_TARGET_PROVIDERS
-    target_providers = _parse_target_providers(target_providers)
+    target_providers = parse_providers(target_providers)
     if preserve_custom_gates is None:
         preserve_custom_gates = DEFAULT_PRESERVE_CUSTOM_GATES
     if shots < 1:

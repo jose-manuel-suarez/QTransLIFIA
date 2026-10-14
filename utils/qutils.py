@@ -2,6 +2,7 @@ import ast
 import cmath
 import itertools
 import math
+import os
 import re
 import string
 from fractions import Fraction
@@ -842,14 +843,72 @@ def qasm3_to_qasm2(qasm3_source):
     return '\n'.join(lines)
 
 
+# ---------------------------------------------------------------------------
+# Proveedores soportados (Qiskit / AWS Braket / PennyLane)
+# ---------------------------------------------------------------------------
+SUPPORTED_PROVIDERS = ('qiskit', 'braket', 'pennylane')
+
+# Sinónimos admitidos en .env, CLI y cargar_circuito_qasm().
+PROVIDER_ALIASES = {
+    'qiskit': 'qiskit', 'ibm': 'qiskit', 'ibm_qiskit': 'qiskit',
+    'braket': 'braket', 'aws': 'braket', 'aws_braket': 'braket',
+    'pennylane': 'pennylane', 'xanadu': 'pennylane', 'xanadu_pennylane': 'pennylane',
+}
+
+# Subcarpeta de migrated_circuits/ por proveedor (coincide con qtrans.py y el README).
+PROVIDER_DIRECTORY = {
+    'qiskit': 'ibm_qiskit',
+    'braket': 'aws_braket',
+    'pennylane': 'xanadu_pennylane',
+}
+
+
+def normalize_provider(provider):
+    """Devuelve el nombre canónico del proveedor ('qiskit', 'braket' o 'pennylane')."""
+    key = str(provider).strip().casefold()
+    normalized = PROVIDER_ALIASES.get(key)
+    if normalized is None:
+        raise ValueError(
+            f'Provider no soportado: {provider!r}; opciones: '
+            f'{", ".join(SUPPORTED_PROVIDERS)} (alias: ibm, aws, xanadu)'
+        )
+    return normalized
+
+
+def parse_providers(value):
+    """Convierte 'qiskit,braket' (str o iterable) en tupla canónica sin repetidos."""
+    items = [value] if isinstance(value, str) else value
+    providers = []
+    for item in items:
+        for token in str(item).split(','):
+            if not token.strip():
+                continue
+            normalized = normalize_provider(token)
+            if normalized not in providers:
+                providers.append(normalized)
+    if not providers:
+        raise ValueError(
+            f'providers debe contener al menos un provider; opciones: '
+            f'{", ".join(SUPPORTED_PROVIDERS)}'
+        )
+    return tuple(providers)
+
+
+def providers_from_env(getenv=None, default='qiskit'):
+    """Lee los proveedores configurados: ``QTRANS_PROVIDERS`` (preferido) o
+    ``QTRANS_TARGET_PROVIDERS`` (clave legada), con ``default`` como respaldo."""
+    if getenv is None:
+        getenv = os.getenv
+    configured = getenv('QTRANS_PROVIDERS') or getenv('QTRANS_TARGET_PROVIDERS') or default
+    return parse_providers(configured)
+
+
 def provider_python_source(qasm_source, provider, qasm_version='3.0', shots=1000,
                            preserve_custom_gates=False):
     """Return executable Python source for a supported quantum provider."""
     from qiskit import qasm2, qasm3
 
-    providers = {'qiskit', 'braket', 'pennylane'}
-    if provider not in providers:
-        raise ValueError(f'Provider no soportado: {provider!r}')
+    provider = normalize_provider(provider)
     if qasm_version not in {'2.0', '3.0'}:
         raise ValueError("qasm_version debe ser '2.0' o '3.0'")
 
@@ -1989,3 +2048,125 @@ def qasm_to_zx_graph(qasm_code):
         process(statement, line_number)
 
     return circuit.to_graph()
+
+
+# Include de librería estándar que el parser nativo de Braket no resuelve en disco
+# (sus gates estándar ya están soportados por el SDK, así que la línea se elimina).
+_STD_INCLUDE_RE = re.compile(r'^\s*include\s+"(?:stdgates\.inc|qelib1\.inc)"\s*;\s*$', re.I | re.M)
+
+
+def detect_qasm_version(qasm_str, qasm_version=None):
+    """Devuelve '2.0' o '3.0': la versión explícita manda; si no, se lee la cabecera."""
+    if qasm_version in ('2.0', '3.0'):
+        return qasm_version
+    for line in (qasm_str or '').splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        match = re.match(r'OPENQASM\s+([0-9]+(?:\.[0-9]+)?)', stripped, re.I)
+        return match.group(1) if match else '3.0'
+    return '3.0'
+
+
+def _load_qiskit_native(qasm_str, qasm_version):
+    from qiskit import qasm2, qasm3
+
+    loaders = {'2.0': qasm2.loads, '3.0': qasm3.loads}
+    try:
+        return loaders[qasm_version](qasm_str)
+    except Exception as primary_error:
+        # Cabecera ausente o inconsistente: se intenta el parser opuesto y se
+        # reporta siempre el error de la versión esperada.
+        try:
+            return loaders['3.0' if qasm_version == '2.0' else '2.0'](qasm_str)
+        except Exception:
+            raise primary_error
+
+
+def _load_braket_native(qasm_str):
+    from braket.circuits import Circuit
+
+    return Circuit.from_ir(_STD_INCLUDE_RE.sub('', qasm_str))
+
+
+def _cargar_circuito_desde_codigo(qasm_str, provider, qasm_version, shots, preserve_custom_gates):
+    """Materializa el circuito nativo del proveedor ejecutando su script migrado."""
+    source = provider_python_source(
+        qasm_str,
+        provider,
+        qasm_version=qasm_version,
+        shots=shots,
+        preserve_custom_gates=preserve_custom_gates,
+    )
+    namespace = {}
+    exec(compile(source, f'<cargar_circuito_qasm:{provider}>', 'exec'), namespace)
+    return namespace['circuit']
+
+
+def cargar_circuito_qasm(qasm_str: str, provider: str, qasm_version: str = None,
+                         shots: int = 1000, preserve_custom_gates: bool = False,
+                         native: bool = True):
+    """Carga un circuito cuántico desde una cadena OpenQASM según el proveedor especificado.
+
+    Parámetros:
+        - qasm_str (str): código OpenQASM (2.0 o 3.0; si ``qasm_version`` no se indica,
+          la versión se detecta de la cabecera ``OPENQASM x.y;``).
+        - provider (str): 'qiskit'/'ibm', 'braket'/'aws' o 'pennylane'/'xanadu'
+          (ver ``PROVIDER_ALIASES``).
+        - qasm_version (str): '2.0' | '3.0'; fuerza la versión a usar en el parseo.
+        - shots (int): disparos para el circuito PennyLane del respaldo por migración.
+        - preserve_custom_gates (bool): conserva las puertas custom como funciones locales
+          en el respaldo por migración.
+        - native (bool): ``True`` usa el parser nativo del proveedor cuando existe
+          (Qiskit siempre, Braket si reconoce el código); ``False`` materializa siempre
+          el circuito vía ``provider_python_source``+``exec``.
+
+    Funcionalidad:
+        Parsea con la librería del proveedor. Qiskit y Braket usan su parser nativo;
+        el de Braket se complementa con un respaldo porque no cubre todo el OpenQASM
+        que genera este proyecto (p. ej. la puerta ``p`` o los ``include`` estándar).
+        PennyLane se materializa siempre con su script migrado, porque su parser nativo
+        tampoco sirve aquí: ``qml.from_qasm`` exige el plugin ``pennylane-qiskit`` y
+        ``qml.from_qasm3`` no acepta los registros ``qreg`` indexados.
+
+    Retorna:
+        - qiskit -> ``qiskit.QuantumCircuit``; braket -> ``braket.circuits.Circuit``;
+        - pennylane -> ``pennylane.QNode`` (circuito ejecutable).
+    """
+    canonical = normalize_provider(provider)
+    if qasm_str is None or not str(qasm_str).strip():
+        raise ValueError('qasm_str está vacío')
+    version = detect_qasm_version(qasm_str, qasm_version)
+    if version not in ('2.0', '3.0'):
+        raise ValueError(f"Versión de OpenQASM no soportada: {version!r} (use '2.0' o '3.0')")
+
+    if canonical == 'qiskit' and native:
+        # Qiskit parsea todo lo que genera el proyecto; no necesita respaldo.
+        return _load_qiskit_native(qasm_str, version)
+
+    if canonical == 'pennylane':
+        return _cargar_circuito_desde_codigo(
+            qasm_str, canonical, version, shots, preserve_custom_gates
+        )
+
+    native_error = None
+    if native:
+        try:
+            return _load_braket_native(qasm_str)
+        except Exception as exc:
+            native_error = exc
+
+    try:
+        return _cargar_circuito_desde_codigo(
+            qasm_str, canonical, version, shots, preserve_custom_gates
+        )
+    except Exception as source_error:
+        attempted = (
+            f'parser nativo ({type(native_error).__name__}: {native_error}); '
+            if native_error is not None
+            else ''
+        )
+        raise ValueError(
+            f'No se pudo cargar el circuito para {canonical!r}: {attempted}'
+            f'migración ({type(source_error).__name__}: {source_error})'
+        ) from source_error

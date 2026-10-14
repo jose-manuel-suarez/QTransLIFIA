@@ -142,6 +142,7 @@ QTRANS_QASM_VERSION=3.0
 QTRANS_ZX_TIME=0.5
 QTRANS_SHOTS=1000
 QTRANS_CAPTURE_TIMEOUT=15
+QTRANS_PROVIDERS=qiskit
 QTRANS_TARGET_PROVIDERS=qiskit
 QTRANS_PRESERVE_CUSTOM_GATES=true
 ```
@@ -166,7 +167,8 @@ QTRANS_PRESERVE_CUSTOM_GATES=true
 | `QTRANS_ZX_TIMEOUT` | Límite en segundos por comparación/reducción ZX; al excederse se marca `NO DEMOSTRADO (timeout)` en lugar de colgar el pipeline. Entero positivo. | `120` |
 | `QTRANS_SHOTS` | Número de shots para los QNodes PennyLane con mediciones. Entero positivo. | `1000` |
 | `QTRANS_CAPTURE_TIMEOUT` | Timeout de carga/captura del navegador Selenium, en segundos. Entero positivo. | `15` |
-| `QTRANS_TARGET_PROVIDERS` | Lista separada por comas: `qiskit`, `braket`, `pennylane`. Los scripts se generan en `migrated_circuits/<prefijo>/` (`ibm_qiskit`, `aws_braket`, `xanadu_pennylane`). | `qiskit` |
+| `QTRANS_PROVIDERS` | Lista separada por comas de proveedores migrados: `qiskit`, `braket`, `pennylane` (alias: `ibm`, `aws`, `xanadu`). Toma el cuaderno y el pipeline; los scripts se generan en `migrated_circuits/<prefijo>/` (`ibm_qiskit`, `aws_braket`, `xanadu_pennylane`). | `qiskit` |
+| `QTRANS_TARGET_PROVIDERS` | Clave legada de proveedores: se usa solo si `QTRANS_PROVIDERS` no está definida. | `qiskit` |
 | `QTRANS_PRESERVE_CUSTOM_GATES` | Si es `true`, las compuertas custom y las nativas de Quirk (p. ej. `QFT`) se conservan como funciones locales en los scripts migrados; si es `false`, se expanden en línea. Booleano. | `true` |
 
 ---
@@ -387,7 +389,7 @@ Resumen de generaciones activables por parámetro:
 | `QTRANS_GENERATE_COMPARISON` | `true/false` | Informes `.md` en `imgs/visual_comparations/` |
 | `QTRANS_GENERATE_ZX` | `true/false` | Grafos ZX y análisis en `ZXCalculus/` |
 | `QTRANS_GENERATE_ZX_IMAGES` | `true/false` | SVG de grafos ZX en `ZXCalculus/graphs/` |
-| `QTRANS_TARGET_PROVIDERS` | `qiskit`, `braket`, `pennylane` | Scripts Python en `migrated_circuits/ibm_qiskit/`, `migrated_circuits/aws_braket/` o `migrated_circuits/xanadu_pennylane/` |
+| `QTRANS_PROVIDERS` | `qiskit`, `braket`, `pennylane` | Scripts Python en `migrated_circuits/ibm_qiskit/`, `migrated_circuits/aws_braket/` o `migrated_circuits/xanadu_pennylane/` (clave legada: `QTRANS_TARGET_PROVIDERS`) |
 | `QTRANS_PRESERVE_CUSTOM_GATES` | `true/false` | Funciones locales para compuertas custom/nativas en los scripts migrados |
 | `QTRANS_GENERATE_COMPOSER_IMAGES` | `true/false` | PNG estilo IBM Composer en `migrated_circuits/ibm_qiskit/imgs/` |
 
