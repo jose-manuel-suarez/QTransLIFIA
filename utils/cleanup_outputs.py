@@ -27,6 +27,14 @@ RUN_DIR_PREFIX = "run_"
 
 
 def human_size(num_bytes):
+    """Formatea un tamaño en bytes a una representación legible.
+
+    Parámetros:
+        - num_bytes (int): tamaño en bytes.
+
+    Retorna:
+        - str: p. ej. '512 B', '1.2 KB', '3.4 MB', '1.0 GB', '2.5 TB'.
+    """
     size = float(num_bytes)
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if size < 1024 or unit == "TB":
@@ -35,6 +43,16 @@ def human_size(num_bytes):
 
 
 def _path_size(path):
+    """Tamaño total en bytes de un archivo o de todo un árbol de directorios.
+
+    Ignora los archivos a los que no se puede acceder (permisos o links rotos).
+
+    Parámetros:
+        - path (str | Path): archivo o directorio a medir.
+
+    Retorna:
+        - int: tamaño acumulado en bytes.
+    """
     path = Path(path)
     if path.is_file():
         try:
@@ -52,7 +70,16 @@ def _path_size(path):
 
 
 def discover_targets(roots=None, include_files=False, keep=0):
-    """Devuelve las rutas a eliminar (dirs ``run_*`` y, opcionalmente, archivos)."""
+    """Devuelve las rutas a eliminar (dirs run_* y, opcionalmente, archivos).
+
+    Parámetros:
+        - roots (list | None): directorios de salida a inspeccionar (default: output/).
+        - include_files (bool): si True incluye también los archivos sueltos.
+        - keep (int): cantidad de corridas más recientes a conservar por raíz.
+
+    Retorna:
+        - list[Path]: rutas candidatas a eliminación.
+    """
     roots = [Path(r) for r in (roots or DEFAULT_ROOTS)]
     targets = []
     for root in roots:
@@ -78,7 +105,20 @@ def clean_outputs(
     assume_yes=False,
     verbose=True,
 ):
-    """Elimina las salidas de corrida y devuelve un resumen de la operación."""
+    """Elimina las salidas de corrida y devuelve un resumen de la operación.
+
+    Parámetros:
+        - roots (list | None): directorios de salida (default: output/).
+        - dry_run (bool): si True solo previsualiza, no borra nada.
+        - include_files (bool): si True elimina también archivos sueltos.
+        - keep (int): corridas más recientes a conservar por raíz.
+        - remove_roots (bool): si True elimina también las raíces vacías.
+        - assume_yes (bool): si True omite la confirmación interactiva.
+        - verbose (bool): si True imprime cada acción.
+
+    Retorna:
+        - dict: resumen con rutas eliminadas, fallidas, bytes y banderas.
+    """
     roots = [Path(r) for r in (roots or DEFAULT_ROOTS)]
     targets = discover_targets(roots, include_files=include_files, keep=keep)
 
@@ -142,6 +182,15 @@ def clean_outputs(
 
 
 def _confirm(count):
+    """Pide confirmación interactiva antes de una eliminación.
+
+    Parámetros:
+        - count (int): cantidad de elementos que se eliminarían.
+
+    Retorna:
+        - bool: True si el usuario responde y/yes/s/sí; False en caso contrario
+          (incluido EOF o cualquier otra respuesta).
+    """
     try:
         answer = input(f"¿Eliminar {count} elemento(s) de salida? [y/N]: ").strip().casefold()
     except EOFError:
@@ -150,6 +199,12 @@ def _confirm(count):
 
 
 def build_argument_parser():
+    """Construye el parser de la CLI de limpieza de salidas.
+
+    Retorna:
+        - argparse.ArgumentParser: parser con --root, --all, --keep,
+          --remove-roots, --dry-run, --yes y --quiet.
+    """
     parser = argparse.ArgumentParser(
         description="Elimina los directorios de corrida (run_*) de output/ y notebooks/output/."
     )
@@ -185,6 +240,15 @@ def build_argument_parser():
 
 
 def main(argv=None):
+    """Punto de entrada de la CLI: previsualiza y elimina salidas de corrida.
+
+    Parámetros:
+        - argv (list[str] | None): argumentos de línea de comandos
+          (None = sys.argv).
+
+    Retorna:
+        - int: código de salida (0 = éxito, 1 = cancelado).
+    """
     args = build_argument_parser().parse_args(argv)
     roots = [Path(r) for r in (args.roots or DEFAULT_ROOTS)]
 

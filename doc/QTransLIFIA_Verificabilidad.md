@@ -87,9 +87,9 @@ Además del determinismo, la estructura del traductor permite estrategias concre
 
 El pipeline incorpora un verificador semántico automático basado en grafos ZX, sin depender de herramientas externas:
 
-- `quirk_to_zx_graph` (`utils/qutils.py:1401`) construye el grafo ZX directamente desde la fuente Quirk.
-- `qasm_to_zx_graph` (`utils/qutils.py:1506`) construye el grafo ZX desde el OpenQASM generado.
-- `_run_zx_workflow` (`qtrans.py:466`) compara ambos grafos: con `zx.Circuit.verify_equality(..., up_to_global_phase=True)` para circuitos grandes y con `zx.simplify.full_reduce` + `zx.compare_tensors` para circuitos pequeños, registrando el resultado en `ZXCalculus/comparison_results.md`.
+- `quirk_to_zx_graph` (`utils/zx_utils.py:374`) construye el grafo ZX directamente desde la fuente Quirk.
+- `qasm_to_zx_graph` (`utils/zx_utils.py:431`) construye el grafo ZX desde el OpenQASM generado.
+- `_run_zx_workflow` (`qtrans.py:527`) compara ambos grafos: con `zx.Circuit.verify_equality(..., up_to_global_phase=True)` para circuitos grandes y con `zx.simplify.full_reduce` + `zx.compare_tensors` para circuitos pequeños, registrando el resultado en `ZXCalculus/comparison_results.md`.
 
 Este mecanismo integrado convierte la comprobación semántica (el nivel más fuerte de verificación) en **un artefacto reproducible del pipeline**, alineado con la exigencia de la QSE de instrumentar la verificación como parte del proceso de desarrollo y no como una actividad manual posterior.
 

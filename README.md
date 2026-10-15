@@ -27,10 +27,11 @@ Ambos modos comparten: lectura de JSON con URLs de Quirk, traducción a OpenQASM
 │   └── QTrans.ipynb                      # Cuaderno con la lógica del pipeline
 ├── utils/
 │   ├── __init__.py
-│   ├── qutils.py                         # Traducción Quirk/OpenQASM, grafos ZX y capturas
+│   ├── qutils.py                         # Traducción Quirk/OpenQASM, proveedores y migración
+│   ├── zx_utils.py                       # Grafos ZX (PyZX) desde Quirk y OpenQASM
+│   ├── url_utils.py                      # Parseo/encodeo de URLs Quirk + extracción Postman
 │   ├── main.py
-│   ├── cleanup_outputs.py                # Limpieza de las corridas de salida
-│   └── extract_urls.py
+│   └── cleanup_outputs.py                # Limpieza de las corridas de salida
 ├── test/                                 # Directorio de pruebas funcionales 
 │   ├── test_qtrans.py                    # Pruebas del pipeline/CLI
 │   └── test_qasm.py                      # Pruebas de traducción OpenQASM

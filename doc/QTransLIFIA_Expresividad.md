@@ -25,14 +25,14 @@ Estas definiciones constituyen el **lenguaje expresivo del diseñador**: la form
 
 ### 4.1 Resolución por `id` y `name`
 
-`_build_gate_map` (`utils/qutils.py:21`) construye un mapa de puertas que resuelve cada definición tanto por su identificador (`id`) como por su nombre (`name`). Esto garantiza que toda compuerta definible en Quirk sea **reconocida y resuelta** sin importar la forma en que sea referenciada en las columnas del circuito.
+`_build_gate_map` (`utils/qutils.py:10`) construye un mapa de puertas que resuelve cada definición tanto por su identificador (`id`) como por su nombre (`name`). Esto garantiza que toda compuerta definible en Quirk sea **reconocida y resuelta** sin importar la forma en que sea referenciada en las columnas del circuito.
 
 ### 4.2 Conservación de compuertas definidas por circuito
 
-Las compuertas definidas mediante `circuit.cols` se traducen como **declaraciones `gate` de OpenQASM** (`append_custom_gates`, `utils/qutils.py:573`): el cuerpo interno de la compuerta se deriva de sus columnas y se mantiene su estructura, en lugar de expandirse y desaparecer. Esto significa que:
+Las compuertas definidas mediante `circuit.cols` se traducen como **declaraciones `gate` de OpenQASM** (`append_custom_gates`, `utils/qutils.py:907`): el cuerpo interno de la compuerta se deriva de sus columnas y se mantiene su estructura, en lugar de expandirse y desaparecer. Esto significa que:
 
 - La **abstracción del usuario se conserva** en el OpenQASM generado (módulo reutilizable, no una secuencia aplanada).
-- Cada **instancia** de la compuerta en el circuito queda referenciada por el identificador resuelto (`_resolve_gate_names`, `utils/qutils.py:108`), y la declaración y sus llamadas **coinciden siempre**.
+- Cada **instancia** de la compuerta en el circuito queda referenciada por el identificador resuelto (`_resolve_gate_names`, `utils/qutils.py:252`), y la declaración y sus llamadas **coinciden siempre**.
 - El elemento se mantiene **trasladable y reutilizable** fuera de Quirk, en todos los ecosistemas que admiten declaraciones `gate`.
 
 ### 4.3 Conservación de compuertas definidas por matriz
@@ -43,23 +43,23 @@ Las compuertas definidas por `matrix` se convierten en su **operación OpenQASM 
 
 - Las compuertas pueden **componerse jerárquicamente**: una compuerta definida puede contener otras compuertas definidas, con un límite de profundidad de anidamiento (≤ 10) como salvaguarda de robustez.
 - Las instancias multi-columna de una misma definición se desambiguan mediante el sufijo `:k` (p. ej. `~abc:1`), preservando su **contexto de uso** dentro del circuito.
-- El **orden de las declaraciones** se resuelve topológicamente para respetar la regla de OpenQASM *"declarar antes de usar"*, incluso ante referencias anidadas entre compuertas (`append_custom_gates`, `utils/qutils.py:625-654`).
+- El **orden de las declaraciones** se resuelve topológicamente para respetar la regla de OpenQASM *"declarar antes de usar"*, incluso ante referencias anidadas entre compuertas (`append_custom_gates`, `utils/qutils.py:968-1004`).
 
 ## 5. Traslación a OpenQASM
 
 - Los `n_qubits` efectivos de cada compuerta definida se calculan con `_gate_height` (altura por circuito o por dimensión de la matriz), garantizando que la declaración `gate <nombre> (#qubits) { ... }` tenga la aridad correcta.
-- Los **nombres se sanitizan** (`_sanitize_gate_name`, `utils/qutils.py:93`) para ser identificadores OpenQASM válidos, evitando colisiones con palabras reservadas y con los gates estándar.
+- Los **nombres se sanitizan** (`_sanitize_gate_name`, `utils/qutils.py:226`) para ser identificadores OpenQASM válidos, evitando colisiones con palabras reservadas y con los gates estándar.
 - El circuito queda expresado tanto por sus **compuertas definidas** (declaradas) como por sus **compuertas usadas** (llamadas), de modo que el OpenQASM generado es una representación **fiel y admisible** del diseño original.
 
-En la versión OpenQASM 2.0, el transpilado intermedio (`qasm3_to_qasm2`, `utils/qutils.py:703`) reduce el circuito a `u1/u2/u3/cx` conservando la **equivalencia funcional** de cada compuerta definida mediante transpilación Qiskit a nivel de optimización 0; en OpenQASM 3.0 (versión por defecto), además, se preserva la **estructura declarativa** de las propias compuertas.
+En la versión OpenQASM 2.0, el transpilado intermedio (`qasm3_to_qasm2`, `utils/qutils.py:1068`) reduce el circuito a `u1/u2/u3/cx` conservando la **equivalencia funcional** de cada compuerta definida mediante transpilación Qiskit a nivel de optimización 0; en OpenQASM 3.0 (versión por defecto), además, se preserva la **estructura declarativa** de las propias compuertas.
 
 ## 6. Admisibilidad en el Ecosistema Destino
 
 La conservación funcional tiene un objetivo concreto: que la compuerta definible en Quirk sea **admisible por el ecosistema destino**, no solo por OpenQASM.
 
 - **OpenQASM como IR admisible**: el OpenQASM generado (2.0 o 3.0 según `QASM_VERSION`) es consumible por parsers, simuladores y transpiladores estándar.
-- **Qiskit / AWS Braket / PennyLane**: `provider_python_source` (`utils/qutils.py:716`) importa el circuito (`qasm2.loads`/`qasm3.loads`) y genera scripts Python para cada provider. Las compuertas definidas por el usuario son re-creadas en el SDK destino (p. ej. `CustomGate`/`UGate` controlado) o descompuestas a puertas nativas por el propio SDK, manteniendo la semántica.
-- **Herramientas de verificación**: el grafo ZX derivado del OpenQASM (`qasm_to_zx_graph`, `utils/qutils.py:1506`) también admite declaraciones `gate`, por lo que la conservación puede comprobarse en término de equivalencia semántica.
+- **Qiskit / AWS Braket / PennyLane**: `provider_python_source` (`utils/qutils.py:1176`) importa el circuito (`qasm2.loads`/`qasm3.loads`) y genera scripts Python para cada provider. Las compuertas definidas por el usuario son re-creadas en el SDK destino (p. ej. `CustomGate`/`UGate` controlado) o descompuestas a puertas nativas por el propio SDK, manteniendo la semántica.
+- **Herramientas de verificación**: el grafo ZX derivado del OpenQASM (`qasm_to_zx_graph`, `utils/zx_utils.py:431`) también admite declaraciones `gate`, por lo que la conservación puede comprobarse en término de equivalencia semántica.
 - **Multi-destino**: un único circuito puede migrarse una vez a OpenQASM y distribuirse a varios ecosistemas, lo cual hace que la expresividad conservada rinda en todos los destinos simultáneamente.
 
 ## 7. Verificación de la Conservación Expresiva

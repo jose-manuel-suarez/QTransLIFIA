@@ -6,10 +6,14 @@ from unittest.mock import patch
 
 from qtrans import run_pipeline
 from utils.qutils import (
-    encode_quirk_url,
     provider_python_source,
-    qasm_to_zx_graph,
     quirk_to_qasm,
+)
+from utils.url_utils import (
+    encode_quirk_url,
+)
+from utils.zx_utils import (
+    qasm_to_zx_graph,
     quirk_to_zx_graph,
 )
 

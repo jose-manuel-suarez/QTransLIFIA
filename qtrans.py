@@ -29,8 +29,10 @@ from utils.qutils import (
     parse_providers,
     provider_python_source,
     providers_from_env,
-    qasm_to_zx_graph,
     quirk_to_qasm,
+)
+from utils.zx_utils import (
+    qasm_to_zx_graph,
     quirk_to_zx_graph,
 )
 
