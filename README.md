@@ -207,13 +207,13 @@ python qtrans.py --input-mode batch
 Procesar solo una lista concreta de JSON del directorio:
 
 ```bash
-python qtrans.py --input-mode batch --input-files algorithms.json,popular_algorithms.json
+python qtrans.py --input-mode batch --input-files main_algorithms.json,popular_algorithms.json
 ```
 
 Procesar un único JSON:
 
 ```bash
-python qtrans.py --input-mode algorithm --input-file algorithms.json
+python qtrans.py --input-mode algorithm --input-file main_algorithms.json
 ```
 
 Omitir las capturas PNG:
@@ -267,7 +267,7 @@ from qtrans import run_pipeline
 batch_result = run_pipeline(input_mode="batch")
 single_result = run_pipeline(
     input_mode="algorithm",
-    input_file="algorithms.json",
+    input_file="main_algorithms.json",
     capture_images=False,
 )
 ```
@@ -297,7 +297,7 @@ Los cuadernos se conservan como flujo alternativo e independiente de la librerí
 
 ### Flujo del cuaderno
 
-El cuaderno principal lee `input/algorithms.json` e `input/popular_algorithms.json` y escribe todas sus salidas bajo una única carpeta de corrida `output/run_DD_MM_YYYY__HH/`. Tanto `input/` como `output/` se resuelven siempre en la **raíz del proyecto** (a partir de la ubicación del cuadernillo), con independencia del directorio de trabajo desde el que se ejecute. La estructura de carpetas se crea de forma **perezosa**: cada celda crea, bajo demanda, el directorio que necesita o genera, en lugar de crear todo el árbol al inicio:
+El cuaderno principal lee `input/main_algorithms.json`, `input/popular_algorithms.json` e `input/qft_algorithms.json` y escribe todas sus salidas bajo una única carpeta de corrida `output/run_DD_MM_YYYY__HH/`. Tanto `input/` como `output/` se resuelven siempre en la **raíz del proyecto** (a partir de la ubicación del cuadernillo), con independencia del directorio de trabajo desde el que se ejecute. La estructura de carpetas se crea de forma **perezosa**: cada celda crea, bajo demanda, el directorio que necesita o genera, en lugar de crear todo el árbol al inicio:
 
 - `algorithms_qasm/` — QASM traducido (lo crea la celda de generación de QASM).
 - `imgs/circuits_quirk/` y `imgs/circuits_qasm/` — diagramas PNG.
