@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from utils.qutils import (
+from qtrans.utils.qutils import (
     PROVIDER_DIRECTORY,
     SUPPORTED_PROVIDERS,
     cargar_circuito_qasm,

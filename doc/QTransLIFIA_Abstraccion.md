@@ -18,7 +18,7 @@ Las características que definen el proyecto son las siguientes:
 ### 2.2 Tratamiento de la Geometría del Circuito
 
 - **Altura consciente (*height-aware*)**: Mediante `_gate_height`, el traductor calcula correctamente la altura ocupada por puertas multi-qubit y *custom gates*, evitando desplazamientos erróneos entre qubits.
-- **Cálculo de *offset***: El parámetro `offset` desplaza todos los índices `q[i+offset]`, ajustando `n = max(len(col)) + offset` en función de la altura de las compuertas utilizadas. Esto garantiza una asignación coherente entre la representación de Quirk y los registros de OpenQASM 2.0.
+- **Cálculo de *offset***: El parámetro `offset` desplaza todos los índices `q[i+offset]`, ajustando `n = max(len(col)) + offset` en función de la altura de las compuertas utilizadas. Esto garantiza una asignación coherente entre la representación de Quirk y los registros de OpenQASM.
 - **Determinación del número efectivo de qubits**: `n_qubits` se calcula considerando la altura efectiva de las puertas empleadas, no únicamente la anchura visible, lo que permite representar correctamente circuitos con abstracciones jerárquicas.
 
 ### 2.3 Separación entre Análisis y Generación
@@ -29,7 +29,7 @@ Las características que definen el proyecto son las siguientes:
 ### 2.4 Normalización del Formato
 
 - **Interoperabilidad con Quirk**: `parse_quirk_url` y `encode_quirk_url` trabajan con JSON estrictamente con comillas dobles, asegurando compatibilidad con el formato exacto empleado por Quirk para sus URLs.
-- **Representación intermedia estable**: La elección de **OpenQASM 2.0** como lenguaje intermedio convierte a QTransLIFIA en un puente entre el ecosistema de diseño/visualización (Quirk) y los ecosistemas de simulación, compilación y ejecución cuántica.
+- **Representación intermedia estable**: La elección de **OpenQASM** (versiones 2.0 y 3.0, por defecto 3.0) como lenguaje intermedio convierte a QTransLIFIA en un puente entre el ecosistema de diseño/visualización (Quirk) y los ecosistemas de simulación, compilación y ejecución cuántica.
 
 ## 3. Abstracción desde la Perspectiva de Ingeniería de Software
 
@@ -59,6 +59,6 @@ Al preservar las *custom gates*, estas dejan de ser un artefacto puramente visua
 
 ## 4. Conclusión
 
-QTransLIFIA adopta un enfoque de **traducción semántica con preservación de abstracciones**, en lugar de una mera transliteración sintáctica. La conservación sistemática de las *custom gates* definidas por el usuario, junto con un modelo de análisis estructurado y una clara separación entre dominios, constituyen sus características determinantes. Esto garantiza que la **expresividad algorítmica** del circuito original se mantenga íntegra al migrar hacia OpenQASM 2.0+ y, posteriormente, hacia cualquier ecosistema destino. Además debemos considerar la modularidad de funcionalidad y reutilización inherente cuando se conservan las funcionalidades locales asociadas a la definición de las compuertas definidas por el usuario.
+QTransLIFIA adopta un enfoque de **traducción semántica con preservación de abstracciones**, en lugar de una mera transliteración sintáctica. La conservación sistemática de las *custom gates* definidas por el usuario, junto con un modelo de análisis estructurado y una clara separación entre dominios, constituyen sus características determinantes. Esto garantiza que la **expresividad algorítmica** del circuito original se mantenga íntegra al migrar hacia OpenQASM y, posteriormente, hacia cualquier ecosistema destino. Además debemos considerar la modularidad de funcionalidad y reutilización inherente cuando se conservan las funcionalidades locales asociadas a la definición de las compuertas definidas por el usuario.
 
 A nivel de conservación de expresividad y nivel de abstracción, ahora los ingenieros cuánticos pueden definir o importar sobre Quirk sus compuertas personalizadas y probadas, no siendo una limitante la traducción al ecosistema destino sino más bien significando una transferencia de dichos módulos funcionales.

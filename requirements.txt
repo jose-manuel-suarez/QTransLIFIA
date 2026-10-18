@@ -1,4 +1,4 @@
-# Dependencias del pipeline (qtrans.py) y de las utilidades (utils/qutils.py)
+# Dependencias del pipeline (qtrans/core.py) y de las utilidades (qtrans/utils/qutils.py)
 python-dotenv==1.0.0
 numpy>=1.24.0
 pyzx>=0.10.7

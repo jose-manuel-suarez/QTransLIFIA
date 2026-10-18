@@ -30,7 +30,7 @@ from qiskit import QuantumCircuit, qasm2, qasm3
 from qiskit.circuit.library import QFTGate
 from qiskit.quantum_info import Operator
 
-from utils.qutils import provider_python_source, quirk_to_qasm
+from qtrans.utils.qutils import provider_python_source, quirk_to_qasm
 
 try:  # dependencia opcional (extra "providers")
     import pennylane as qml

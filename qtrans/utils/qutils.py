@@ -4,7 +4,7 @@ import os
 import re
 import string
 
-from utils.url_utils import parse_quirk_url
+from .url_utils import parse_quirk_url
 
 
 def _build_gate_map(circuito):
@@ -188,11 +188,13 @@ def _qft_declarations(tokens):
     return lines
 
 
-def _column_extent(col):
+def _column_extent(col, gate_map=None):
     """Altura efectiva de una columna, contando custom gates y QFT nativas.
 
     Parámetros:
         - col (list): columna del circuito.
+        - gate_map (dict | None): mapa id/name -> definición de custom gates
+          (para contar la altura de las celdas que referencian un gate).
 
     Retorna:
         - int: la máxima cantidad de qubits que toca la columna.
@@ -202,6 +204,11 @@ def _column_extent(col):
         info = _qft_token(value)
         if info is not None:
             extent = max(extent, index + info[0])
+            continue
+        if gate_map is not None and _is_gate_ref(value, gate_map):
+            gate = gate_map.get(str(value).split(':')[0])
+            height = _gate_height(gate) if gate is not None else 0
+            extent = max(extent, index + (height or 1))
     return extent
 
 
@@ -1043,7 +1050,7 @@ def quirk_to_qasm(url, offset=0, qasm_version='3.0'):
     if not cols:
         n = offset
     else:
-        n = max(_column_extent(c) for c in cols) + offset
+        n = max(_column_extent(c, gate_map) for c in cols) + offset
         r = max(
             (
                 gate.get("n_qubits")
@@ -1101,7 +1108,7 @@ PROVIDER_ALIASES = {
     'pennylane': 'pennylane', 'xanadu': 'pennylane', 'xanadu_pennylane': 'pennylane',
 }
 
-# Subcarpeta de migrated_circuits/ por proveedor (coincide con qtrans.py y el README).
+# Subcarpeta de migrated_circuits/ por proveedor (coincide con qtrans/core.py y el README).
 PROVIDER_DIRECTORY = {
     'qiskit': 'ibm_qiskit',
     'braket': 'aws_braket',
@@ -1192,9 +1199,9 @@ def provider_python_source(qasm_source, provider, qasm_version='3.0', shots=1000
     """
     # Import a nivel de función: los módulos de proveedor importan de este archivo
     # (_angle_to_expr y helpers), así que un import a nivel de módulo sería cíclico.
-    from utils.braket_utils import _braket_python_source
-    from utils.pennylane_utils import _pennylane_python_source
-    from utils.qiskit_utils import _load_qiskit_native, _qiskit_python_source
+    from .braket_utils import _braket_python_source
+    from .pennylane_utils import _pennylane_python_source
+    from .qiskit_utils import _load_qiskit_native, _qiskit_python_source
 
     provider = normalize_provider(provider)
     if qasm_version not in {'2.0', '3.0'}:
@@ -1261,8 +1268,8 @@ def quirk_circuit_info(url):
     gates_defs = circuito.get('gates', [])
     # n_qubits efectivo: max de cols principales y altura de custom gates usados
     if cols:
-        n_qubits = max(_column_extent(c) for c in cols) if cols else 0
         gate_map_eff = _build_gate_map(circuito)
+        n_qubits = max(_column_extent(c, gate_map_eff) for c in cols) if cols else 0
         for col in cols:
             for idx, entry in enumerate(col):
                 if not isinstance(entry, str):
@@ -1434,6 +1441,82 @@ def detect_qasm_version(qasm_str, qasm_version=None):
     return '3.0'
 
 
+def load_qasm_circuit(qasm_str, qasm_version=None):
+    """Carga un circuito Qiskit (``QuantumCircuit``) desde código OpenQASM 2.0 o 3.0.
+
+    Punto único de carga de OpenQASM hacia Qiskit, compartido por la generación de
+    imágenes, la celda de visualización del cuaderno y el pipeline CLI. La versión
+    se determina con ``detect_qasm_version`` (cabecera ``OPENQASM x.y;`` salvo que
+    se fuerce ``qasm_version``); si el parser 3.0 falla se reintenta con el parser
+    2.0 como respaldo.
+
+    Parámetros:
+        - qasm_str (str): código OpenQASM (2.0 o 3.0).
+        - qasm_version (str | None): '2.0' | '3.0' fuerza la versión; si es None se
+          detecta desde la cabecera del código.
+
+    Retorna:
+        - qiskit.QuantumCircuit: circuito cargado.
+
+    Lanza:
+        - ValueError: si ``qasm_str`` está vacío.
+    """
+    from qiskit import QuantumCircuit, qasm2, qasm3
+
+    text = (qasm_str or '').strip()
+    if not text:
+        raise ValueError('El contenido OpenQASM está vacío')
+    version = detect_qasm_version(text, qasm_version)
+    if version == '2.0':
+        return qasm2.loads(text)
+    try:
+        return qasm3.loads(text)
+    except Exception:
+        return QuantumCircuit.from_qasm_str(text)
+
+
+def render_qasm_image(qasm_code, qasm_version=None, style='bw', output_path=None):
+    """Dibuja un circuito OpenQASM con Qiskit (matplotlib) como PNG.
+
+    Punto único de dibujo de circuitos OpenQASM, compartido por las imágenes en
+    base64 de la API de librería y por la generación de archivos del pipeline CLI
+    y del cuaderno.
+
+    Parámetros:
+        - qasm_code (str): código OpenQASM (2.0 o 3.0).
+        - qasm_version (str | None): versión forzada del parser (None = autodetectar).
+        - style (str): estilo de dibujo de Qiskit ('bw' para QASM, 'iqp' para el
+          estilo de IBM Quantum Composer).
+        - output_path (str | Path | None): si se indica, guarda el PNG en esa ruta
+          y devuelve un ``Path``; si es None, devuelve los bytes PNG.
+
+    Retorna:
+        - bytes | pathlib.Path: bytes PNG si ``output_path`` es None; el ``Path``
+          del archivo guardado en caso contrario.
+    """
+    import io
+    from pathlib import Path
+
+    import matplotlib
+    matplotlib.use('Agg', force=True)
+    import matplotlib.pyplot as plt
+
+    circuit = load_qasm_circuit(qasm_code, qasm_version)
+    figure = None
+    try:
+        figure = circuit.draw(output='mpl', style=style)
+        if output_path is not None:
+            output_path = Path(output_path)
+            figure.savefig(str(output_path), format='png', bbox_inches='tight')
+            return output_path
+        buffer = io.BytesIO()
+        figure.savefig(buffer, format='png', bbox_inches='tight')
+        return buffer.getvalue()
+    finally:
+        if figure is not None:
+            plt.close(figure)
+
+
 def _cargar_circuito_desde_codigo(qasm_str, provider, qasm_version, shots, preserve_custom_gates):
     """Materializa el circuito nativo del proveedor ejecutando su script migrado.
 
@@ -1489,8 +1572,8 @@ def cargar_circuito_qasm(qasm_str: str, provider: str, qasm_version: str = None,
         - qiskit -> ``qiskit.QuantumCircuit``; braket -> ``braket.circuits.Circuit``;
         - pennylane -> ``pennylane.QNode`` (circuito ejecutable).
     """
-    from utils.braket_utils import _load_braket_native
-    from utils.qiskit_utils import _load_qiskit_native
+    from .braket_utils import _load_braket_native
+    from .qiskit_utils import _load_qiskit_native
 
     canonical = normalize_provider(provider)
     if qasm_str is None or not str(qasm_str).strip():

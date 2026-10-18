@@ -7,7 +7,7 @@ expone el parser nativo (``_load_qiskit_native``) y la generación de código Qi
 
 import re
 
-from utils.qutils import (
+from .qutils import (
     _angle_to_expr,
     _sanitize_gate_name,
     _unquote_parameters,

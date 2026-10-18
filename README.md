@@ -9,12 +9,14 @@ El proyecto ofrece **dos formas de ejecución**, independientes entre sí pero c
 
 | Modo | Punto de entrada | Entrada (default) | Salida (default) | Recomendado para |
 | --- | --- | --- | --- | --- |
-| **Librería Python** | `qtrans.py` (CLI + API) | `input/` | `output/run_DD_MM_YYYY__HH_MM/` | Automatización, scripts, integración en otros flujos |
+| **Librería Python** | `qtrans` (paquete: CLI + API) | `input/` | `output/run_DD_MM_YYYY__HH_MM/` | Automatización, scripts, integración en otros flujos |
 | **Cuaderno Jupyter** | `notebooks/QTrans.ipynb` | `input/` | `output/run_DD_MM_YYYY__HH/` | Exploración, visualización y demostraciones |
 
-> En **ambos modos** `input/` y `output/` se resuelven en la **raíz del proyecto**. El cuaderno lo hace a partir de su propia ubicación (`utils/qutils.py`), por lo que funciona aunque se ejecute desde otra carpeta.
+> En **ambos modos** `input/` y `output/` se resuelven en la **raíz del proyecto**. El cuaderno lo hace a partir de su propia ubicación (`qtrans/utils/qutils.py`), por lo que funciona aunque se ejecute desde otra carpeta.
 
 Ambos modos comparten: lectura de JSON con URLs de Quirk, traducción a OpenQASM como lenguaje representacional intermedio, visualización (mediante capturas PNG, diagramas, comparaciones), grafos ZX y generación de scripts migrados.
+
+Las tres vías de ejecución —**API de librería** (`translate_circuit`), **CLI/pipeline** (`run_pipeline` / `python -m qtrans`) y **cuaderno**— comparten **una única lógica** implementada en `qtrans/utils` (traducción Quirk→OpenQASM, carga de OpenQASM, migración a proveedores y verificación ZX), de modo que no existen variantes contradictorias entre ellas.
 
 ## Estructura del proyecto
 
@@ -25,17 +27,24 @@ Ambos modos comparten: lectura de JSON con URLs de Quirk, traducción a OpenQASM
 │   └── run_<estampa>/                    # Una carpeta por corrida
 ├── notebooks/
 │   └── QTrans.ipynb                      # Cuaderno con la lógica del pipeline
-├── utils/
-│   ├── __init__.py
-│   ├── qutils.py                         # Traducción Quirk/OpenQASM, proveedores y migración
-│   ├── zx_utils.py                       # Grafos ZX (PyZX) desde Quirk y OpenQASM
-│   ├── url_utils.py                      # Parseo/encodeo de URLs Quirk + extracción Postman
-│   ├── main.py
-│   └── cleanup_outputs.py                # Limpieza de las corridas de salida
-├── test/                                 # Directorio de pruebas funcionales 
+├── qtrans/                               # Paquete instalable
+│   ├── __init__.py                       # API pública: translate_circuit, run_pipeline, main
+│   ├── __main__.py                       # Soporte para `python -m qtrans`
+│   ├── core.py                           # Pipeline, CLI y API del pipeline
+│   └── utils/
+│       ├── __init__.py
+│       ├── qutils.py                     # Traducción Quirk/OpenQASM, proveedores y migración
+│       ├── zx_utils.py                   # Grafos ZX (PyZX) desde Quirk y OpenQASM
+│       ├── url_utils.py                  # Parseo/encodeo de URLs Quirk + extracción Postman
+│       ├── main.py
+│       └── cleanup_outputs.py            # Limpieza de las corridas de salida
+├── test/                                 # Directorio de pruebas funcionales
 │   ├── test_qtrans.py                    # Pruebas del pipeline/CLI
-│   └── test_qasm.py                      # Pruebas de traducción OpenQASM
-├── qtrans.py                             # API Python y CLI del pipeline
+│   ├── test_qasm.py                      # Pruebas de traducción OpenQASM
+│   ├── test_translate.py                 # Pruebas del contrato de la API translate_circuit
+│   ├── test_providers.py                 # Pruebas de migración por proveedor
+│   └── test_endianness.py                # Pruebas de convención de endianness
+├── doc/                                  # Documentación QSE y paper (qtrans.tex)
 ├── pyproject.toml                        # Empaquetado (pip install)
 ├── requirements.txt                      # Librerías requeridas
 └── original/                             # Librerías originales heredadas
@@ -75,7 +84,7 @@ run_<estampa_fecha_hora>/
 - Ejecutar el flujo varias veces **dentro de la misma hora** reutiliza el mismo directorio y **sobrescribe** los archivos generados, evitando crear una carpeta nueva por cada reintento.
 - Al cambiar la hora se crea una nueva carpeta `run_*`, preservando el historial de corridas anteriores.
 - Las carpetas generadas están excluidas del control de versiones (`.gitignore`: `/output/`, y `/notebooks/output/` por compatibilidad con corridas antiguas). Por cuestión de optimización y tamaño del proyecto, por lo cual no existe trazabilidad a nivel de ejecuciones en el repositorio GitHub.
-- Además se provee un script para limpieza de directorios de salida en `utils/cleanup_outputs.py`.
+- Además se provee un script para limpieza de directorios de salida en `qtrans/utils/cleanup_outputs.py`.
 
 ### Versión de OpenQASM
 
@@ -174,15 +183,18 @@ QTRANS_PRESERVE_CUSTOM_GATES=true
 
 ---
 
-## Modo 1 — Ejecución como Librería Python (`qtrans.py`)
+## Modo 1 — Ejecución como Librería Python (`qtrans`)
 
-`qtrans.py` es el pipeline completo: se puede usar como **CLI** de línea de comandos o importar como **API** desde código Python.
+El paquete `qtrans` es el pipeline completo: se puede usar como **CLI** de línea de comandos o importar como **API** desde código Python (`from qtrans import translate_circuit, run_pipeline`).
 
 ### Instalación del paquete
 
-`qtrans.py` está empaquetado con `pyproject.toml`, por lo que puede instalarse con `pip` (expone el comando `qtrans`, el módulo `qtrans`, `translator` y el paquete `utils`):
+El proyecto está empaquetado con `pyproject.toml` (layout de paquete `qtrans/`), por lo que puede instalarse con `pip` (expone el comando `qtrans` y el paquete importable `qtrans`):
 
 ```bash
+# Desde PyPI
+pip install qtranslifia
+
 # Desde el repositorio (uso local)
 pip install -e .
 
@@ -196,42 +208,42 @@ Extras disponibles: `providers`, `http`, `notebook`, `dev`.
 
 ### Uso como CLI
 
-Ejecuta los comandos desde la raíz del repositorio (o usa el comando `qtrans` si instalaste el paquete).
+Ejecuta los comandos desde la raíz del repositorio con `python -m qtrans` (o usa el comando `qtrans` si instalaste el paquete).
 
 Procesar todos los JSON de `QTRANS_INPUT_DIR`:
 
 ```bash
-python qtrans.py --input-mode batch
+python -m qtrans --input-mode batch
 ```
 
 Procesar solo una lista concreta de JSON del directorio:
 
 ```bash
-python qtrans.py --input-mode batch --input-files main_algorithms.json,popular_algorithms.json
+python -m qtrans --input-mode batch --input-files main_algorithms.json,popular_algorithms.json
 ```
 
 Procesar un único JSON:
 
 ```bash
-python qtrans.py --input-mode algorithm --input-file main_algorithms.json
+python -m qtrans --input-mode algorithm --input-file main_algorithms.json
 ```
 
 Omitir las capturas PNG:
 
 ```bash
-python qtrans.py --input-mode batch --no-capture
+python -m qtrans --input-mode batch --no-capture
 ```
 
 Forzar capturas aunque `.env` tenga `QTRANS_CAPTURE_IMAGES=false`:
 
 ```bash
-python qtrans.py --input-mode batch --capture-images
+python -m qtrans --input-mode batch --capture-images
 ```
 
 Para consultar todos los argumentos:
 
 ```bash
-python qtrans.py --help
+python -m qtrans --help
 ```
 
 | Argumento | Descripción |
@@ -259,7 +271,51 @@ python qtrans.py --help
 
 ### Uso como API
 
-`qtrans.py` expone `run_pipeline`, que ejecuta el flujo completo y devuelve un resumen:
+El paquete expone dos puntos de entrada: `translate_circuit` (traducción de circuitos desde un payload JSON, sin tocar disco) y `run_pipeline` (flujo completo sobre `input/`).
+
+#### `translate_circuit(payload)`
+
+Recibe un payload JSON (dict o cadena) con el contrato `{"input": {...}}` y devuelve `{"input": <eco normalizado>, "output": ...}` (dict si es un circuito único, lista si es un lote con `input.circuits`):
+
+```python
+from qtrans import translate_circuit
+
+result = translate_circuit({
+    "input": {
+        "url": "https://algassert.com/quirk#circuit={...}",
+        "qasm_version": "3.0",
+        "provider": ["ibm", "aws"],
+        "zx": {"enabled": True},
+        "comparison": True,
+    }
+})
+
+print(result["output"]["qasm"]["code"])
+print(result["output"]["qasm"]["version"])       # '3.0'
+print(result["output"]["qasm"]["lines"])         # cantidad de líneas
+print(result["output"]["qasm"]["gates"])         # {'custom': {count,names}, 'native': {count,names}}
+print(result["output"]["migrated_code"])         # {'ibm_qiskit_code': ..., 'aws_braket_code': ...}
+print(result["output"]["zx_calculus_result"])    # 'equivalente' | 'no-equivalente' | 'no-comprobado'
+```
+
+Estructura de `output` (un objeto por circuito; en modo lote `input.circuits` es una **lista** y cada
+objeto incluye además `name`):
+
+| Campo | Descripción |
+| --- | --- |
+| `qasm` | `code` (OpenQASM), `version`, `lines` y `gates` (`custom`/`native`, cada uno `{count, names}`; el conteo se hace sobre el QASM 3.0 previo a la reducción de basis, por lo que es estable aunque se pida la versión 2.0). |
+| `migrated_code` | Código Python por proveedor, con clave `<subcarpeta_proveedor>_code` (`ibm_qiskit_code`, `aws_braket_code`, `xanadu_pennylane_code`). |
+| `zx_calculus_result` | `'equivalente'` \| `'no-equivalente'` \| `'no-comprobado'`; `null` si `zx.enabled=false`. |
+| `circuit_info` | `n_qubits`, `n_cols`, `gates`. |
+| `img` | `{quirk, qasm, composer}` en base64 (PNG) o `null` si no se pidió o falló. |
+| `comparison_doc` | Markdown inline o `null`. |
+| `errors` | `[{stage, message}]` de etapas opcionales fallidas. |
+
+Etapas opcionales (imágenes en base64, comparación Markdown, validación ZX) se controlan desde `input.zx`, `input.images` y `input.comparison`; sus fallos se reportan en `output.errors` sin interrumpir la traducción. Payload inválido → `ValueError`.
+
+#### `run_pipeline(...)`
+
+`run_pipeline` ejecuta el flujo completo (escribe la corrida en `output/`) y devuelve un resumen:
 
 ```python
 from qtrans import run_pipeline
@@ -312,22 +368,22 @@ Los scripts Braket requieren `amazon-braket-sdk`; los scripts PennyLane requiere
 
 ---
 
-## Limpieza de salidas (`utils/cleanup_outputs.py`)
+## Limpieza de salidas (`qtrans/utils/cleanup_outputs.py`)
 
 Elimina los directorios de corrida (`run_*`) generados por ambos modos en `output/` (y, por compatibilidad, en el antiguo `notebooks/output/`). Funciona como script de consola o como biblioteca importable.
 
 ```bash
 # Ver qué se eliminaría, sin borrar nada
-python utils/cleanup_outputs.py --dry-run
+python -m qtrans.utils.cleanup_outputs --dry-run
 
 # Borrar las corridas de ambas raíces (pide confirmación)
-python utils/cleanup_outputs.py
+python -m qtrans.utils.cleanup_outputs
 
 # Sin confirmación
-python utils/cleanup_outputs.py -y
+python -m qtrans.utils.cleanup_outputs -y
 
 # Limpiar solo output/ (ignora el antiguo notebooks/output/)
-python utils/cleanup_outputs.py --root output -y
+python -m qtrans.utils.cleanup_outputs --root output -y
 ```
 
 | Argumento | Descripción |
@@ -343,7 +399,7 @@ python utils/cleanup_outputs.py --root output -y
 Uso como biblioteca:
 
 ```python
-from utils.cleanup_outputs import clean_outputs
+from qtrans.utils.cleanup_outputs import clean_outputs
 
 summary = clean_outputs(roots=["output"], assume_yes=True)
 print(summary["total_bytes"])

@@ -5,14 +5,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 from qtrans import run_pipeline
-from utils.qutils import (
+from qtrans.utils.qutils import (
     provider_python_source,
     quirk_to_qasm,
 )
-from utils.url_utils import (
+from qtrans.utils.url_utils import (
     encode_quirk_url,
 )
-from utils.zx_utils import (
+from qtrans.utils.zx_utils import (
     qasm_to_zx_graph,
     quirk_to_zx_graph,
 )
@@ -151,7 +151,7 @@ class QTransPipelineTests(unittest.TestCase):
     def test_capture_function_is_called_for_each_algorithm(self):
         self.write_algorithms('algorithms.json', '1. Bell')
 
-        with patch('qtrans.capture_quirk_circuit', return_value=True) as capture:
+        with patch('qtrans.core.capture_quirk_circuit', return_value=True) as capture:
             summary = self.run_case(
                 input_mode='algorithm',
                 input_file='algorithms.json',

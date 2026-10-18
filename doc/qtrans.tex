@@ -1,0 +1,588 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---------------------------------------------------------------------------
+% Codificación e idioma
+% ---------------------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-nodecimaldot]{babel}
+
+% ---------------------------------------------------------------------------
+% Matemática, tipografía y utilidades
+% ---------------------------------------------------------------------------
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  citecolor=blue!50!black,
+  urlcolor=blue!60!black,
+  pdftitle={QTransLIFIA: traducción y verificación semántica de circuitos cuánticos desde Quirk a ecosistemas de software cuántico},
+  pdfkeywords={Quirk; OpenQASM; ingeniería de software cuántica; preservación semántica; cálculo ZX}
+}
+
+% ---------------------------------------------------------------------------
+% Metadatos del documento
+% ---------------------------------------------------------------------------
+\title{\bfseries QTransLIFIA: traducción y verificación semántica de circuitos \\
+cuánticos desde Quirk hacia ecosistemas de software cuántico}
+
+\author{
+  Equipo del Proyecto QTransLIFIA\\
+  \small Laboratorio de Investigación y Formación en Informática Avanzada (LIFIA)
+}
+\date{\today}
+
+% Comandos de conveniencia para código y términos técnicos
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\gate}[1]{\textit{#1}}
+
+\begin{document}
+\maketitle
+
+% ---------------------------------------------------------------------------
+% Resumen y palabras clave
+% ---------------------------------------------------------------------------
+\begin{abstract}
+\noindent
+La computación cuántica se apoya en un ecosistema fragmentado de herramientas de diseño,
+lenguajes intermedios y \emph{software development kits} (SDK) de ejecución que no
+comparten una representación común. Esta heterogeneidad dificulta la portabilidad de los
+circuitos y amenaza la fidelidad semántica del diseño original cuando este debe migrarse
+entre plataformas. En este trabajo presentamos \textbf{QTransLIFIA}, un traductor de
+circuitos cuánticos que convierte diseños elaborados en la herramienta interactiva
+\emph{Quirk} hacia \emph{OpenQASM} como lenguaje pivote de representación intermedia y,
+desde allí, hacia múltiples ecosistemas de destino (IBM Qiskit, AWS Braket y Xanadu
+PennyLane). A diferencia de una transliteración sintáctica, QTransLIFIA adopta un enfoque
+de \emph{traducción semántica con preservación de abstracciones}: conserva las compuertas
+personalizadas definidas por el usuario ---tanto las compuestas por circuito como las
+definidas por matriz---, la disposición columnar y las relaciones de control y objetivo del
+circuito original. El trabajo se enmarca en la \emph{Ingeniería de Software Cuántica}
+(\emph{Quantum Software Engineering}, QSE) y articula explícitamente seis atributos de
+calidad: abstracción, expresividad, verificabilidad, \emph{testing}, escalabilidad y
+extensibilidad. La fidelidad de la traducción se instrumenta como un artefacto reproducible
+del propio flujo mediante un verificador semántico integrado basado en cálculo ZX, que
+compara el grafo derivado de la fuente Quirk con el derivado del OpenQASM generado. Los
+resultados muestran que un diseño puede traducirse una única vez a OpenQASM y distribuirse
+simultáneamente a varios \emph{backends}, preservando la intención algorítmica del diseño y
+habilitando la verificación temprana en la etapa más económica del flujo. QTransLIFIA se
+distribuye como biblioteca instalable con una interfaz de programación y una interfaz de
+línea de comandos, y como cuaderno Jupyter para exploración y demostración.
+\end{abstract}
+
+\noindent\textbf{Palabras clave:} traducción de circuitos cuánticos; Quirk; OpenQASM;
+ingeniería de software cuántica (QSE); preservación semántica; compuertas personalizadas;
+equivalencia por cálculo ZX; verificación y validación; migración multi-ecosistema; Qiskit;
+AWS Braket; PennyLane.
+
+% ===========================================================================
+\section{Introducción}
+% ===========================================================================
+
+La programación de circuitos cuánticos se desarrolla hoy en un ecosistema
+\emph{multi-lenguaje} y esencialmente \emph{multi-vendor}. El diseño conceptual suele
+realizarse en herramientas visuales e interactivas como \emph{Quirk}~\cite{gidney2016quirk};
+la simulación, compilación y ejecución se delegan a SDK propietarios o de comunidad como
+IBM Qiskit~\cite{qiskit}, AWS Braket~\cite{braket} o Xanadu PennyLane~\cite{pennylane}; y
+entre ambos extremos circulan lenguajes intermedios de intercambio como
+OpenQASM~\cite{cross2017openqasm, openqasm3}. Esta separación de responsabilidades es
+deseable desde el punto de vista de la ingeniería, pero introduce un riesgo central: la
+\emph{pérdida de fidelidad semántica} durante la traducción. Un circuito que se traduce
+incorrectamente ---un control desplazado, un objetivo intercambiado, una abstracción
+aplanada o una compuerta descartada--- produce una transformación unitaria distinta de la
+diseñada, y el error se propaga silenciosamente a todos los artefactos posteriores.
+
+La \emph{Ingeniería de Software Cuántica} (\emph{Quantum Software Engineering},
+QSE)~\cite{qse} propone tratar los artefactos cuánticos con los mismos principios de
+calidad que el software clásico: modularidad, trazabilidad, verificabilidad y
+reproducibilidad. Bajo esta óptica, un traductor de circuitos no debe limitarse a emitir
+sintaxis válida, sino que debe \emph{preservar} la intención algorítmica del diseño y
+\emph{demostrar} que lo hace.
+
+\textbf{QTransLIFIA} responde a esta necesidad. Se trata de un traductor que toma circuitos
+diseñados en Quirk ---a partir de su URL con el JSON embebido--- y los proyecta sobre
+OpenQASM, empleado como lenguaje pivote de representación intermedia. Sobre esa base común,
+el sistema genera código ejecutable para varios ecosistemas de destino y verifica la
+equivalencia entre el circuito de origen y el traducido mediante cálculo ZX.
+
+\paragraph{Aportes.} Este trabajo presenta:
+\begin{enumerate}[label=(\roman*), leftmargin=2em]
+  \item un enfoque de \emph{traducción semántica con preservación de abstracciones}, que
+        conserva las compuertas personalizadas de Quirk como entidades funcionales
+        trasladables, en lugar de aplanarlas;
+  \item la instrumentación explícita de seis atributos de calidad de QSE ---abstracción,
+        expresividad, verificabilidad, \emph{testing}, escalabilidad y
+        extensibilidad--- como decisiones de arquitectura observables;
+  \item un \emph{verificador semántico integrado} basado en cálculo ZX~\cite{kissinger2020pyzx},
+        que convierte la comprobación de equivalencia en un artefacto reproducible del
+        propio flujo;
+  \item una arquitectura de representación intermedia que permite migrar un único circuito
+        a múltiples \emph{backends} sin reescribir el núcleo de traducción; y
+  \item una implementación distribuible como biblioteca (API y CLI) y como cuaderno Jupyter,
+        con una batería de pruebas automatizadas sobre circuitos canónicos.
+\end{enumerate}
+
+El resto del documento se organiza como sigue. La Sección~\ref{sec:arquitectura} describe
+Quirk, OpenQASM y la arquitectura del flujo. La Sección~\ref{sec:atributos} desarrolla los
+seis atributos de calidad desde la perspectiva QSE. La Sección~\ref{sec:verificacion}
+detalla los mecanismos de verificación y \emph{testing}. La
+Sección~\ref{sec:migracion} aborda la migración a ecosistemas destino. La
+Sección~\ref{sec:discusion} discute implicaciones y limitaciones, y la
+Sección~\ref{sec:conclusiones} presenta las conclusiones.
+
+% ===========================================================================
+\section{Antecedentes y arquitectura}
+\label{sec:arquitectura}
+% ===========================================================================
+
+\subsection{El punto de partida: Quirk}
+
+\emph{Quirk}~\cite{gidney2016quirk} es un simulador de circuitos cuánticos basado en
+navegador, orientado a la exploración interactiva. Su unidad de diseño es una matriz de
+\emph{columnas}; cada columna representa una tajada temporal de operaciones. Un circuito se
+almacena íntegramente en la URL de la página como un objeto JSON codificado en la
+fragmento \code{\#circuit=...}. Quirk no se limita a ofrecer compuertas nativas: permite
+al usuario \emph{definir sus propias compuertas} de dos maneras:
+
+\begin{itemize}[leftmargin=1.6em]
+  \item \textbf{por circuito} (\code{circuit.cols}): una compuerta compuesta por columnas
+        internas que reutilizan otras compuertas (nativas o previamente definidas); y
+  \item \textbf{por matriz} (\code{matrix}): una compuerta especificada directamente por su
+        matriz unitaria.
+\end{itemize}
+
+Estas definiciones constituyen el \emph{lenguaje expresivo del diseñador}: la forma en que
+el usuario estructura un algoritmo en bloques reutilizables.
+
+\subsection{El lenguaje pivote: OpenQASM}
+
+OpenQASM~\cite{cross2017openqasm, openqasm3} es un lenguaje textual, imperativo y basado en
+registros cuánticos (\code{q[...]}), ampliamente soportado por simuladores, transpiladores,
+compiladores y SDK. Su adopción como \emph{representación intermedia} convierte a
+QTransLIFIA en un puente entre el dominio de diseño visual (Quirk) y los dominios de
+ejecución. El sistema soporta dos versiones: OpenQASM~2.0 y OpenQASM~3.0 (esta última por
+defecto), seleccionables mediante configuración. La versión~2.0 se obtiene por
+transpilación a un conjunto de primitivas equivalente, mientras que la versión~3.0
+preserva además la estructura declarativa de las compuertas definidas por el usuario.
+
+\subsection{Arquitectura del flujo}
+
+QTransLIFIA se organiza como una tubería de etapas con responsabilidades independientes, de
+modo que la lógica de traducción resulte auditable y reutilizable. La Tabla~\ref{tab:pipeline}
+resume las etapas principales y su artefacto característico.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Etapas del flujo de traducción y artefacto principal.}
+\label{tab:pipeline}
+\begin{tabular}{@{}p{0.30\textwidth}p{0.62\textwidth}@{}}
+\toprule
+\textbf{Etapa} & \textbf{Artefacto / comprobación} \\
+\midrule
+Análisis del origen & Modelo estructurado del circuito Quirk (dimensiones, compuertas, compuertas personalizadas). \\
+Traducción a OpenQASM & Código OpenQASM (\code{algorithms\_qasm/}) como representación intermedia. \\
+Verificación semántica & Comparación de grafos ZX (Quirk frente a OpenQASM). \\
+Comprobación visual & Capturas y diagramas en PNG, con comparación lado a lado en Markdown. \\
+Migración a destino & Scripts Python ejecutables por ecosistema (\code{migrated\_circuits/}). \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+El diseño establece una \emph{frontera clara entre dominios}: el modelo visual y columnar de
+Quirk queda contenido en el analizador y el resolutor de compuertas personalizadas,
+mientras que la capa de emisión se limita a producir OpenQASM válido. Los detalles de un
+dominio no contaminan al otro, en aplicación directa del principio de separación de
+preocupaciones.
+
+La arquitectura evita deliberadamente la duplicación de lógica: la traducción
+Quirk\,$\rightarrow$\,OpenQASM, la migración a proveedores, la generación de grafos ZX y las
+utilidades de carga y dibujo residen en un único módulo de utilidades compartido por las
+tres formas de ejecución del sistema ---biblioteca/API, interfaz de línea de comandos y
+cuaderno Jupyter---. De este modo, cualquiera de las tres rutas ejecuta exactamente la misma
+lógica, sin variantes contradictorias.
+
+\subsection{Formas de ejecución y contrato de entrada}
+
+El flujo funcional es único y se ofrece mediante tres puntos de entrada:
+
+\begin{itemize}[leftmargin=1.6em]
+  \item \textbf{Librería (API):} una función de traducción que recibe un \emph{payload} JSON
+        y devuelve el resultado sin tocar disco, y una función de ejecución del flujo
+        completo sobre el directorio de entrada;
+  \item \textbf{Línea de comandos (CLI):} invocable como módulo, con parámetros para la
+        entrada, la versión de OpenQASM, los proveedores de destino y los interruptores de
+        cada etapa; y
+  \item \textbf{Cuaderno Jupyter:} un flujo exploratorio y visual, útil para demostraciones
+        y para la inspección artefacto por artefacto.
+\end{itemize}
+
+La entrada se especifica como uno o más archivos JSON en los que cada clave es un nombre de
+algoritmo y cada valor contiene una URL de Quirk, un desplazamiento de índices opcional y
+una descripción opcional. Los artefactos se agrupan por corrida en un directorio con marca
+temporal, de forma que las ejecuciones dentro de la misma ventana temporal se consolidan y
+las corridas históricas quedan preservadas.
+
+% ===========================================================================
+\section{Atributos de calidad desde la ingeniería de software cuántica}
+\label{sec:atributos}
+% ===========================================================================
+
+QTransLIFIA se concibe con atributos de calidad explícitos, documentados de manera
+individual y consolidados como un conjunto coherente. La Tabla~\ref{tab:atributos} los
+resume y anticipa cómo se materializa cada uno.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Atributos de calidad y su materialización en QTransLIFIA.}
+\label{tab:atributos}
+\begin{tabular}{@{}p{0.20\textwidth}p{0.72\textwidth}@{}}
+\toprule
+\textbf{Atributo} & \textbf{Materialización} \\
+\midrule
+Abstracción & Traducción semántica con preservación de compuertas personalizadas; separación entre análisis y generación; ocultamiento de la complejidad del formato de Quirk. \\
+Expresividad & Conservación funcional de las compuertas definibles en Quirk (por circuito y por matriz), respetando el punto de partida de diseño. \\
+Verificabilidad & Equivalencia estructural y funcional entre el circuito de Quirk y el OpenQASM generado, apoyada en metadatos y determinismo. \\
+\emph{Testing} & Estrategias complementarias por etapa: verificación estática, equivalencia por cálculo ZX y comprobación visual. \\
+Escalabilidad & Crecimiento vertical (complejidad del circuito) y horizontal (múltiples ecosistemas) sobre OpenQASM como interfaz estable. \\
+Extensibilidad & Incorporación de nuevas compuertas, versiones de OpenQASM y consumidores sin rediseñar el núcleo. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Abstracción}
+
+La abstracción se manifiesta en tres niveles. Primero, en la \emph{conservación de las
+abstracciones del usuario}: el traductor no aplana las compuertas personalizadas, sino que
+las mantiene como entidades identificables en OpenQASM. Segundo, en la \emph{ocultación de
+la complejidad del formato}: el JSON anidado dentro de la URL de Quirk queda encapsulado por
+el analizador, que expone al resto del sistema estructuras de datos normalizadas de alto
+nivel (dimensiones del circuito, inventario de compuertas y de compuertas personalizadas).
+Tercero, en la \emph{separación entre análisis y generación}: puede analizarse el circuito
+sin emitir código, lo que habilita inspección, validación y métricas con independencia de la
+sintaxis generada. Esta separación constituye una frontera explícita entre dos modelos
+semánticos ---el visual y columnar de Quirk y el textual e imperativo de OpenQASM---
+evitando que los detalles de representación de un dominio se filtren en el otro.
+
+\subsection{Expresividad}
+
+La expresividad es la capacidad de \emph{conservar el poder expresivo con el que el usuario
+diseñó el circuito} y trasladarlo, sin pérdida, al lenguaje pivote y al ecosistema destino.
+El aspecto central es la conservación funcional de las compuertas definibles en Quirk:
+
+\begin{itemize}[leftmargin=1.6em]
+  \item \textbf{Compuertas por circuito:} se traducen como declaraciones de compuerta de
+        OpenQASM; el cuerpo interno se deriva de sus columnas y se conserva su estructura en
+        lugar de expandirse y desaparecer. Las llamadas y las declaraciones coinciden
+        siempre, de modo que la compuerta permanece \emph{trasladable y reutilizable} fuera
+        de Quirk.
+  \item \textbf{Compuertas por matriz:} se convierten en la operación OpenQASM equivalente,
+        preservando su comportamiento funcional. Ninguna vía de definición de Quirk queda
+        fuera del alcance del traductor.
+  \item \textbf{Composición y anidamiento:} las compuertas pueden componerse jerárquicamente
+        (una compuerta definida puede contener otras), con un límite de profundidad de
+        anidamiento como salvaguarda de robustez. Las instancias multicolumna de una misma
+        definición se desambiguan mediante un sufijo que preserva su contexto de uso, y el
+        orden de las declaraciones se resuelve topológicamente para respetar la regla
+        ``declarar antes de usar''.
+\end{itemize}
+
+La conservación se comprueba, no se asume: el modelo estructurado del circuito permite
+auditar que toda compuerta definida fue considerada y mapeada, y el cálculo ZX corrobora la
+equivalencia semántica de las compuertas trasladadas. El resultado es que los ingenieros
+cuánticos pueden definir o importar en Quirk sus compuertas personalizadas ---ya probadas---
+sin que la traducción al ecosistema destino constituya una limitante, sino una
+\emph{transferencia de módulos funcionales}.
+
+\subsection{Verificabilidad}
+
+La verificabilidad es la capacidad de comprobar que el circuito traducido es equivalente al
+original, tanto estructural como funcionalmente. El punto de comprobación más sensible se
+ubica en las \emph{etapas iniciales} del flujo: cuando el circuito existe todavía en su
+forma de origen. Detectar allí un defecto de traducción es la barrera de control de calidad
+más temprana y económica, pues cualquier error introducido en esa fase se propaga a todos
+los artefactos posteriores.
+
+La verificación se estructura en tres niveles complementarios:
+
+\begin{description}[leftmargin=1.6em]
+  \item[Nivel sintáctico.] El OpenQASM emitido debe ser conforme al estándar: cabecera,
+        declaraciones de registros válidas, aridad correcta e identificadores válidos. Se
+        resuelve con analizadores OpenQASM existentes.
+  \item[Nivel estructural.] Deben coincidir dimensiones, inventario de compuertas,
+        controles, objetivos, conectividad y jerarquía de compuertas personalizadas entre el
+        circuito analizado y el código emitido. Es totalmente automatizable sin simulación.
+  \item[Nivel semántico.] Ambas representaciones deben producir la misma acción unitaria
+        sobre el espacio de estados, salvo fase global. Se comprueba de forma nativa mediante
+        el cálculo ZX (Sección~\ref{sec:verificacion}).
+\end{description}
+
+La preservación estructural es condición \emph{necesaria pero no suficiente} de la
+equivalencia funcional: garantiza que no se perdieron piezas, mientras que la comprobación
+definitiva de la unitaria la aporta el nivel semántico. La verificabilidad se apoya, además,
+en el \emph{determinismo} del traductor ---una misma URL produce siempre el mismo
+OpenQASM---, que habilita pruebas de regresión robustas, y en la \emph{trazabilidad} de cada
+instrucción hasta la columna y la definición de compuerta que le dieron origen.
+
+\subsection{Testing}
+
+El flujo no es una transformación monolítica, sino una tubería de etapas, y cada
+transformación es una oportunidad de introducir un defecto. QTransLIFIA articula tres
+familias de estrategias complementarias:
+
+\begin{enumerate}[label=(\arabic*), leftmargin=2em]
+  \item \textbf{Verificación estática:} aserción de invariantes sobre el modelo estructurado
+        ---número efectivo de qubits, número de columnas, inventario y conteo de compuertas,
+        compuertas personalizadas, geometría del \code{offset} y preservación de
+        parámetros--- contrastados con el código emitido. Es barata, determinista y
+        totalmente automatizable, por lo que se aplica en cada corrida.
+  \item \textbf{Equivalencia semántica por cálculo ZX:} comparación automática de la acción
+        unitaria de ambas representaciones mediante grafos ZX, que supera la comprobación
+        estructural al detectar estados de qubits distintos, controles duplicados o
+        expansiones incorrectas de compuertas personalizadas.
+  \item \textbf{Comprobación visual rápida:} capturas del circuito de Quirk, diagramas del
+        OpenQASM generado y comparaciones lado a lado, aptas para inspección humana
+        inmediata en circuitos sencillos y como \emph{sanity check} en circuitos grandes.
+\end{enumerate}
+
+Ninguna estrategia es suficiente por sí sola: la estática garantiza que no se pierden
+piezas, la semántica aporta la garantía formal de equivalencia y la visual ofrece la lectura
+inmediata que acelera la detección de defectos. El repositorio complementa estas
+estrategias con una suite de pruebas automatizadas que ejercita los modos de entrada, los
+circuitos canónicos, los desplazamientos de índice, las compuertas personalizadas y la
+opción de preservación de compuertas nativas.
+
+\subsection{Escalabilidad}
+
+La escalabilidad se aborda en dos direcciones. La \emph{vertical} corresponde al crecimiento
+en la complejidad del circuito: más qubits, más columnas y jerarquías de compuertas
+personalizadas más profundas. Se soporta mediante un cálculo de alturas consciente de la
+geometría ---que determina la altura ocupada por cada compuerta multi-qubit o compuesta y
+evita asignaciones incorrectas de índices--- y mediante un cálculo dinámico del número
+efectivo de qubits y del desplazamiento, de modo que la asignación a registros permanezca
+coherente aunque las abstracciones añadan qubits virtuales o modifiquen la altura efectiva.
+
+La escalabilidad \emph{horizontal} corresponde a la integración con múltiples ecosistemas
+destino. El eje central es OpenQASM como interfaz estable: al emitir este formato
+intermedio, el traductor queda agnóstico al \emph{backend}. Nuevos consumidores ---
+simuladores, transpiladores, \emph{toolchains} de validación--- pueden integrarse como
+consumidores puros del OpenQASM generado, y es factible añadir etapas posteriores
+(optimización, mapeo a topología física, reescritura para dispositivos específicos) que
+operen sobre el IR sin acoplarse a la lógica de análisis de Quirk.
+
+\subsection{Extensibilidad}
+
+La extensibilidad es la capacidad de evolucionar sin rediseñar la arquitectura central.
+Se fundamenta en tres principios: separación de responsabilidades ---análisis, expansión de
+compuertas personalizadas y emisión están claramente desacoplados---; abstracción mediante
+mapeos, donde una tabla de compuertas y un modelo estructurado del circuito facilitan añadir
+elementos sin alterar los mecanismos existentes; y centralización de la emisión, que permite
+sustituir o extender la capa de salida de forma aislada.
+
+Estos principios habilitan cuatro líneas de evolución:
+
+\begin{itemize}[leftmargin=1.6em]
+  \item \textbf{Evolución de Quirk:} el mapeo por identificador y nombre absorbe cambios de
+        nomenclatura o nuevos identificadores, y la extracción explícita de compuertas
+        personalizadas hace que el soporte a nuevas abstracciones sea implícito.
+  \item \textbf{Nuevas compuertas y funcionalidades:} incorporar compuertas nativas localiza
+        el cambio en la capa de mapeo y emisión, sin afectar el cálculo de alturas, el
+        mecanismo de expansión ni el análisis. La información estructurada del circuito
+        habilita, además, funcionalidades futuras ---validación, métricas, reportes
+        estructurados--- sin acoplarlas a la generación.
+  \item \textbf{Nuevas versiones de OpenQASM:} la emisión aislada permite introducir un nuevo
+        generador reutilizando íntegramente el análisis y la expansión de abstracciones. La
+        coexistencia de OpenQASM~2.0 y 3.0 es una manifestación temprana de esta capacidad.
+  \item \textbf{Nuevos ecosistemas destino:} al adoptar un IR canónico, los nuevos destinos
+        se integran como adaptadores o consumidores externos, sin proliferar lógica específica
+        de Quirk por \emph{backend}.
+\end{itemize}
+
+% ===========================================================================
+\section{Verificación y validación}
+\label{sec:verificacion}
+% ===========================================================================
+
+\subsection{El verificador semántico integrado}
+
+El componente más distintivo de QTransLIFIA es su verificador semántico basado en cálculo
+ZX, que se apoya en la librería PyZX~\cite{kissinger2020pyzx}. El proceso consta de tres
+pasos: se construye un grafo ZX \emph{directamente desde la fuente Quirk}; se construye un
+segundo grafo \emph{desde el OpenQASM generado}; y se comparan ambos grafos por circuito. La
+estrategia de comparación se adapta al tamaño del circuito: para circuitos pequeños se
+reduce cada grafo y se comparan sus tensores; para circuitos grandes se verifica la igualdad
+de los circuitos asociados considerando la fase global. El resultado por circuito
+---\emph{equivalente}, \emph{no equivalente} o \emph{no comprobado}--- se registra como un
+reporte auditable.
+
+La regla de equivalencia y el criterio de decisión residen en un único punto del sistema,
+compartido por las tres formas de ejecución, de modo que el veredicto es idéntico
+independientemente de la ruta empleada. Además, el verificador se protege con un límite de
+tiempo por comparación: cuando la reducción de un grafo resulta computacionalmente
+intratable, el circuito se marca como \emph{no comprobado} en lugar de bloquear el flujo.
+Este mecanismo convierte la comprobación semántica ---el nivel más fuerte de verificación---
+en un \emph{artefacto reproducible del propio pipeline}, en línea con la exigencia de la QSE
+de instrumentar la verificación como parte del proceso de desarrollo y no como una actividad
+manual posterior.
+
+\subsection{Estrategias automatizables}
+
+La separación entre análisis y generación habilita estrategias de verificación automatizada
+adicionales: el contraste entre el inventario de compuertas del circuito analizado y las
+instrucciones efectivamente emitidas; la comprobación de invariantes (\emph{property-based
+testing}) sobre dimensiones, número de controles y rango de índices; las pruebas
+metamórficas, que exigen invariancia ante transformaciones que no alteran el circuito; y la
+validación sintáctica con consumidores externos. El determinismo del traductor sustituye,
+en estas estrategias, la necesidad de comparar contra una referencia móvil: la comparación
+contra una salida fija es estable a lo largo del tiempo.
+
+\subsection{Estado de la validación}
+
+La batería de pruebas del repositorio ejercita los modos de entrada individual y por lotes,
+circuitos canónicos (estados de Bell, compuertas de Toffoli, compuertas personalizadas
+simples y anidadas), el desplazamiento de índices y la opción de preservación o expansión de
+compuertas. La verificación semántica por cálculo ZX se ejecuta sobre las colecciones de
+algoritmos de prueba, que abarcan algoritmos principales, variantes populares y diseños
+específicos de la transformada cuántica de Fourier y su inversa. El flujo completo ---
+incluidas la generación de imágenes, la comparación visual, los grafos ZX y la migración a
+proveedores--- se ejecuta de extremo a extremo tanto desde la línea de comandos como desde el
+cuaderno, sin intervención manual.
+
+% ===========================================================================
+\section{Migración a ecosistemas destino}
+\label{sec:migracion}
+% ===========================================================================
+
+Sobre la representación intermedia OpenQASM, QTransLIFIA genera scripts Python ejecutables,
+uno por algoritmo y ecosistema. La Tabla~\ref{tab:proveedores} resume los destinos
+soportados y sus particularidades.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Ecosistemas de destino soportados.}
+\label{tab:proveedores}
+\begin{tabular}{@{}p{0.20\textwidth}p{0.68\textwidth}@{}}
+\toprule
+\textbf{Ecosistema} & \textbf{Particularidad de la migración} \\
+\midrule
+IBM Qiskit & Emplea compuertas nativas siempre que la descomposición del circuito corresponda
+a una puerta estándar; produce además diagramas con el estilo de IBM Quantum Composer. \\
+AWS Braket & Requiere el SDK de Amazon Braket; el cargador nativo se complementa con un
+respaldo por migración para cubrir todo el OpenQASM que genera el proyecto. \\
+Xanadu PennyLane & Se materializa siempre a través del script migrado, generando circuitos
+ejecutables con un número configurable de disparos. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La migración se beneficia de la preservación de abstracciones: las compuertas definidas por
+el usuario llegan al SDK destino con su semántica intacta ---recreadas como compuertas
+personalizadas--- o reducidas a primitivas equivalentes por el propio SDK. Un mismo circuito
+puede migrarse una única vez a OpenQASM y distribuirse a varios ecosistemas
+simultáneamente, de modo que la expresividad conservada rinde en todos los destinos a la
+vez. La carga del circuito OpenQASM por proveedor también reside en un único punto
+compartido, de forma que las tres formas de ejecución interpretan el IR de manera idéntica.
+
+% ===========================================================================
+\section{Discusión}
+\label{sec:discusion}
+% ===========================================================================
+
+El aporte conceptual de QTransLIFIA no está en la conversión de sintaxis ---resoluble con
+mapeos locales--- sino en sostener dos premisas de ingeniería. La primera es que
+\emph{la abstracción del usuario es parte de la semántica}: aplanar una compuerta
+personalizada durante la traducción destruye información de diseño y dificulta el
+mantenimiento del software cuántico. La segunda es que \emph{la fidelidad debe ser
+demostrable}: incorporar el verificador semántico al flujo convierte una propiedad deseable en
+una evidencia reproducible.
+
+Entre las limitaciones que delinean el trabajo futuro se destacan: la verificación ZX puede
+resultar intratable en circuitos con muchas compuertas multi-controladas, motivo por el cual
+se emplea un límite de tiempo y un veredicto explícito de \emph{no comprobado}; la
+equivalencia se establece salvo fase global, lo que es adecuado para la mayoría de los
+propósitos pero conviene documentar por contexto; y la migración a nuevos ecosistemas, si
+bien no exige modificar el núcleo, sí requiere implementar un generador específico por
+destino. Finalmente, la captura visual del circuito original depende de un navegador
+automatizado, por lo que es la etapa más sensible al entorno de ejecución.
+
+Como líneas de evolución, la arquitectura admite incorporar nuevos ecosistemas como
+consumidores puros del IR, añadir nuevos generadores para versiones futuras de OpenQASM sin
+rediseñar el análisis, y enriquecer el modelo estructurado con nuevas métricas de calidad.
+
+% ===========================================================================
+\section{Conclusiones}
+\label{sec:conclusiones}
+% ===========================================================================
+
+QTransLIFIA demuestra que es posible migrar circuitos cuánticos entre plataformas
+preservando la \emph{intención algorítmica} del diseño y \emph{demostrando} dicha
+preservación como parte del propio flujo. Al combinar traducción semántica con preservación
+de abstracciones, OpenQASM como representación intermedia estable y un verificador
+semántico integrado basado en cálculo ZX, el sistema materializa los seis atributos de
+calidad que la Ingeniería de Software Cuántica promueve: \emph{expresividad} y
+\emph{abstracción} definen qué se conserva; \emph{verificabilidad} y \emph{testing}
+garantizan cómo se comprueba; y \emph{escalabilidad} y \emph{extensibilidad} delimitan hasta
+dónde puede crecer.
+
+Tres resultados sostienen esta conclusión. Primero, las compuertas personalizadas definibles
+en Quirk ---por circuito o por matriz--- sobreviven a la traducción como entidades
+funcionales, reutilizables y auditables, en lugar de aplanarse. Segundo, la equivalencia
+entre el circuito diseñado y el traducido se convierte en un artefacto reproducible del
+pipeline, no en una comprobación manual posterior. Tercero, un único circuito puede
+migrarse a varios ecosistemas sin reescribir el núcleo, gracias a una arquitectura modular
+desacoplada y a un lenguaje pivote ampliamente soportado.
+
+Estos tres resultados convergen en la premisa central del proyecto:
+\textbf{el circuito que el usuario diseñó en Quirk es el circuito que se traduce, se verifica
+y se ejecuta} en cualquiera de los ecosistemas de destino. Al sentar esta premisa sobre
+principios explícitos de ingeniería de software cuántica, QTransLIFIA se posiciona como una
+solución preparada para evolucionar con el ecosistema cuántico, preservando al mismo tiempo
+estabilidad, mantenibilidad y fidelidad semántica.
+
+% ===========================================================================
+\begin{thebibliography}{9}
+% ===========================================================================
+
+\bibitem{gidney2016quirk}
+C.~Gidney, \emph{Quirk: a drag-and-drop quantum circuit simulator}.
+\url{https://algassert.com/quirk}. Accedido en 2026.
+
+\bibitem{cross2017openqasm}
+A.~W. Cross, L.~S. Bishop, J.~A. Smolin y J.~M. Gambetta,
+\emph{Open Quantum Assembly Language}, 2017. \url{https://openqasm.com}.
+
+\bibitem{openqasm3}
+A.~W. Cross \emph{et al.}, \emph{OpenQASM 3: A broader and deeper quantum assembly language},
+ACM Transactions on Quantum Computing, 2022.
+
+\bibitem{kissinger2020pyzx}
+A.~Kissinger y J.~van de Wetering, \emph{PyZX: A Python library for quantum circuit
+rewriting and simplification}, 2020. \url{https://pyzx.readthedocs.io}.
+
+\bibitem{qiskit}
+Qiskit Development Team, \emph{Qiskit: an open-source framework for quantum computing}.
+\url{https://www.ibm.com/quantum/qiskit}. Accedido en 2026.
+
+\bibitem{braket}
+Amazon Web Services, \emph{Amazon Braket: servicio de computación cuántica gestionada}.
+\url{https://aws.amazon.com/braket/}. Accedido en 2026.
+
+\bibitem{pennylane}
+Xanadu, \emph{PennyLane: cross-platform Python library for quantum machine learning and
+quantum computing}. \url{https://pennylane.ai}. Accedido en 2026.
+
+\bibitem{qse}
+M.~Piattini, G.~Peterssen y R.~Pérez-Castillo, \emph{Quantum Software Engineering},
+Springer, 2022.
+
+\end{thebibliography}
+
+\end{document}

@@ -5,7 +5,7 @@
 - `encode_quirk_url(url)` percent-encodea el `circuit=` para usarla como `href`.
 - `main()` recorre la colección Postman del proyecto y escribe `quirks_urls.txt`.
 
-Se importa como ``from utils.url_utils import parse_quirk_url, encode_quirk_url``.
+Se importa como ``from qtrans.utils.url_utils import parse_quirk_url, encode_quirk_url``.
 """
 
 import ast

@@ -11,7 +11,7 @@ compatibilidad, en el antiguo ``notebooks/output/``. Uso desde consola:
     python utils/cleanup_outputs.py --all        # borra además archivos sueltos
     python utils/cleanup_outputs.py --remove-roots
 
-También puede importarse: ``from utils.cleanup_outputs import clean_outputs``.
+También puede importarse: ``from qtrans.utils.cleanup_outputs import clean_outputs``.
 """
 
 import argparse

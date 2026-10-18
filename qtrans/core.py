@@ -9,6 +9,8 @@ incluidas las imágenes de los circuitos migrados con el estilo de IBM Quantum C
 
 Todas las salidas se agrupan por corrida en ``<output>/run_DD_MM_YYYY__HH_MM``, donde ``<output>`` es el directorio de salida configurado y la etiqueta de la corrida se genera a partir de la fecha y hora actual.
 
+Como librería instalable con pip, expone la función core ``translate_circuit(payload)``: recibe un objeto JSON (dict o cadena) con el grupo ``input`` (circuito como ``url``/``json`` o lote ``circuits``, más ``offset``, ``qasm_version``, ``provider`` y las etapas opcionales) y devuelve ``{"input": ..., "output": ...}``; cada circuito de ``output`` incluye ``qasm`` (``code``, ``version``, ``lines`` y ``gates`` con ``custom``/``native``), ``migrated_code`` (por proveedor), ``zx_calculus_result``, ``circuit_info``, ``img`` (PNG en base64), ``comparison_doc`` y ``errors`` (más ``name`` si es un lote).
+
 """
 
 # Importación de las librerías estándar y configuración del entorno
@@ -22,21 +24,28 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from utils.qutils import (
+from .utils.qutils import (
     PROVIDER_DIRECTORY,
     SUPPORTED_PROVIDERS,
     capture_quirk_circuit,
+    load_qasm_circuit,
     parse_providers,
     provider_python_source,
     providers_from_env,
+    qasm3_to_qasm2,
+    quirk_circuit_info,
     quirk_to_qasm,
+    render_qasm_image,
 )
-from utils.zx_utils import (
+from .utils.url_utils import encode_quirk_url
+from .utils.zx_utils import (
+    compare_zx_graphs,
     qasm_to_zx_graph,
     quirk_to_zx_graph,
+    reduce_and_draw_zx_svg,
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
 
 
@@ -307,15 +316,6 @@ def process_json_file(
     }
 
 
-def _load_qasm_circuit(qasm_source, qasm_version):
-    """ Efectúa la carga (método: loads) del código de origen, dependiendo de la versión qasm."""
-    from qiskit import qasm2, qasm3
-
-    if qasm_version == "2.0":
-        return qasm2.loads(qasm_source)
-    return qasm3.loads(qasm_source)
-
-
 def _generate_provider_files(records, providers, migrated_dir, qasm_version, shots, verbose,
                              preserve_custom_gates=False):
     generated = []
@@ -344,56 +344,41 @@ def _generate_provider_files(records, providers, migrated_dir, qasm_version, sho
 
 
 def _generate_qasm_images(records, qasm_images_dir, qasm_version, verbose):
-    import matplotlib
-    matplotlib.use("Agg", force=True)
-    import matplotlib.pyplot as plt
-
     qasm_images_dir = Path(qasm_images_dir)
     qasm_images_dir.mkdir(parents=True, exist_ok=True)
     generated = []
     errors = []
     for record in records:
         image_path = qasm_images_dir / f"{record['name']}.png"
-        figure = None
         try:
-            circuit = _load_qasm_circuit(record["qasm_source"], qasm_version)
-            figure = circuit.draw(output="mpl", filename=str(image_path), style="bw")
+            render_qasm_image(
+                record["qasm_source"], qasm_version, style="bw", output_path=image_path
+            )
             generated.append(image_path)
             _log(verbose, "QASM PNG", f"Generado {image_path.name}.")
         except Exception as exc:
             errors.append((f"QASM PNG/{record['name']}", exc))
             print(f"Error generando diagrama QASM {record['name']}: {exc}")
-        finally:
-            if figure is not None:
-                plt.close(figure)
     return generated, errors
 
 
 def _generate_composer_images(records, images_dir, qasm_version, verbose):
     """Genera un PNG por circuito migrado con el estilo de IBM Quantum Composer."""
-    import matplotlib
-    matplotlib.use("Agg", force=True)
-    import matplotlib.pyplot as plt
-
     images_dir = Path(images_dir)
     images_dir.mkdir(parents=True, exist_ok=True)
     generated = []
     errors = []
     for record in records:
         image_path = images_dir / f"{record['name']}.png"
-        figure = None
         try:
-            circuit = _load_qasm_circuit(record["qasm_source"], qasm_version)
-            # proveedor y loads
-            figure = circuit.draw(output="mpl", filename=str(image_path), style="iqp")
+            render_qasm_image(
+                record["qasm_source"], qasm_version, style="iqp", output_path=image_path
+            )
             generated.append(image_path)
             _log(verbose, "Composer PNG", f"Generado {image_path.name}.")
         except Exception as exc:
             errors.append((f"Composer PNG/{record['name']}", exc))
             print(f"Error generando imagen Composer {record['name']}: {exc}")
-        finally:
-            if figure is not None:
-                plt.close(figure)
     return generated, errors
 
 
@@ -484,33 +469,17 @@ def _zx_run_with_timeout(target, timeout):
     raise outcome["error"]
 
 
-def _zx_compare_once(base_graph, qasm_graph, timeout, zx_module):
+def _zx_compare_once(base_graph, qasm_graph, timeout):
     """Compara dos grafos ZX con un límite de tiempo.
 
-    La comparación puede ser computacionalmente intratable en circuitos con
-    muchas compuertas multi-controladas; en ese caso se devuelve un resultado
-    de "no demostrado" por timeout en lugar de colgar el pipeline.
+    La regla de equivalencia vive en ``zx_utils.compare_zx_graphs``; aquí solo se
+    envuelve en un límite de tiempo porque la comparación puede ser
+    computacionalmente intratable en circuitos con muchas compuertas
+    multi-controladas; en ese caso se devuelve un resultado de "no demostrado"
+    por timeout en lugar de colgar el pipeline.
     """
     def worker():
-        base_qubits = base_graph.num_inputs()
-        qasm_qubits = qasm_graph.num_inputs()
-        if base_qubits != qasm_qubits:
-            return "sin comparar", f"NO COMPARABLES ({base_qubits} vs. {qasm_qubits} qubits)"
-        if base_qubits > 10:
-            base_circuit = zx_module.Circuit.from_graph(base_graph)
-            qasm_circuit = zx_module.Circuit.from_graph(qasm_graph)
-            method = "verify_equality"
-            equivalent = base_circuit.verify_equality(
-                qasm_circuit, up_to_global_phase=True
-            )
-            return method, ("EQUIVALENTES" if equivalent else "NO DEMOSTRADO")
-        zx_module.simplify.full_reduce(base_graph)
-        zx_module.simplify.full_reduce(qasm_graph)
-        method = "compare_tensors (rw-greedy-linear)"
-        equivalent = zx_module.compare_tensors(
-            base_graph, qasm_graph, strategy="rw-greedy-linear"
-        )
-        return method, ("EQUIVALENTES" if equivalent else "NO EQUIVALENTES")
+        return compare_zx_graphs(base_graph, qasm_graph)
 
     result = _zx_run_with_timeout(worker, timeout)
     if result is _ZX_TIMEOUT:
@@ -525,11 +494,6 @@ def _algorithm_sort_key(name):
 
 
 def _run_zx_workflow(records, zx_dir, zx_time, generate_images, verbose, zx_timeout):
-    import matplotlib
-    matplotlib.use("Agg", force=True)
-    import matplotlib.pyplot as plt
-    import pyzx as zx
-
     zx_dir = Path(zx_dir)
     base_dir = zx_dir / "algorithms_base"
     qasm_dir = zx_dir / "algorithms_qasm"
@@ -582,7 +546,7 @@ def _run_zx_workflow(records, zx_dir, zx_time, generate_images, verbose, zx_time
 
         try:
             method, result = _zx_compare_once(
-                base_graph, qasm_graph, zx_timeout, zx
+                base_graph, qasm_graph, zx_timeout
             )
         except Exception as exc:
             errors.append((f"Comparación ZX/{name}", exc))
@@ -642,31 +606,23 @@ def _run_zx_workflow(records, zx_dir, zx_time, generate_images, verbose, zx_time
     generated_images = []
     if generate_images:
         for name, graph in base_graphs.items():
-            figure = None
             image_path = graphs_dir / f"{name}.svg"
             try:
-                reduced_graph = graph.copy()
+                def render_worker(graph=graph, path=image_path):
+                    return reduce_and_draw_zx_svg(graph, path)
 
-                def reduce_worker(graph=reduced_graph):
-                    zx.simplify.full_reduce(graph)
-
-                if _zx_run_with_timeout(reduce_worker, zx_timeout) is _ZX_TIMEOUT:
+                if _zx_run_with_timeout(render_worker, zx_timeout) is _ZX_TIMEOUT:
                     _log(
                         verbose,
                         "ZX SVG",
                         f"Reducción de {name} excedió {zx_timeout}s; se omite el SVG.",
                     )
                     continue
-                figure = zx.draw(reduced_graph, labels=True)
-                figure.savefig(image_path, format="svg")
                 generated_images.append(image_path)
                 _log(verbose, "ZX SVG", f"Generado {image_path.name}.")
             except Exception as exc:
                 errors.append((f"ZX SVG/{name}", exc))
                 print(f"Error generando SVG ZX para {name}: {exc}")
-            finally:
-                if figure is not None:
-                    plt.close(figure)
 
     return {
         "base_graphs": len(base_graphs),
@@ -965,6 +921,598 @@ def run_pipeline(
     )
     _log(verbose, "Salida", f"Scripts migrados en {migrated_dir}.")
     return summary
+
+
+# ---------------------------------------------------------------------------
+# API de librería: translate_circuit()
+# ---------------------------------------------------------------------------
+_QUIRK_URL_PREFIX = "https://algassert.com/quirk#circuit="
+_QASM_DECL_RE = re.compile(r"^gate\s+([A-Za-z_][A-Za-z0-9_]*)")
+_QASM_MODIFIER_RE = re.compile(r"^(?:(?:ctrl|inv|pow\s*\([^)]*\))\s*@\s*)+")
+_NON_OPERATION_PREFIXES = ("qreg", "creg", "qubit", "bit", "measure", "barrier", "reset")
+_TRANSLATE_TOP_KEYS = frozenset({"input"})
+_TRANSLATE_INPUT_KEYS = frozenset({
+    "url",
+    "json",
+    "circuits",
+    "offset",
+    "qasm_version",
+    "provider",
+    "shots",
+    "preserve_custom_gates",
+    "zx",
+    "images",
+    "comparison",
+})
+_TRANSLATE_CIRCUIT_KEYS = frozenset({"name", "url", "json", "offset"})
+_TRANSLATE_ZX_KEYS = frozenset({"enabled", "time", "timeout"})
+_TRANSLATE_IMAGES_KEYS = frozenset({"quirk", "qasm", "composer", "capture_timeout"})
+
+
+def _unknown_keys(payload, allowed, label):
+    """Lista de claves no admitidas en un dict (para mensajes de error).
+
+    Parámetros:
+        - payload (dict): dict a inspeccionar.
+        - allowed (frozenset): claves permitidas.
+        - label (str): nombre del grupo para el mensaje.
+
+    Retorna:
+        - list[str]: claves desconocidas ordenadas (vacía si no hay).
+    """
+    return [f"{label}.{key}" for key in sorted(set(payload) - allowed)]
+
+
+def _resolve_circuit_url(entry):
+    """Construye la URL Quirk de trabajo a partir de ``url`` o ``json``.
+
+    Parámetros:
+        - entry (dict): dict con exactamente una de las claves ``url`` (URL de
+          Quirk) o ``json`` (dict o cadena JSON del circuito con ``cols``).
+
+    Retorna:
+        - str: URL de Quirk ``https://algassert.com/quirk#circuit=...``.
+
+    Lanza:
+        - ValueError: si faltan/clavan las claves o el circuito JSON es inválido.
+    """
+    url = entry.get("url")
+    json_circuit = entry.get("json")
+    if (url is None) == (json_circuit is None):
+        raise ValueError('Debe enviar exactamente una clave: "url" o "json".')
+    if url is not None:
+        if not isinstance(url, str) or "circuit=" not in url:
+            raise ValueError('"url" debe ser una URL de Quirk con circuit=<JSON>.')
+        return url
+    if isinstance(json_circuit, str):
+        try:
+            circuit = json.loads(json_circuit)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f'"json" debe ser JSON válido: {exc}') from exc
+    elif isinstance(json_circuit, dict):
+        circuit = json_circuit
+    else:
+        raise ValueError('"json" debe ser un dict o una cadena JSON del circuito.')
+    if not isinstance(circuit.get("cols"), list):
+        raise ValueError('El circuito JSON debe tener la clave "cols" con una lista de columnas.')
+    circuit_json = json.dumps(circuit, ensure_ascii=False, separators=(",", ":"))
+    return _QUIRK_URL_PREFIX + circuit_json
+
+
+def _qasm_gate_summary(qasm3_source):
+    """Resume las operaciones custom y nativas del código OpenQASM 3.0.
+
+    Ignora cabeceras, declaraciones ``qreg``/``creg`` y los cuerpos de las
+    declaraciones ``gate`` (incluidas QFTn); solo cuentan las líneas de
+    operación a nivel de módulo. Una operación es *custom* si su nombre
+    coincide con un gate declarado en el propio código; el resto es *nativa*.
+
+    Parámetros:
+        - qasm3_source (str): código OpenQASM 3.0 generado por ``quirk_to_qasm``.
+
+    Retorna:
+        - dict: ``{"custom": {"count": int, "names": [str, ...]},
+          "native": {"count": int, "names": [str, ...]}}``; los nombres son
+          únicos y quedan ordenados alfabéticamente.
+    """
+    custom_names = set()
+    operations = []
+    depth = 0
+    for raw_line in qasm3_source.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(("OPENQASM", "include", "//", "#")):
+            continue
+        if depth == 0:
+            declaration_match = _QASM_DECL_RE.match(line)
+            if declaration_match:
+                custom_names.add(declaration_match.group(1))
+            elif not line.startswith(_NON_OPERATION_PREFIXES) and line.endswith(";"):
+                operations.append(line)
+        depth += line.count("{") - line.count("}")
+        if depth < 0:
+            depth = 0
+
+    custom_operations = []
+    native_operations = []
+    for operation in operations:
+        token = _QASM_MODIFIER_RE.sub("", operation.rstrip(";").strip())
+        if "=" in token:
+            # Asignaciones de QASM 3.0 (``c[i] = measure q[j]``): la operación
+            # es el lado derecho, no el registro clásico de destino.
+            token = token.split("=", 1)[1].strip()
+        name = re.split(r"[\s(]", token, maxsplit=1)[0]
+        if name in custom_names:
+            custom_operations.append(name)
+        else:
+            native_operations.append(name)
+    return {
+        "custom": {"count": len(custom_operations), "names": sorted(set(custom_operations))},
+        "native": {"count": len(native_operations), "names": sorted(set(native_operations))},
+    }
+
+
+def _zx_calculus_result(url, qasm_code, offset, zx_time, zx_timeout):
+    """Compara los grafos ZX de Quirk y del QASM generado.
+
+    Parámetros:
+        - url (str): URL de Quirk de origen.
+        - qasm_code (str): código OpenQASM generado (2.0 o 3.0).
+        - offset (int): desplazamiento de índices q[i].
+        - zx_time (float): tiempo de simulación usado en la construcción ZX.
+        - zx_timeout (int): límite en segundos de la comparación.
+
+    Retorna:
+        - str: 'equivalente' si los grafos son EQUIVALENTES, 'no-equivalente'
+          si son NO EQUIVALENTES o NO COMPARABLES y 'no-comprobado' si no se
+          pudo demostrar (timeout, error o resultado indeterminado).
+    """
+    try:
+        base_graph = quirk_to_zx_graph(url, offset, time=zx_time)
+        qasm_graph = qasm_to_zx_graph(qasm_code)
+        _, result = _zx_compare_once(base_graph, qasm_graph, zx_timeout)
+    except Exception:  # noqa: BLE001 — la validación ZX nunca debe tumbar la traducción
+        return "no-comprobado"
+    if result.startswith("EQUIVALENTES"):
+        return "equivalente"
+    if result.startswith(("NO EQUIVALENTES", "NO COMPARABLES")):
+        return "no-equivalente"
+    return "no-comprobado"
+
+
+def _require_keys(payload, allowed, label):
+    """Valida que un dict solo contenga claves admitidas.
+
+    Parámetros:
+        - payload (dict): dict a validar.
+        - allowed (frozenset): claves admitidas.
+        - label (str): nombre del grupo (para el mensaje de error).
+
+    Retorna:
+        - None
+
+    Lanza:
+        - ValueError: si hay claves desconocidas.
+    """
+    unknown = _unknown_keys(payload, allowed, label)
+    if unknown:
+        raise ValueError(
+            f"Claves desconocidas: {', '.join(unknown)}. "
+            f"Claves admitidas en {label}: "
+            f"{', '.join(f'{label}.{key}' for key in sorted(allowed))}."
+        )
+
+
+def _validated_bool(value, label):
+    """Valida que value sea bool.
+
+    Parámetros:
+        - value: valor a validar.
+        - label (str): nombre del campo (para el mensaje de error).
+
+    Retorna:
+        - bool: el valor validado.
+
+    Lanza:
+        - ValueError: si no es booleano.
+    """
+    if not isinstance(value, bool):
+        raise ValueError(f"{label} debe ser booleano: {value!r}")
+    return value
+
+
+def _validated_int(value, label, minimum):
+    """Valida que value sea un entero >= minimum.
+
+    Parámetros:
+        - value: valor a validar.
+        - label (str): nombre del campo (para el mensaje de error).
+        - minimum (int): cota inferior incluida.
+
+    Retorna:
+        - int: el valor validado.
+
+    Lanza:
+        - ValueError: si no es un entero >= minimum.
+    """
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"{label} debe ser un entero >= {minimum}: {value!r}")
+    return value
+
+
+def _normalize_translate_input(input_payload):
+    """Valida y normaliza el grupo ``input`` de un payload de ``translate_circuit``.
+
+    Resuelve los valores por defecto (QASM_VERSION/shots/etc. desde el entorno),
+    normaliza los proveedores y construye la URL Quirk efectiva de cada circuito.
+
+    Parámetros:
+        - input_payload (dict): objeto ``input`` del payload.
+
+    Retorna:
+        - dict: entrada normalizada; sirve como eco en la respuesta y como
+          configuración de ejecución. Siempre contiene ``offset``,
+          ``qasm_version``, ``provider`` (lista), ``shots``,
+          ``preserve_custom_gates``, ``zx``, ``images``, ``comparison`` y
+          exactamente uno de ``url`` (circuito único) o ``circuits`` (lote).
+
+    Lanza:
+        - ValueError: claves desconocidas, falta de circuito, tipos o rangos inválidos.
+    """
+    if not isinstance(input_payload, dict):
+        raise ValueError('El payload debe tener la clave "input" con un objeto.')
+    _require_keys(input_payload, _TRANSLATE_INPUT_KEYS, "input")
+
+    has_single = ("url" in input_payload) or ("json" in input_payload)
+    has_batch = "circuits" in input_payload
+    if has_single == has_batch:
+        raise ValueError(
+            'Debe enviar exactamente uno: "input.url"/"input.json" (circuito '
+            'único) o "input.circuits" (lote).'
+        )
+
+    settings = {
+        "offset": _validated_int(input_payload.get("offset", 0), "input.offset", 0),
+        "qasm_version": str(
+            input_payload.get("qasm_version", DEFAULT_QASM_VERSION)
+        ).strip(),
+        "provider": list(parse_providers(input_payload.get("provider", "qiskit"))),
+        "shots": _validated_int(input_payload.get("shots", DEFAULT_SHOTS), "input.shots", 1),
+        "preserve_custom_gates": _validated_bool(
+            input_payload.get("preserve_custom_gates", DEFAULT_PRESERVE_CUSTOM_GATES),
+            "input.preserve_custom_gates",
+        ),
+        "comparison": _validated_bool(input_payload.get("comparison", False), "input.comparison"),
+    }
+    if settings["qasm_version"] not in {"2.0", "3.0"}:
+        raise ValueError(
+            f"input.qasm_version debe ser '2.0' o '3.0': {settings['qasm_version']!r}"
+        )
+
+    zx_payload = input_payload.get("zx")
+    if zx_payload is None:
+        zx_payload = {}
+    if not isinstance(zx_payload, dict):
+        raise ValueError("input.zx debe ser un objeto.")
+    _require_keys(zx_payload, _TRANSLATE_ZX_KEYS, "input.zx")
+    zx_time = zx_payload.get("time", DEFAULT_ZX_TIME)
+    if isinstance(zx_time, bool) or not isinstance(zx_time, (int, float)) or not 0 <= zx_time <= 1:
+        raise ValueError(f"input.zx.time debe estar entre 0 y 1: {zx_time!r}")
+    settings["zx"] = {
+        "enabled": _validated_bool(zx_payload.get("enabled", True), "input.zx.enabled"),
+        "time": float(zx_time),
+        "timeout": _validated_int(
+            zx_payload.get("timeout", DEFAULT_ZX_TIMEOUT), "input.zx.timeout", 1
+        ),
+    }
+
+    images_payload = input_payload.get("images")
+    if images_payload is None:
+        images_payload = {}
+    if not isinstance(images_payload, dict):
+        raise ValueError("input.images debe ser un objeto.")
+    _require_keys(images_payload, _TRANSLATE_IMAGES_KEYS, "input.images")
+    settings["images"] = {
+        "quirk": _validated_bool(images_payload.get("quirk", False), "input.images.quirk"),
+        "qasm": _validated_bool(images_payload.get("qasm", False), "input.images.qasm"),
+        "composer": _validated_bool(
+            images_payload.get("composer", False), "input.images.composer"
+        ),
+        "capture_timeout": _validated_int(
+            images_payload.get("capture_timeout", DEFAULT_CAPTURE_TIMEOUT),
+            "input.images.capture_timeout",
+            1,
+        ),
+    }
+
+    if has_batch:
+        circuits = input_payload["circuits"]
+        if not isinstance(circuits, list) or not circuits:
+            raise ValueError("input.circuits debe ser una lista no vacía de circuitos.")
+        normalized_circuits = []
+        for index, entry in enumerate(circuits):
+            if not isinstance(entry, dict):
+                raise ValueError(f"input.circuits[{index}] debe ser un objeto.")
+            _require_keys(entry, _TRANSLATE_CIRCUIT_KEYS, f"input.circuits[{index}]")
+            name = entry.get("name")
+            if name is None:
+                name = f"circuit_{index + 1}"
+            elif not isinstance(name, str) or not name.strip():
+                raise ValueError(f"input.circuits[{index}].name debe ser una cadena no vacía.")
+            normalized_circuits.append({
+                "name": name.strip(),
+                "url": _resolve_circuit_url(entry),
+                "offset": _validated_int(
+                    entry.get("offset", settings["offset"]),
+                    f"input.circuits[{index}].offset",
+                    0,
+                ),
+            })
+        settings["circuits"] = normalized_circuits
+    else:
+        settings["url"] = _resolve_circuit_url(input_payload)
+    return settings
+
+
+def _image_qasm_base64(qasm_code, qasm_version, style):
+    """Diagrama PNG en base64 del circuito QASM (estilo Qiskit 'bw' o 'iqp').
+
+    Parámetros:
+        - qasm_code (str): código OpenQASM (2.0 o 3.0).
+        - qasm_version (str): versión del código, para elegir el parser.
+        - style (str): estilo de dibujo de Qiskit ('bw', 'iqp').
+
+    Retorna:
+        - str: imagen PNG codificada en base64.
+    """
+    import base64
+
+    return base64.b64encode(
+        render_qasm_image(qasm_code, qasm_version, style)
+    ).decode("ascii")
+
+
+def _image_quirk_base64(url, capture_timeout):
+    """Captura PNG en base64 del circuito Quirk (Selenium headless).
+
+    Parámetros:
+        - url (str): URL de Quirk a capturar.
+        - capture_timeout (int): límite en segundos de carga de la página.
+
+    Retorna:
+        - str | None: PNG en base64, o None si la captura no se pudo realizar.
+    """
+    import base64
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        image_path = Path(temp_dir) / "quirk.png"
+        captured = capture_quirk_circuit(url, image_path, timeout=capture_timeout)
+        if not captured or not image_path.is_file():
+            return None
+        return base64.b64encode(image_path.read_bytes()).decode("ascii")
+
+
+def _comparison_markdown(name, url, qasm_code, qasm_version):
+    """Documento Markdown inline de comparación Quirk vs OpenQASM de un circuito.
+
+    Parámetros:
+        - name (str | None): nombre del circuito (título del documento).
+        - url (str): URL de Quirk de origen.
+        - qasm_code (str): código OpenQASM generado.
+        - qasm_version (str): versión del código generado.
+
+    Retorna:
+        - str: documento Markdown con el enlace a Quirk y el código QASM.
+    """
+    encoded_url = encode_quirk_url(url)
+    title = (name or "circuito").strip()
+    return (
+        f"# Comparación de circuitos: {title}\n\n"
+        f"## Circuito Quirk\n\n"
+        f"[Abrir en Quirk]({encoded_url})\n\n"
+        f"## OpenQASM {qasm_version}\n\n"
+        f"```qasm\n{qasm_code}\n```\n"
+    )
+
+
+def _translate_circuit_entry(name, url, offset, settings):
+    """Traduce un circuito Quirk y arma su objeto de salida completo.
+
+    Ejecuta la traducción a OpenQASM, el conteo de gates, la migración a los
+    proveedores pedidos y, si están habilitados, la validación ZX, las
+    imágenes en base64 y el documento de comparación. Los fallos de las
+    etapas opcionales se acumulan en ``errors`` sin interrumpir el resto.
+
+    Parámetros:
+        - name (str | None): nombre del circuito (None en modo single).
+        - url (str): URL de Quirk del circuito.
+        - offset (int): desplazamiento de los índices q[i].
+        - settings (dict): entrada normalizada (ver ``_normalize_translate_input``).
+
+    Retorna:
+        - dict: objeto de salida JSON-serializable del circuito.
+
+    Lanza:
+        - excepciones de ``quirk_to_qasm``/``provider_python_source`` si la
+          traducción o la migración fallan (errores de etapas opcionales NO
+          lanzan: van a ``errors``).
+    """
+    errors = []
+
+    qasm3_source = quirk_to_qasm(url, offset=offset, qasm_version="3.0")
+    gates_summary = _qasm_gate_summary(qasm3_source)
+    qasm_version = settings["qasm_version"]
+    qasm_code = (
+        qasm3_source if qasm_version == "3.0" else qasm3_to_qasm2(qasm3_source)
+    )
+    qasm_block = {
+        "code": qasm_code,
+        "version": qasm_version,
+        "lines": len(qasm_code.splitlines()),
+        "gates": gates_summary,
+    }
+
+    info = quirk_circuit_info(url)
+    circuit_info = {
+        "n_qubits": info["n_qubits"],
+        "n_cols": info["n_cols"],
+        "gates": info["gates"],
+    }
+
+    migrated_code = {}
+    for provider in settings["provider"]:
+        migrated_code[f"{PROVIDER_DIRECTORY[provider]}_code"] = provider_python_source(
+            qasm_code,
+            provider,
+            qasm_version=qasm_version,
+            shots=settings["shots"],
+            preserve_custom_gates=settings["preserve_custom_gates"],
+        )
+
+    zx_settings = settings["zx"]
+    zx_calculus_result = (
+        _zx_calculus_result(
+            url, qasm_code, offset, zx_settings["time"], zx_settings["timeout"]
+        )
+        if zx_settings["enabled"]
+        else None
+    )
+
+    images_settings = settings["images"]
+    img = {"quirk": None, "qasm": None, "composer": None}
+    if images_settings["quirk"]:
+        try:
+            img["quirk"] = _image_quirk_base64(url, images_settings["capture_timeout"])
+            if img["quirk"] is None:
+                errors.append({
+                    "stage": "img.quirk",
+                    "message": "No se pudo capturar el circuito Quirk (Selenium).",
+                })
+        except Exception as exc:  # noqa: BLE001 — etapa opcional no interrumpe el resultado
+            errors.append({"stage": "img.quirk", "message": str(exc)})
+    if images_settings["qasm"]:
+        try:
+            img["qasm"] = _image_qasm_base64(qasm_code, qasm_version, "bw")
+        except Exception as exc:  # noqa: BLE001
+            errors.append({"stage": "img.qasm", "message": str(exc)})
+    if images_settings["composer"]:
+        try:
+            img["composer"] = _image_qasm_base64(qasm_code, qasm_version, "iqp")
+        except Exception as exc:  # noqa: BLE001
+            errors.append({"stage": "img.composer", "message": str(exc)})
+
+    comparison_doc = None
+    if settings["comparison"]:
+        try:
+            comparison_doc = _comparison_markdown(name, url, qasm_code, qasm_version)
+        except Exception as exc:  # noqa: BLE001
+            errors.append({"stage": "comparison", "message": str(exc)})
+
+    output = {}
+    if name is not None:
+        output["name"] = name
+    output.update({
+        "qasm": qasm_block,
+        "migrated_code": migrated_code,
+        "zx_calculus_result": zx_calculus_result,
+        "circuit_info": circuit_info,
+        "img": img,
+        "comparison_doc": comparison_doc,
+        "errors": errors,
+    })
+    return output
+
+
+def translate_circuit(payload):
+    """Función core de la librería: traduce circuitos Quirk con un payload JSON.
+
+    Ejecuta el flujo Quirk -> OpenQASM -> código de proveedor, con las etapas
+    opcionales (validación ZX, imágenes en base64, documento de comparación)
+    configurables desde el propio payload. Estructura espejo del proyecto:
+    ``input`` agrupa las entradas (como la carpeta ``input/``) y ``output``
+    las salidas (como la carpeta ``output/``).
+
+    Payload de entrada (dict o cadena JSON):
+        - input (dict, obligatorio) con exactamente uno de:
+            - url (str): URL de Quirk con ``circuit=<JSON>``; o
+            - json (dict | str): circuito Quirk con ``cols``; o
+            - circuits (list): lote de ``{name?, url|json, offset?}``.
+        - y opcionalmente:
+            - offset (int >= 0, default 0): desplazamiento de q[i] (global;
+              cada entrada de ``circuits`` puede sobreescribirlo).
+            - qasm_version (str, default QTRANS_QASM_VERSION o '3.0'): '2.0'|'3.0'.
+            - provider (str | list, default 'qiskit'): alias canónicos
+              ('qiskit'/'ibm', 'braket'/'aws', 'pennylane'/'xanadu').
+            - shots (int >= 1, default QTRANS_SHOTS o 1000).
+            - preserve_custom_gates (bool, default QTRANS_PRESERVE_CUSTOM_GATES).
+            - zx (object, default {enabled: true, time: 0.5, timeout: 120}).
+            - images (object, default {quirk: false, qasm: false, composer:
+              false, capture_timeout: 15}); las imágenes van en base64 en
+              ``output.img`` (no se escribe nada en disco).
+            - comparison (bool, default false): documento Markdown inline.
+
+    Respuesta (dict serializable a JSON):
+        - input: eco de la entrada normalizada (con defaults resueltos y URLs
+          efectivas).
+        - output: objeto de salida si es circuito único, o **lista** de
+          objetos si se usó ``circuits``. Cada objeto contiene:
+            - name (str): nombre del circuito; **solo** en modo lote (los
+              objetos de un circuito único no incluyen esta clave).
+            - qasm (dict): bloque del código generado:
+                - code (str): código OpenQASM completo.
+                - version (str): versión efectiva de ``code``.
+                - lines (int): cantidad de líneas de ``code``.
+                - gates (dict): ``custom``/``native``, cada uno con ``count``
+                  (operaciones) y ``names`` (nombres únicos, ordenados). Se
+                  cuentan sobre el QASM 3.0 previo a la reducción de basis,
+                  de modo que el conteo es estable aunque se pida la versión 2.0.
+            - migrated_code (dict): código Python por proveedor, con clave
+              ``<subcarpeta_proveedor>_code`` (p. ej. ``ibm_qiskit_code``,
+              ``aws_braket_code``, ``xanadu_pennylane_code``).
+            - zx_calculus_result (str | None): 'equivalente' |
+              'no-equivalente' | 'no-comprobado'; None si zx.enabled=false.
+            - circuit_info (dict): n_qubits, n_cols, gates.
+            - img (dict): {quirk, qasm, composer} en base64 (PNG) o None si
+              no se pidió o falló.
+            - comparison_doc (str | None): Markdown inline o None.
+            - errors (list): [{stage, message}] de etapas opcionales fallidas.
+
+    Parámetros:
+        - payload (dict | str): objeto JSON de entrada (dict o cadena).
+
+    Retorna:
+        - dict: ``{"input": ..., "output": ...}`` JSON-serializable.
+
+    Lanza:
+        - ValueError: payload inválido (claves desconocidas, faltantes, mal
+          tipadas o fuera de rango).
+        - Propaga las excepciones de la traducción/migración (etapas
+          obligatorias); las etapas opcionales nunca lanzan, van a ``errors``.
+    """
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"El payload debe ser JSON válido: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("El payload debe ser un dict o una cadena JSON.")
+    _require_keys(payload, _TRANSLATE_TOP_KEYS, "payload")
+    if "input" not in payload:
+        raise ValueError('El payload debe tener la clave "input".')
+
+    settings = _normalize_translate_input(payload["input"])
+
+    if "circuits" in settings:
+        output = [
+            _translate_circuit_entry(
+                circuit["name"], circuit["url"], circuit["offset"], settings
+            )
+            for circuit in settings["circuits"]
+        ]
+    else:
+        output = _translate_circuit_entry(None, settings["url"], settings["offset"], settings)
+
+    return {"input": settings, "output": output}
 
 
 def build_argument_parser():

@@ -1,6 +1,6 @@
 import sys
 sys.path.insert(0, '..')
-from utils.qutils import quirk_to_qasm
+from qtrans.utils.qutils import quirk_to_qasm
 
 
 def test(desc, url, offset=0):

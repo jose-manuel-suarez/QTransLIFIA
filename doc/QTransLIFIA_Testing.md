@@ -12,7 +12,7 @@ El paso más crítico de todo el flujo es la **traducción Quirk → OpenQASM**:
 
 ## 2. El Flujo como Objeto de Prueba
 
-`run_pipeline` (`qtrans.py:681`) orquesta el flujo completo. Cada etapa puede activarse/desactivarse de forma independiente mediante flags (CLI) o variables de entorno (`QTRANS_*`), lo que permite **probar cada paso aislado**:
+`run_pipeline` (`qtrans/core.py:637`) orquesta el flujo completo. Cada etapa puede activarse/desactivarse de forma independiente mediante flags (CLI) o variables de entorno (`QTRANS_*`), lo que permite **probar cada paso aislado**:
 
 | Etapa | Artefacto principal | Flag / `QTRANS_*` | Riesgo si falla |
 | --- | --- | --- | --- |
@@ -30,7 +30,7 @@ El determinismo de `quirk_to_qasm` (misma URL → mismo OpenQASM) es el prerequi
 
 ### 3.1 Verificación Estática por Características del Circuito
 
-La verificación estática opera sobre el **modelo estructurado** provisto por `quirk_circuit_info` (`utils/qutils.py:1248`), antes de cualquier simulación. Consiste en asertar invariantes y contrastarlas contra el OpenQASM emitido:
+La verificación estática opera sobre el **modelo estructurado** provisto por `quirk_circuit_info` (`qtrans/utils/qutils.py:1255`), antes de cualquier simulación. Consiste en asertar invariantes y contrastarlas contra el OpenQASM emitido:
 
 - **Dimensiones**: el `n_qubits` efectivo (que incluye la altura de *custom gates* y multi-qubit) debe coincidir con el número de qubits declarados en el registro `q` del OpenQASM generado.
 - **Número de columnas** (`n_cols`) y mapeo columna → instrucciones: conservador del orden temporal de la semántica columnar de Quirk.
@@ -46,9 +46,9 @@ Esta estrategia es **barata, determinista y totalmente automatizable**, por lo q
 
 El pipeline incorpora un **verificador semántico automático** basado en el cálculo ZX, que supera la comprobación estructural al comparar la acción unitaria de ambas representaciones:
 
-1. `quirk_to_zx_graph(url, offset, time)` (`utils/zx_utils.py:374`) construye el grafo ZX directamente desde la fuente Quirk.
-2. `qasm_to_zx_graph(qasm_code)` (`utils/zx_utils.py:431`) construye el grafo ZX desde el OpenQASM generado.
-3. `_run_zx_workflow` (`qtrans.py:527`) compara ambos grafos por circuito:
+1. `quirk_to_zx_graph(url, offset, time)` (`qtrans/utils/zx_utils.py:374`) construye el grafo ZX directamente desde la fuente Quirk.
+2. `qasm_to_zx_graph(qasm_code)` (`qtrans/utils/zx_utils.py:431`) construye el grafo ZX desde el OpenQASM generado.
+3. `compare_zx_graphs` (`qtrans/utils/zx_utils.py`) compara ambos grafos por circuito (regla única compartida por las tres formas de ejecución); `_run_zx_workflow` (`qtrans/core.py`) lo invoca:
    - **Circuitos grandes** (> 10 qubits): `zx.Circuit.verify_equality(..., up_to_global_phase=True)`.
    - **Circuitos pequeños** (≤ 10 qubits): `zx.simplify.full_reduce` + `zx.compare_tensors(..., strategy='rw-greedy-linear')`.
    - Resultado por circuito en `ZXCalculus/comparison_results.md` (`EQUIVALENTES` / `NO DEMOSTRADO` / `NO COMPARABLES` / `ERROR`).
@@ -61,7 +61,7 @@ Para circuitos pequeños el costo de la inspección humana es bajo y alto su val
 
 - **Capturas del circuito Quirk** (`capture_quirk_circuit`, PNG en `imgs/circuits_quirk/`): fijan la referencia oficial diseñada por el usuario.
 - **Diagrama del OpenQASM generado** (`imgs/circuits_qasm/`): permite contrastar el circuito tal como lo interpretó el traductor.
-- **Comparación lado a lado** (`_write_comparison_docs`, `qtrans.py:400` → `imgs/visual_comparations/*.md`): una página por circuito con Quirk y OpenQASM en la misma vista, más un `README.md` índice.
+- **Comparación lado a lado** (`_write_comparison_docs`, `qtrans/core.py:385` → `imgs/visual_comparations/*.md`): una página por circuito con Quirk y OpenQASM en la misma vista, más un `README.md` índice.
 - **Imágenes estilo IBM Quantum Composer** (para los scripts migrados): confirman la lectura del circuito en el ecosistema destino.
 
 Para circuitos de pocos qubits (estados Bell, Toffoli, «la demostración por la vista») la comparación visual es la comprobación más rápida y suficiente; para circuitos grandes, en cambio, debe relegarse a un rol de *sanity check* y delegarse la garantía a 3.1 y 3.2.
@@ -82,6 +82,7 @@ Para circuitos de pocos qubits (estados Bell, Toffoli, «la demostración por la
 El repositorio incluye suites de pruebas que automatizan la comprobación del flujo:
 
 - `test/test_qtrans.py`: pruebas del pipeline/CLI (`run_pipeline`) — modos `algorithm`/`batch`, artefactos por corrida, apertura de imágenes y generación de scripts migrados.
+- `test/test_translate.py`: pruebas del contrato de la API de librería `translate_circuit`.
 - `test/test_qasm.py`: pruebas de traducción sobre circuitos canónicos (Bell, Toffoli, *offset*, *placeholders*) invocando `quirk_to_qasm`.
 - Ejecución:
   ```text

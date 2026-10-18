@@ -9,7 +9,7 @@ description = "Traducción de circuitos Quirk a OpenQASM y migración a Qiskit, 
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
-authors = [{ name = "QTransLIFIA" }]
+authors = [{ name = "LIFIA author", email="jsuarez@lifia.info.unlp.edu.ar" }]
 keywords = ["quantum", "quirk", "openqasm", "qiskit", "braket", "pennylane", "zx-calculus"]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -51,10 +51,15 @@ dev = [
 [project.scripts]
 qtrans = "qtrans:main"
 
+[tool.setuptools.packages.find]
+include = ["qtrans*"]
+
 [tool.setuptools]
-py-modules = ["qtrans", "translator"]
-packages = ["utils"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-utils = ["*.py"]
+"qtrans.utils" = ["*.py"]
+
+[project.urls]
+Homepage = "https://github.com/jose-manuel-suarez/QTransLIFIA"
+Issues = "https://github.com/jose-manuel-suarez/QTransLIFIA/issues"

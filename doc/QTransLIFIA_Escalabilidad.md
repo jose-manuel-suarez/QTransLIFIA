@@ -39,11 +39,11 @@ Al centralizar la emisión exclusivamente en las funciones `quirk_to_qasm` y `qu
 
 ## 4. Escalabilidad hacia Múltiples Ecosistemas Destino
 
-### 4.1 OpenQASM 2.0 como Interfaz Estable
+### 4.1 OpenQASM como Interfaz Estable
 
-La adopción de **OpenQASM 2.0** como representación intermedia es el eje central de la escalabilidad entre ecosistemas. OpenQASM 2.0 constituye una *lingua franca* ampliamente soportada por simuladores, transpiladores, compiladores cuánticos, SDKs y plataformas de hardware/cuántico-emulación.
+La adopción de **OpenQASM** (versiones 2.0 y 3.0, por defecto 3.0) como representación intermedia es el eje central de la escalabilidad entre ecosistemas. OpenQASM constituye una *lingua franca* ampliamente soportada por simuladores, transpiladores, compiladores cuánticos, SDKs y plataformas de hardware/cuántico-emulación.
 
-Al emitir este formato intermedio, QTransLIFIA queda **agnóstico al backend destino**. Cualquier herramienta capaz de consumir OpenQASM 2.0 puede recibir directamente el circuito traducido.
+Al emitir este formato intermedio, QTransLIFIA queda **agnóstico al backend destino**. Cualquier herramienta capaz de consumir OpenQASM puede recibir directamente el circuito traducido.
 
 ### 4.2 Pipeline Reutilizable para Nuevos Destinos
 
@@ -52,7 +52,7 @@ El diseño actual permite escalar horizontalmente a nuevos ecosistemas sin modif
 - **Sin reescritura del parser**: La extracción, normalización y resolución de *custom gates* permanecen invariantes ante cambios en el ecosistema destino.
 - **Consumidores independientes**: Nuevos backends (simuladores, frameworks, toolchains de validación, entornos de ejecución) pueden integrarse como consumidores puros del OpenQASM generado.
 - **Post-procesadores opcionales**: Resulta factible añadir etapas posteriores al generador (optimización, mapeo a topología física, reescritura para dispositivos específicos, análisis estático) que operen sobre OpenQASM, sin acoplarse a la lógica de parsing Quirk.
-- **Migración a nuevos lenguajes destino**: En caso de requerir OpenQASM 3.0 u otro lenguaje, basta con implementar un nuevo generador que reutilice íntegramente `quirk_circuit_info`, el mapa de puertas y el mecanismo de expansión. La tubería Quirk→análisis permanece válida.
+- **Migración a nuevos lenguajes destino**: La coexistencia de OpenQASM 2.0 y 3.0 (esta última por defecto) es una manifestación temprana de esta capacidad: en caso de requerir otro lenguaje, basta con implementar un nuevo generador que reutilice íntegramente `quirk_circuit_info`, el mapa de puertas y el mecanismo de expansión. La tubería Quirk→análisis permanece válida.
 
 ### 4.3 Escalabilidad por Composición
 
@@ -60,7 +60,7 @@ Gracias a la separación análisis/generación, el traductor puede integrarse en
 
 - **Integración en pipelines CI/CD**: Al ser determinista y modular, puede emplearse para validar migraciones de circuitos entre entornos de forma automatizada.
 - **Procesamiento por lotes**: La interfaz `quirk_to_qasm(url, offset=0)` es minimalista y predecible, lo que facilita su invocación masiva para colecciones de circuitos Quirk.
-- **Orquestación multi-destino**: Un mismo circuito Quirk puede traducirse una única vez a OpenQASM 2.0 y distribuirse simultáneamente a múltiples ecosistemas destino, maximizando la reutilización.
+- **Orquestación multi-destino**: Un mismo circuito Quirk puede traducirse una única vez a OpenQASM y distribuirse simultáneamente a múltiples ecosistemas destino, maximizando la reutilización.
 
 ## 5. Escalabilidad en Mantenimiento y Evolución
 
@@ -70,4 +70,4 @@ Gracias a la separación análisis/generación, el traductor puede integrarse en
 
 ## 6. Conclusión
 
-QTransLIFIA presenta una arquitectura escalable tanto **verticalmente** (complejidad creciente del circuito: qubits, columnas, jerarquías anidadas) como **horizontalmente** (múltiples ecosistemas destino). El uso de OpenQASM 2.0 como interfaz estable, unido a un pipeline modular, desacoplado y reutilizable, permite que el traductor crezca sin reescribir su núcleo. En consecuencia, el sistema es escalable para incorporar nuevos destinos, nuevos consumidores y futuras variantes del propio lenguaje cuántico intermedio, manteniendo intacta la lógica que resuelve el origen Quirk.
+QTransLIFIA presenta una arquitectura escalable tanto **verticalmente** (complejidad creciente del circuito: qubits, columnas, jerarquías anidadas) como **horizontalmente** (múltiples ecosistemas destino). El uso de OpenQASM como interfaz estable, unido a un pipeline modular, desacoplado y reutilizable, permite que el traductor crezca sin reescribir su núcleo. En consecuencia, el sistema es escalable para incorporar nuevos destinos, nuevos consumidores y futuras variantes del propio lenguaje cuántico intermedio, manteniendo intacta la lógica que resuelve el origen Quirk.

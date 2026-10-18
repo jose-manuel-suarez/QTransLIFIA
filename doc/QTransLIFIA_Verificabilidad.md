@@ -2,7 +2,7 @@
 
 ## 1. Introducción
 
-La verificabilidad en QTransLIFIA se refiere a la capacidad de comprobar que el circuito traducido desde Quirk a OpenQASM 2.0 es **equivalente** al circuito original, tanto desde el punto de vista estructural como, potencialmente, funcional. Esto resulta fundamental para garantizar una migración fiable entre lenguajes y ecosistemas distintos.
+La verificabilidad en QTransLIFIA se refiere a la capacidad de comprobar que el circuito traducido desde Quirk a OpenQASM es **equivalente** al circuito original, tanto desde el punto de vista estructural como, potencialmente, funcional. Esto resulta fundamental para garantizar una migración fiable entre lenguajes y ecosistemas distintos.
 
 ## 2. Fundamentos para la Verificabilidad
 
@@ -87,9 +87,9 @@ Además del determinismo, la estructura del traductor permite estrategias concre
 
 El pipeline incorpora un verificador semántico automático basado en grafos ZX, sin depender de herramientas externas:
 
-- `quirk_to_zx_graph` (`utils/zx_utils.py:374`) construye el grafo ZX directamente desde la fuente Quirk.
-- `qasm_to_zx_graph` (`utils/zx_utils.py:431`) construye el grafo ZX desde el OpenQASM generado.
-- `_run_zx_workflow` (`qtrans.py:527`) compara ambos grafos: con `zx.Circuit.verify_equality(..., up_to_global_phase=True)` para circuitos grandes y con `zx.simplify.full_reduce` + `zx.compare_tensors` para circuitos pequeños, registrando el resultado en `ZXCalculus/comparison_results.md`.
+- `quirk_to_zx_graph` construye el grafo ZX directamente desde la fuente Quirk.
+- `qasm_to_zx_graph` construye el grafo ZX desde el OpenQASM generado.
+- `compare_zx_graphs` (`qtrans/utils/zx_utils.py`) compara ambos grafos: con `zx.Circuit.verify_equality(..., up_to_global_phase=True)` para circuitos grandes y con `zx.simplify.full_reduce` + `zx.compare_tensors` para circuitos pequeños. `_run_zx_workflow` (`qtrans/core.py`) lo invoca y registra el resultado en `ZXCalculus/comparison_results.md`; esta regla de equivalencia es única y compartida por las tres formas de ejecución (librería/CLI y cuaderno).
 
 Este mecanismo integrado convierte la comprobación semántica (el nivel más fuerte de verificación) en **un artefacto reproducible del pipeline**, alineado con la exigencia de la QSE de instrumentar la verificación como parte del proceso de desarrollo y no como una actividad manual posterior.
 
@@ -119,9 +119,9 @@ Esta información permite:
 - **Inspección de definiciones internas**: `custom_gates_info` y `custom_gates_gates` permiten examinar la estructura interna de cada *custom gate* (columnas, puertas, jerarquías), facilitando la validación antes de su expansión.
 - **Cobertura estructural**: Asegurar que el conjunto de elementos extraídos cubre íntegramente lo representado en `circuit.cols`.
 
-## 4. Trazabilidad y Preservación de Estructura
+## 5. Trazabilidad y Preservación de Estructura
 
-### 4.1 Trazabilidad de Puertas
+### 5.1 Trazabilidad de Puertas
 
 Gracias a la resolución explícita de *custom gates* mediante `_build_gate_map` y `_col_to_qasm_with_gates`, es posible **trazar cada instrucción OpenQASM** hasta su origen en el circuito Quirk:
 
@@ -129,57 +129,57 @@ Gracias a la resolución explícita de *custom gates* mediante `_build_gate_map`
 - **Contexto por columna**: El sufijo `:k` asegura trazabilidad cuando la misma definición se instancia múltiples veces en columnas distintas.
 - **Resolución recursiva documentada**: La expansión paso a paso permite seguir la jerarquía de resolución (definición → subdefiniciones → puertas primitivas), lo cual resulta crítico para depuración y auditoría.
 
-### 4.2 Preservación de Conectividad y Jerarquía
+### 5.2 Preservación de Conectividad y Jerarquía
 
 - **Conectividad explícita**: Controles y *targets* se preservan durante la expansión, evitando reordenamientos que podrían alterar la semántica.
 - **Jerarquía intacta**: El soporte a anidamiento (profundidad ≤ 10) mantiene la estructura jerárquica definida por el usuario, permitiendo contrastar la jerarquía Quirk contra la secuencia expandida en OpenQASM.
 - **Geometría coherente**: `_gate_height`, `offset` y el cálculo del número efectivo de qubits garantizan que la asignación a registros `q[i]` refleje fielmente la disposición del circuito original.
 
-## 5. Equivalencia entre Circuitos Migrados
+## 6. Equivalencia entre Circuitos Migrados
 
-### 5.1 Equivalencia Estructural
+### 6.1 Equivalencia Estructural
 
 La **equivalencia estructural** se establece cuando:
 
-1. Las dimensiones efectivas coinciden: `n_qubits` (Quirk, efectivo) ≡ número de qubits declarados en OpenQASM 2.0.
+1. Las dimensiones efectivas coinciden: `n_qubits` (Quirk, efectivo) ≡ número de qubits declarados en OpenQASM.
 2. La topología de operaciones se preserva: mismo conjunto de puertas efectivas, mismas relaciones control-target y misma conectividad.
 3. La jerarquía de abstracciones se resuelve de forma coherente: la expansión produce una secuencia que corresponde semánticamente a las definiciones originales.
 4. El mapeo columna→instrucciones respeta la semántica columnar de Quirk.
 
-Al mantener todos estos elementos, QTransLIFIA permite establecer una **correspondencia estructural verificable** entre la representación Quirk y la representación OpenQASM 2.0.
+Al mantener todos estos elementos, QTransLIFIA permite establecer una **correspondencia estructural verificable** entre la representación Quirk y la representación OpenQASM.
 
-### 5.2 Equivalencia Funcional
+### 6.2 Equivalencia Funcional
 
 La **equivalencia funcional** (misma acción unitaria sobre el espacio de estados, salvo fases globales irrelevantes según contexto) puede verificarse externamente aprovechando la fidelidad estructural lograda:
 
-- **Base para simulación cruzada**: Al migrar a OpenQASM 2.0, el mismo circuito puede ejecutarse en distintos simuladores/compiladores que consuman ese IR. La comparación de resultados (estados, distribuciones, valores esperados) permite detectar discrepancias atribuibles al backend, no a errores de traducción.
+- **Base para simulación cruzada**: Al migrar a OpenQASM, el mismo circuito puede ejecutarse en distintos simuladores/compiladores que consuman ese IR. La comparación de resultados (estados, distribuciones, valores esperados) permite detectar discrepancias atribuibles al backend, no a errores de traducción.
 - **Verificación mediante herramientas externas**: Herramientas de equivalencia de circuitos (comparadores unitarios, verificadores formales o frameworks de *circuit equivalence checking*) pueden operar sobre el OpenQASM generado, tomando como referencia la semántica preservada desde Quirk.
 - **Comparación entre variantes**: Resulta viable comparar el circuito original (conceptualmente) con el traducido mediante ejecución en entornos equivalentes para validar corrección funcional.
 
-### 5.3 Equivalencia entre Distintos Lenguajes y Ecosistemas
+### 6.3 Equivalencia entre Distintos Lenguajes y Ecosistemas
 
 El proceso completo habilita la **verificabilidad cruzada entre ecosistemas**:
 
 1. **Origen**: Circuito definido en Quirk (modelo visual/URL).
-2. **Intermedio**: Representación canónica OpenQASM 2.0 (texto, ampliamente soportado).
+2. **Intermedio**: Representación canónica OpenQASM (texto, ampliamente soportado).
 3. **Destinos múltiples**: Simuladores, transpiladores, SDKs o hardware que consumen OpenQASM.
 
-Dado que OpenQASM 2.0 actúa como *punto de referencia intermedio*, la equivalencia puede validarse en dos niveles:
+Dado que OpenQASM actúa como *punto de referencia intermedio*, la equivalencia puede validarse en dos niveles:
 
 - **Quirk ↔ OpenQASM**: Verificable estructuralmente mediante `quirk_circuit_info` + inspección del OpenQASM generado (trazabilidad de puertas, conteos, conectividad).
 - **OpenQASM ↔ múltiples backends**: Verificable funcionalmente mediante ejecución cruzada con resultados consistentes entre ecosistemas.
 
-## 6. Mecanismos que Facilitan la Verificación Automatizada
+## 7. Mecanismos que Facilitan la Verificación Automatizada
 
-### 6.1 Determinismo como Requisito Crítico
+### 7.1 Determinismo como Requisito Crítico
 
-La traducción es **funcionalmente determinista**: mismo input (URL Quirk) → misma salida (OpenQASM 2.0). Esto permite:
+La traducción es **funcionalmente determinista**: mismo input (URL Quirk) → misma salida (OpenQASM). Esto permite:
 
 - *Golden tests*: Comparación contra *snapshots* conocidos.
 - *Regression tests*: Detección automática de cambios no intencionales entre versiones.
 - *Differential testing*: Comparación entre implementaciones o entre versiones del traductor.
 
-### 6.2 Verificación por Contraste Análisis–Generación
+### 7.2 Verificación por Contraste Análisis–Generación
 
 La separación entre `quirk_circuit_info` y `quirk_to_qasm` permite diseñar verificadores automatizados:
 
@@ -188,21 +188,21 @@ La separación entre `quirk_circuit_info` y `quirk_to_qasm` permite diseñar ver
 - **Cobertura de *custom gates***: Asegurar que todas las `custom_gate_ids` referenciadas han sido resueltas y que ninguna definición queda sin utilizar cuando corresponde.
 - **Validación de resolución**: Comprobar que la expansión recursiva cubre todos los niveles definidos en `custom_gates_info`, respetando el límite de profundidad.
 
-### 6.3 Trazabilidad Sistemática
+### 7.3 Trazabilidad Sistemática
 
 - **Resolución explícita**: El proceso `_col_to_qasm_with_gates` hace explícita la expansión, lo que facilita *logging* estructurado para auditoría paso a paso.
 - **Mapeo unívoco**: `id`/`name` + sufijo `:k` proporcionan claves únicas para rastrear cada instancia expandida, esencial para identificar el origen de cualquier instrucción generada.
 
-## 7. Recomendaciones para Verificación Práctica
+## 8. Recomendaciones para Verificación Práctica
 
 Aunque la verificación funcional completa puede requerir herramientas externas, el proyecto provee los elementos necesarios para un riguroso proceso de validación:
 
 - **Verificación estructural**: Usar `quirk_circuit_info` para validar inventario, dimensiones, *custom gates* y jerarquías antes de revisar OpenQASM.
-- **Verificación sintáctica**: Validar el OpenQASM 2.0 generado con parsers OpenQASM 2.0 existentes (simuladores, validadores) para asegurar conformidad con el estándar.
-- **Verificación cruzada**: Ejecutar el mismo circuito traducido en al menos dos simuladores distintos que soporten OpenQASM 2.0 y comparar resultados para detectar posibles errores de traducción.
+- **Verificación sintáctica**: Validar el OpenQASM generado con parsers OpenQASM existentes (simuladores, validadores) para asegurar conformidad con el estándar.
+- **Verificación cruzada**: Ejecutar el mismo circuito traducido en al menos dos simuladores distintos que soporten OpenQASM y comparar resultados para detectar posibles errores de traducción.
 - **Verificación por casos canónicos**: Mantener un conjunto de circuitos Quirk representativos (puertas nativas, multi-qubit, *custom gates* simples/anidados) con sus correspondientes OpenQASM esperados para *regression testing*.
 
-## 8. Conclusión
+## 9. Conclusión
 
 QTransLIFIA está diseñado con la **verificabilidad como atributo de calidad**. La combinación de:
 
@@ -210,6 +210,6 @@ QTransLIFIA está diseñado con la **verificabilidad como atributo de calidad**.
 2. **Trazabilidad explícita** mediante resolución por `id`/`name` y sufijo `:k`.
 3. **Preservación estructural** de conectividad, jerarquía, geometría y controles.
 4. **Determinismo** del proceso de traducción.
-5. **Representación intermedia estable** (OpenQASM 2.0) que permite verificación cruzada entre ecosistemas.
+5. **Representación intermedia estable** (OpenQASM) que permite verificación cruzada entre ecosistemas.
 
 ...permite establecer tanto **equivalencia estructural** (Quirk ↔ OpenQASM) como habilitar **equivalencia funcional** mediante validación externa. Esto garantiza que la migración entre lenguajes y ecosistemas se realice con alta confianza, priorizando la **fidelidad semántica** del circuito original por encima de una mera conversión superficial.

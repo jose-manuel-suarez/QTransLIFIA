@@ -7,7 +7,7 @@ antes de ``Circuit.from_ir``.
 
 import re
 
-from utils.qutils import (
+from .qutils import (
     _angle_to_expr,
     _sanitize_gate_name,
     _unquote_parameters,

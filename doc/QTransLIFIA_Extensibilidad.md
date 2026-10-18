@@ -10,7 +10,7 @@ El diseño se fundamenta en:
 
 - **Separación de responsabilidades**: Parsing, análisis, expansión de *custom gates* y emisión están claramente desacoplados.
 - **Abstracción mediante mapeos**: El uso de tablas/mapas (`_build_gate_map`) y modelos estructurados (`quirk_circuit_info`) facilita añadir elementos sin alterar mecanismos existentes.
-- **Centralización de la emisión**: Toda la sintaxis OpenQASM 2.0 se genera en `quirk_to_qasm` y `quirk_col_to_qasm`, lo que permite sustituir o extender la capa de salida de forma aislada.
+- **Centralización de la emisión**: Toda la sintaxis OpenQASM se genera en `quirk_to_qasm` y `quirk_col_to_qasm`, lo que permite sustituir o extender la capa de salida de forma aislada.
 
 ## 3. Extensibilidad ante Evolución de Quirk
 
@@ -25,7 +25,7 @@ El diseño se fundamenta en:
 Para añadir soporte a nuevas compuertas, basta con extender el mapeo de traducción en:
 
 - `_build_gate_map`: Para asegurar su correcta resolución dentro del conjunto de puertas del circuito.
-- `quirk_col_to_qasm` (y lógica asociada): Para definir su equivalencia de sintaxis en OpenQASM 2.0 (operadores de 1, 2 o más qubits, rotaciones, etc.).
+- `quirk_col_to_qasm` (y lógica asociada): Para definir su equivalencia de sintaxis en OpenQASM (operadores de 1, 2 o más qubits, rotaciones, etc.).
 
 Este enfoque localiza el cambio en la capa de mapeo/emisión, sin afectar al cálculo de alturas (`_gate_height`), al mecanismo de expansión o al parsing.
 
@@ -46,16 +46,16 @@ La información estructurada ofrecida por `quirk_circuit_info` habilita funciona
 
 ## 5. Extensibilidad a Versiones de OpenQASM
 
-- **Generador aislado**: La emisión OpenQASM se concentra en `quirk_to_qasm` y `quirk_col_to_qasm`. Esto permite introducir un **nuevo generador** para otras versiones (p.ej. **OpenQASM 3.0**) sin modificar el parser, la extracción de *custom gates*, la expansión recursiva ni el cálculo geométrico.
-- **Reutilización completa del análisis**: `quirk_circuit_info`, el mapa de puertas resuelto y la representación expandida pueden reutilizarse íntegramente para generar sintaxis OpenQASM 3.0, QIR, o cualquier otro IR cuántico textual.
-- **Evolución incremental**: Podría adoptarse un enfoque multi-generador (seleccionable por parámetro) manteniendo OpenQASM 2.0 como opción estable, lo cual resulta compatible con la arquitectura actual.
+- **Generador aislado**: La emisión OpenQASM se concentra en `quirk_to_qasm` y `quirk_col_to_qasm`. Esto permite introducir un **nuevo generador** para otras versiones sin modificar el parser, la extracción de *custom gates*, la expansión recursiva ni el cálculo geométrico. La coexistencia actual de **OpenQASM 3.0** (por defecto) y **OpenQASM 2.0** es una manifestación temprana de esta capacidad.
+- **Reutilización completa del análisis**: `quirk_circuit_info`, el mapa de puertas resuelto y la representación expandida pueden reutilizarse íntegramente para generar sintaxis OpenQASM de otra versión, QIR, o cualquier otro IR cuántico textual.
+- **Evolución incremental**: Podría adoptarse un enfoque multi-generador (seleccionable por parámetro) manteniendo OpenQASM como opción estable, lo cual resulta compatible con la arquitectura actual.
 
 ## 6. Extensibilidad a Nuevos Ecosistemas Destino
 
-- **Arquitectura basada en representación intermedia**: Al adoptar OpenQASM 2.0 como formato canónico intermedio, nuevos ecosistemas destino no requieren modificar el núcleo Quirk→OpenQASM. Basta con integrar consumidores del OpenQASM generado.
+- **Arquitectura basada en representación intermedia**: Al adoptar OpenQASM como formato canónico intermedio, nuevos ecosistemas destino no requieren modificar el núcleo Quirk→OpenQASM. Basta con integrar consumidores del OpenQASM generado.
 - **Post-procesadores desacoplados**: Es posible añadir etapas posteriores al traductor (optimización, mapeo a topología de dispositivo, compilación dirigida, *routing*, *gate decomposition* específica de backend) que operen **sobre OpenQASM**. Estos post-procesadores no dependen del formato Quirk, lo cual refuerza la extensibilidad.
 - **Adaptadores por ecosistema**: Nuevos destinos pueden implementarse como adaptadores externos al proyecto, reutilizando QTransLIFIA como traductor Quirk→IR estable. Esto evita proliferación de lógicas específicas de Quirk por backend.
-- **Soporte a flujos multi-destino**: Un único circuito Quirk puede migrarse a OpenQASM 2.0 una vez y distribuirse a múltiples toolchains, lo cual facilita la incorporación progresiva de nuevos ecosistemas.
+- **Soporte a flujos multi-destino**: Un único circuito Quirk puede migrarse a OpenQASM una vez y distribuirse a múltiples toolchains, lo cual facilita la incorporación progresiva de nuevos ecosistemas.
 
 ## 7. Consideraciones de Extensibilidad y Robustez
 
@@ -69,7 +69,7 @@ QTransLIFIA está concebido para ser **altamente extensible**. Su arquitectura m
 
 1. **Futuras versiones de Quirk**, mediante mapeos dinámicos por `id`/`name` y extracción explícita de *custom gates*.
 2. **Nuevas compuertas y funcionalidades**, localizando las extensiones en capas de mapeo, análisis o post-procesado sin rediseñar el núcleo.
-3. **Evolución de versiones de OpenQASM** (incluido OpenQASM 3.0), reutilizando íntegramente el análisis y la expansión de abstracciones a través de un nuevo generador aislado.
-4. **Nuevos ecosistemas destino**, aprovechando OpenQASM 2.0 como representación intermedia estable y desacoplando los consumidores del formato Quirk.
+3. **Evolución de versiones de OpenQASM** (hoy soportadas: OpenQASM 3.0, por defecto, y OpenQASM 2.0), reutilizando íntegramente el análisis y la expansión de abstracciones a través de un nuevo generador aislado.
+4. **Nuevos ecosistemas destino**, aprovechando OpenQASM como representación intermedia estable y desacoplando los consumidores del formato Quirk.
 
 Este enfoque posiciona al proyecto como una solución preparada para evolucionar conforme avanza el ecosistema de computación cuántica, preservando al mismo tiempo estabilidad, mantenibilidad y fidelidad semántica.

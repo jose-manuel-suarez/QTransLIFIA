@@ -16,13 +16,13 @@ import math
 import re
 from fractions import Fraction
 
-from utils.qutils import (
+from .qutils import (
     _build_gate_map,
     _column_extent,
     _matrix_to_rows,
     _qft_token,
 )
-from utils.url_utils import parse_quirk_url
+from .url_utils import parse_quirk_url
 
 
 def _zx_phase(angle):
@@ -392,9 +392,9 @@ def quirk_to_zx_graph(url, offset=0, time=0.5):
 
     circuit_data = parse_quirk_url(url)
     cols = circuit_data.get('cols', [])
-    n_qubits = max((_column_extent(col) for col in cols), default=0) + offset
-    circuit = zx.Circuit(n_qubits)
     gate_map = _build_gate_map(circuit_data)
+    n_qubits = max((_column_extent(col, gate_map) for col in cols), default=0) + offset
+    circuit = zx.Circuit(n_qubits)
 
     for col in cols:
         controls = [index + offset for index, value in enumerate(col) if value == '•']
@@ -623,3 +623,76 @@ def qasm_to_zx_graph(qasm_code):
         process(statement, line_number)
 
     return circuit.to_graph()
+
+
+def compare_zx_graphs(base_graph, qasm_graph):
+    """Compara dos grafos ZX (PyZX) y devuelve el método y el veredicto.
+
+    Punto único de la regla de equivalencia ZX, compartido por el pipeline CLI
+    (``_zx_compare_once`` en ``qtrans/core.py``, con límite de tiempo) y por el
+    cuaderno. Grafos con distinto número de qubits no son comparables; con más de
+    10 qubits se usa la verificación de igualdad de circuitos (``verify_equality``)
+    y, en caso contrario, la comparación de tensores tras reducir ambos grafos.
+
+    Parámetros:
+        - base_graph (pyzx.Graph): grafo ZX construido desde Quirk.
+        - qasm_graph (pyzx.Graph): grafo ZX construido desde el OpenQASM generado.
+
+    Retorna:
+        - tuple[str, str]: ``(method, result)`` donde ``result`` es
+          'EQUIVALENTES', 'NO EQUIVALENTES', 'NO DEMOSTRADO' o 'NO COMPARABLES'.
+    """
+    import pyzx as zx
+
+    base_qubits = base_graph.num_inputs()
+    qasm_qubits = qasm_graph.num_inputs()
+    if base_qubits != qasm_qubits:
+        return 'sin comparar', f'NO COMPARABLES ({base_qubits} vs. {qasm_qubits} qubits)'
+    if base_qubits > 10:
+        base_circuit = zx.Circuit.from_graph(base_graph)
+        qasm_circuit = zx.Circuit.from_graph(qasm_graph)
+        equivalent = base_circuit.verify_equality(qasm_circuit, up_to_global_phase=True)
+        return 'verify_equality', ('EQUIVALENTES' if equivalent else 'NO DEMOSTRADO')
+    zx.simplify.full_reduce(base_graph)
+    zx.simplify.full_reduce(qasm_graph)
+    equivalent = zx.compare_tensors(base_graph, qasm_graph, strategy='rw-greedy-linear')
+    return (
+        'compare_tensors (rw-greedy-linear)',
+        ('EQUIVALENTES' if equivalent else 'NO EQUIVALENTES'),
+    )
+
+
+def reduce_and_draw_zx_svg(graph, output_path, figsize=None):
+    """Reduce un grafo ZX (``full_reduce``) y lo dibuja en un archivo SVG.
+
+    Punto único del renderizado de grafos ZX reducidos, compartido por el
+    pipeline CLI y el cuaderno.
+
+    Parámetros:
+        - graph (pyzx.Graph): grafo ZX a reducir y dibujar (no se modifica).
+        - output_path (str | Path): ruta del SVG de salida.
+        - figsize (tuple[float, float] | None): tamaño de figura opcional.
+
+    Retorna:
+        - pyzx.Graph: la copia reducida del grafo (para métricas como el número
+          de vértices restantes).
+    """
+    import matplotlib
+    matplotlib.use('Agg', force=True)
+    import matplotlib.pyplot as plt
+    import pyzx as zx
+
+    reduced_graph = graph.copy()
+    zx.simplify.full_reduce(reduced_graph)
+    if figsize is None:
+        # Tamaño adaptado al grafo reducido (mismo criterio que el cuaderno).
+        n_qubits = reduced_graph.num_inputs()
+        vertices = reduced_graph.num_vertices()
+        figsize = (
+            max(12, min(24, vertices / 70)),
+            max(5, min(12, n_qubits * 0.5)),
+        )
+    figure = zx.draw(reduced_graph, labels=True, figsize=figsize)
+    figure.savefig(str(output_path), format='svg')
+    plt.close(figure)
+    return reduced_graph
