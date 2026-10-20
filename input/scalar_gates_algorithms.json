@@ -1,0 +1,114 @@
+{
+  "scalar_spacer_2q": {
+    "desc": "Compuerta Scalar nativa Quirk \u2026 (Spacer, sin efecto sobre el estado) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"\\u2026\",\"\\u2026\"],[\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_spacer_4q": {
+    "desc": "Compuerta Scalar nativa Quirk \u2026 (Spacer, sin efecto sobre el estado) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"\\u2026\",\"\\u2026\",\"\\u2026\",\"\\u2026\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_spacer_6q": {
+    "desc": "Compuerta Scalar nativa Quirk \u2026 (Spacer, sin efecto sobre el estado) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"\\u2026\",\"\\u2026\",\"\\u2026\",\"\\u2026\",\"\\u2026\",\"\\u2026\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_spacer_10q": {
+    "desc": "Compuerta Scalar nativa Quirk \u2026 (Spacer, sin efecto sobre el estado) (10 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"\\u2026\",\"\\u2026\",\"\\u2026\",\"\\u2026\",\"\\u2026\",\"\\u2026\",\"\\u2026\",\"\\u2026\",\"\\u2026\",\"\\u2026\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_zero_2q": {
+    "desc": "Compuerta Scalar nativa Quirk 0 (Nothing Gate) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"0\",\"0\"],[\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_zero_4q": {
+    "desc": "Compuerta Scalar nativa Quirk 0 (Nothing Gate) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"0\",\"0\",\"0\",\"0\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_zero_6q": {
+    "desc": "Compuerta Scalar nativa Quirk 0 (Nothing Gate) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"0\",\"0\",\"0\",\"0\",\"0\",\"0\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_zero_10q": {
+    "desc": "Compuerta Scalar nativa Quirk 0 (Nothing Gate) (10 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"0\",\"0\",\"0\",\"0\",\"0\",\"0\",\"0\",\"0\",\"0\",\"0\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_negate_2q": {
+    "desc": "Compuerta Scalar nativa Quirk NeGate (niega todas las amplitudes) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"NeGate\",\"NeGate\"],[\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_negate_4q": {
+    "desc": "Compuerta Scalar nativa Quirk NeGate (niega todas las amplitudes) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"NeGate\",\"NeGate\",\"NeGate\",\"NeGate\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_negate_6q": {
+    "desc": "Compuerta Scalar nativa Quirk NeGate (niega todas las amplitudes) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"NeGate\",\"NeGate\",\"NeGate\",\"NeGate\",\"NeGate\",\"NeGate\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_negate_10q": {
+    "desc": "Compuerta Scalar nativa Quirk NeGate (niega todas las amplitudes) (10 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"NeGate\",\"NeGate\",\"NeGate\",\"NeGate\",\"NeGate\",\"NeGate\",\"NeGate\",\"NeGate\",\"NeGate\",\"NeGate\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_imaginary_2q": {
+    "desc": "Compuerta Scalar nativa Quirk i (fase global i) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"i\",\"i\"],[\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_imaginary_4q": {
+    "desc": "Compuerta Scalar nativa Quirk i (fase global i) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"i\",\"i\",\"i\",\"i\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_imaginary_6q": {
+    "desc": "Compuerta Scalar nativa Quirk i (fase global i) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"i\",\"i\",\"i\",\"i\",\"i\",\"i\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_imaginary_10q": {
+    "desc": "Compuerta Scalar nativa Quirk i (fase global i) (10 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"i\",\"i\",\"i\",\"i\",\"i\",\"i\",\"i\",\"i\",\"i\",\"i\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_anti_imaginary_2q": {
+    "desc": "Compuerta Scalar nativa Quirk -i (fase global -i) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"-i\",\"-i\"],[\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_anti_imaginary_4q": {
+    "desc": "Compuerta Scalar nativa Quirk -i (fase global -i) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"-i\",\"-i\",\"-i\",\"-i\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_anti_imaginary_6q": {
+    "desc": "Compuerta Scalar nativa Quirk -i (fase global -i) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"-i\",\"-i\",\"-i\",\"-i\",\"-i\",\"-i\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_anti_imaginary_10q": {
+    "desc": "Compuerta Scalar nativa Quirk -i (fase global -i) (10 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"-i\",\"-i\",\"-i\",\"-i\",\"-i\",\"-i\",\"-i\",\"-i\",\"-i\",\"-i\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_sqrt_imaginary_2q": {
+    "desc": "Compuerta Scalar nativa Quirk \u221ai (fase global \u221ai) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"\\u221ai\",\"\\u221ai\"],[\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_sqrt_imaginary_4q": {
+    "desc": "Compuerta Scalar nativa Quirk \u221ai (fase global \u221ai) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"\\u221ai\",\"\\u221ai\",\"\\u221ai\",\"\\u221ai\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_sqrt_imaginary_6q": {
+    "desc": "Compuerta Scalar nativa Quirk \u221ai (fase global \u221ai) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"\\u221ai\",\"\\u221ai\",\"\\u221ai\",\"\\u221ai\",\"\\u221ai\",\"\\u221ai\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_sqrt_imaginary_10q": {
+    "desc": "Compuerta Scalar nativa Quirk \u221ai (fase global \u221ai) (10 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"\\u221ai\",\"\\u221ai\",\"\\u221ai\",\"\\u221ai\",\"\\u221ai\",\"\\u221ai\",\"\\u221ai\",\"\\u221ai\",\"\\u221ai\",\"\\u221ai\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_anti_sqrt_imaginary_2q": {
+    "desc": "Compuerta Scalar nativa Quirk \u221a-i (fase global \u221a-i) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"\\u221a-i\",\"\\u221a-i\"],[\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_anti_sqrt_imaginary_4q": {
+    "desc": "Compuerta Scalar nativa Quirk \u221a-i (fase global \u221a-i) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_anti_sqrt_imaginary_6q": {
+    "desc": "Compuerta Scalar nativa Quirk \u221a-i (fase global \u221a-i) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "scalar_anti_sqrt_imaginary_10q": {
+    "desc": "Compuerta Scalar nativa Quirk \u221a-i (fase global \u221a-i) (10 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\",\"\\u221a-i\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  }
+}

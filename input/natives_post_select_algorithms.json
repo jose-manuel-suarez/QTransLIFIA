@@ -1,0 +1,66 @@
+{
+  "postselect_plus_2q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |+\u27e9\u27e8+| (Postselect X-Off, estado propio) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\"],[\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_plus_4q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |+\u27e9\u27e8+| (Postselect X-Off, estado propio) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_plus_6q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |+\u27e9\u27e8+| (Postselect X-Off, estado propio) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_plus_10q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |+\u27e9\u27e8+| (Postselect X-Off, estado propio) (10 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\",\"|+\\u27e9\\u27e8+|\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_minus_2q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |-\u27e9\u27e8-| (Postselect X-On, estado propio) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"Z\",\"Z\"],[\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\"],[\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_minus_4q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |-\u27e9\u27e8-| (Postselect X-On, estado propio) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"Z\",\"Z\",\"Z\",\"Z\"],[\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_minus_6q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |-\u27e9\u27e8-| (Postselect X-On, estado propio) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"Z\",\"Z\",\"Z\",\"Z\",\"Z\",\"Z\"],[\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_minus_10q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |-\u27e9\u27e8-| (Postselect X-On, estado propio) (10 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"Z\",\"Z\",\"Z\",\"Z\",\"Z\",\"Z\",\"Z\",\"Z\",\"Z\",\"Z\"],[\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\",\"|-\\u27e9\\u27e8-|\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_x_2q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |X\u27e9\u27e8X| = |i\u27e9\u27e8i| (Postselect Y-Off, estado propio) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"Z^\\u00bd\",\"Z^\\u00bd\"],[\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\"],[\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_x_4q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |X\u27e9\u27e8X| = |i\u27e9\u27e8i| (Postselect Y-Off, estado propio) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\"],[\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_x_6q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |X\u27e9\u27e8X| = |i\u27e9\u27e8i| (Postselect Y-Off, estado propio) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\"],[\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_x_10q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |X\u27e9\u27e8X| = |i\u27e9\u27e8i| (Postselect Y-Off, estado propio) (10 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\",\"Z^\\u00bd\"],[\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\",\"|X\\u27e9\\u27e8X|\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_slash_2q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |/\u27e9\u27e8/| = |-i\u27e9\u27e8-i| (Postselect Y-On, estado propio) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"Z^-\\u00bd\",\"Z^-\\u00bd\"],[\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\"],[\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_slash_4q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |/\u27e9\u27e8/| = |-i\u27e9\u27e8-i| (Postselect Y-On, estado propio) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\"],[\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_slash_6q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |/\u27e9\u27e8/| = |-i\u27e9\u27e8-i| (Postselect Y-On, estado propio) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\"],[\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  },
+  "postselect_slash_10q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |/\u27e9\u27e8/| = |-i\u27e9\u27e8-i| (Postselect Y-On, estado propio) (10 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\",\"Z^-\\u00bd\"],[\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\",\"|/\\u27e9\\u27e8/|\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+  }
+}

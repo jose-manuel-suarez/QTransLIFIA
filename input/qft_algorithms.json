@@ -25,26 +25,26 @@
   },
   "qft_qft-1_2q": {
     "desc": "Compuerta QFT seguida de QFT\u2020 nativa Quirk (2 qubits)",
-    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"QFT2\"],[\"QFT2\\u2020\"],[\"Measure\",\"Measure\"]]}"
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"QFT2\"],[\"QFT\\u20202\"],[\"Measure\",\"Measure\"]]}"
   },
   "qft_qft-1_3q": {
     "desc": "Compuerta QFT seguida de QFT\u2020 nativa Quirk (3 qubits)",
-    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\"],[\"QFT3\"],[\"QFT3\\u2020\"],[\"Measure\",\"Measure\",\"Measure\"]]}"
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\"],[\"QFT3\"],[\"QFT\\u20203\"],[\"Measure\",\"Measure\",\"Measure\"]]}"
   },
   "qft_qft-1_4q": {
     "desc": "Compuerta QFT seguida de QFT\u2020 nativa Quirk (4 qubits)",
-    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"QFT4\"],[\"QFT4\\u2020\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\"],[\"QFT4\"],[\"QFT\\u20204\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
   },
   "qft_qft-1_6q": {
     "desc": "Compuerta QFT seguida de QFT\u2020 nativa Quirk (6 qubits)",
-    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"QFT6\"],[\"QFT6\\u2020\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"QFT6\"],[\"QFT\\u20206\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
   },
   "qft_qft-1_10q": {
     "desc": "Compuerta QFT seguida de QFT\u2020 nativa Quirk (10 qubits)",
-    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"QFT10\"],[\"QFT10\\u2020\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"QFT10\"],[\"QFT\\u202010\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
   },
   "qft_qft-1_14q": {
     "desc": "Compuerta QFT seguida de QFT\u2020 nativa Quirk (14 qubits)",
-    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"QFT14\"],[\"QFT14\\u2020\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\",\"H\"],[\"QFT14\"],[\"QFT\\u202014\"],[\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\",\"Measure\"]]}"
   }
 }

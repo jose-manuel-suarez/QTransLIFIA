@@ -4,7 +4,7 @@ import os
 import re
 import string
 
-from .url_utils import parse_quirk_url
+from .url_utils import canonicalize_quirk_url, parse_quirk_url
 
 
 def _build_gate_map(circuito):
@@ -1371,6 +1371,9 @@ def capture_quirk_circuit(url, output_path, timeout=15):
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    # Quirk solo reconoce la QFT inversa como 'QFT†n'; sin esta canonización,
+    # las variantes 'QFTn†'/'QFT^†n' se capturan como compuerta "parse error".
+    url = canonicalize_quirk_url(url)
     options = webdriver.ChromeOptions()
     options.add_argument('--headless')
     options.add_argument('--disable-gpu')
