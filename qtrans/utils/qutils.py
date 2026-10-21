@@ -634,6 +634,61 @@ def _angle_literal(radians):
     return f'{sign}pi/{denominator}' if numerator == 1 else f'{sign}{numerator}*pi/{denominator}'
 
 
+# Compuertas de post-selección nativas de Quirk (PostSelectionGates.js). Son
+# proyectores NO unitarios: 'post-seleccionar' = medir en la base propia del
+# proyector y descartar el shot si el resultado no coincide. OpenQASM no tiene
+# primitiva de post-selección, así que se traducen como la rotación de base que
+# define el proyector + una medición en el registro ``ps`` (post-select),
+# dejando en comentario el cbit válido y la etiqueta de Quirk.
+_POSTSELECT_GATES = {
+    # id (JSON Quirk)   : (líneas de rotación de base, resultado esperado, etiqueta)
+    '|0⟩⟨0|':           ([], 0, 'Postselect Off (|0>)'),
+    '|1⟩⟨1|':           (['x'], 1, 'Postselect On (|1>)'),
+    '|+⟩⟨+|':           (['h'], 0, 'Postselect X-Off (|+>)'),
+    '|-⟩⟨-|':           (['h'], 1, 'Postselect X-On (|->)'),
+    '|X⟩⟨X|':           (['h', 'sdg'], 0, 'Postselect Y-Off (|+i>)'),
+    '|/⟩⟨/|':           (['h', 'sdg'], 1, 'Postselect Y-On (|-i>)'),
+}
+
+
+def _is_postselect(value):
+    """Indica si una celda Quirk es una compuerta de post-selección.
+
+    Parámetros:
+        - value: celda de la columna (identificador de la compuerta).
+
+    Retorna:
+        - bool: True si ``value`` es un proyector de post-selección de Quirk.
+    """
+    return isinstance(value, str) and value in _POSTSELECT_GATES
+
+
+def _postselect_lines(value, qubit_index, offset):
+    """Traduce una compuerta de post-selección a sus líneas OpenQASM.
+
+    Emite la rotación de base que define el proyector, la medición en el cbit
+    del registro ``ps`` y un comentario con el resultado válido (los shots cuyo
+    cbit no coincide deben descartarse). La post-selección no es un unitario y
+    OpenQASM no la representa directamente.
+
+    Parámetros:
+        - value: identificador de la compuerta de post-selección.
+        - qubit_index (int): índice lógico del qubit (sin offset).
+        - offset (int): desplazamiento de los índices q[i].
+
+    Retorna:
+        - list[str]: líneas OpenQASM (sin terminador ';').
+    """
+    rotations, expected, label = _POSTSELECT_GATES[value]
+    qi = qubit_index + offset
+    lines = [f'{gate} q[{qi}];' for gate in rotations]
+    lines.append(
+        f'// {label}: post-selección (medición), conservar si ps[{qi}] == {expected}'
+    )
+    lines.append(f'ps[{qi}] = measure q[{qi}];')
+    return lines
+
+
 def _quirk2_col_to_qasm(col, offset, gate_map, gate_names=None):
     """Traduce una columna Quirk a líneas OpenQASM 3.0 (wrapper con nombres).
 
@@ -731,6 +786,11 @@ def _quirk2_col_to_qasm_core(col, offset, gate_map, gate_names=None):
                         f'{", ".join(control_wires)};'
                     )
                 continue
+            if _is_postselect(value):
+                # Una post-selección controlada no tiene traducción directa:
+                # OpenQASM no permite medir dentro de una compuerta controlada.
+                _report_unsupported_gate(value)
+                continue
             if isinstance(value, str) and _is_gate_ref(value, gate_map):
                 gate_id = value.split(':')[0]
                 gate = gate_map[gate_id]
@@ -740,7 +800,18 @@ def _quirk2_col_to_qasm_core(col, offset, gate_map, gate_names=None):
                 target = basic_gates.get(value)
                 gate_height = 1
             if target is None:
-                if value not in _SCALAR_NOOP_GATES and value not in _SCALAR_NULL_GATES and value != '•':
+                if value in _SCALAR_NOOP_GATES:
+                    lines.append(
+                        "// Spacer Quirk ('\u2026'): compuerta identidad (no-op), "
+                        "no altera el estado."
+                    )
+                elif value in _SCALAR_NULL_GATES:
+                    lines.append(
+                        "// ZeroGate Quirk ('0'): matriz nula idempotente (0\u00b70=0), "
+                        "no unitaria; se omite del circuito."
+                    )
+                    _report_unsupported_gate(value)
+                elif value != '•':
                     _report_unsupported_gate(value)
                 continue
             target_indices = range(index, index + gate_height)
@@ -801,9 +872,20 @@ def _quirk2_col_to_qasm_core(col, offset, gate_map, gate_names=None):
                     lines.append(f'gphase({_angle_literal(scalar_phase)});')
                     continue
                 if value in _SCALAR_NOOP_GATES:
+                    lines.append(
+                        "// Spacer Quirk ('\u2026'): compuerta identidad (no-op), "
+                        "no altera el estado."
+                    )
                     continue
                 if value in _SCALAR_NULL_GATES:
+                    lines.append(
+                        "// ZeroGate Quirk ('0'): matriz nula idempotente (0\u00b70=0), "
+                        "no unitaria; se omite del circuito."
+                    )
                     _report_unsupported_gate(value)
+                    continue
+                if _is_postselect(value):
+                    lines.extend(_postselect_lines(value, index, offset))
                     continue
                 if value in basic_gates:
                     qi = index + offset
@@ -1194,6 +1276,11 @@ def quirk_to_qasm(url, offset=0, qasm_version='3.0'):
         if r > n: n = r
         
     lines.extend([f'qreg q[{n}];', f'creg c[{n}];'])
+    has_postselect = any(
+        _is_postselect(value) for col in cols for value in col
+    )
+    if has_postselect:
+        lines.append(f'creg ps[{n}];  // post-selección: descartar shots con ps != esperado')
     for col in cols:
         # algo=_col_to_qasm_with_gates(col, offset, gate_map)
         algo = _quirk2_col_to_qasm(col, offset, gate_map, gate_names)
