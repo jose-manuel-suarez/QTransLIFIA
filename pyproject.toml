@@ -8,12 +8,12 @@ version = "0.1.0"
 description = "Traducción de circuitos Quirk a OpenQASM y migración a Qiskit, AWS Braket y PennyLane."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "LIFIA author", email="jsuarez@lifia.info.unlp.edu.ar" }]
 keywords = ["quantum", "quirk", "openqasm", "qiskit", "braket", "pennylane", "zx-calculus"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Physics",
 ]

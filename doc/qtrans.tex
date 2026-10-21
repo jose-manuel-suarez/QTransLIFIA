@@ -128,7 +128,7 @@ equivalencia entre el circuito de origen y el traducido mediante cálculo ZX.
         con una batería de pruebas automatizadas sobre circuitos canónicos.
 \end{enumerate}
 
-El resto del documento se organiza como sigue. La Sección~\ref{sec:arquitectura} describe
+El resto del documento se organiza y estructura de la siguiente manera: la Sección~\ref{sec:arquitectura} describe
 Quirk, OpenQASM y la arquitectura del flujo. La Sección~\ref{sec:atributos} desarrolla los
 seis atributos de calidad desde la perspectiva QSE. La Sección~\ref{sec:verificacion}
 detalla los mecanismos de verificación y \emph{testing}. La
@@ -146,15 +146,11 @@ Sección~\ref{sec:conclusiones} presenta las conclusiones.
 \emph{Quirk}~\cite{gidney2016quirk} es un simulador de circuitos cuánticos basado en
 navegador, orientado a la exploración interactiva. Su unidad de diseño es una matriz de
 \emph{columnas}; cada columna representa una tajada temporal de operaciones. Un circuito se
-almacena íntegramente en la URL de la página como un objeto JSON codificado en la
-fragmento \code{\#circuit=...}. Quirk no se limita a ofrecer compuertas nativas: permite
-al usuario \emph{definir sus propias compuertas} de dos maneras:
+almacena íntegramente en la URL de la página como un objeto JSON codificado en el fragmento \code{\#circuit=...}. Quirk no se limita a ofrecer compuertas nativas: permite al usuario \emph{definir sus propias compuertas} de dos maneras:
 
 \begin{itemize}[leftmargin=1.6em]
-  \item \textbf{por circuito} (\code{circuit.cols}): una compuerta compuesta por columnas
-        internas que reutilizan otras compuertas (nativas o previamente definidas); y
-  \item \textbf{por matriz} (\code{matrix}): una compuerta especificada directamente por su
-        matriz unitaria.
+  \item \textbf{por circuito} (\code{circuit.cols}): una compuerta compuesta por columnas internas que reutilizan otras compuertas (nativas o previamente definidas) que el usuario determina mediante un subrango de segmentos de compuertas seleccionado; y
+  \item \textbf{por gates} (\code{matrix}): una compuerta nombrada, especificada directamente por su matriz unitaria y referenciada en el circuito mediante ese nombre.
 \end{itemize}
 
 Estas definiciones constituyen el \emph{lenguaje expresivo del diseñador}: la forma en que

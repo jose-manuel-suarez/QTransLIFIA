@@ -3,6 +3,7 @@ import math
 import os
 import re
 import string
+import sys
 
 from .url_utils import canonicalize_quirk_url, parse_quirk_url
 
@@ -534,6 +535,105 @@ def _is_gate_ref(entry, gate_map):
     return base in gate_map
 
 
+# ---------------------------------------------------------------------------
+# Compuertas escalares de Quirk (fase global ·I)
+# ---------------------------------------------------------------------------
+# Fase global (en radianes) asociada a cada compuerta escalar de Quirk:
+# multiplican el estado por e^{i·theta}·I. Sin control son fase global
+# (gphase); con control pasan a ser fase relativa (Sección: _SCALAR_*_RELS).
+_SCALAR_GLOBAL_PHASES = {
+    'NeGate': math.pi,
+    'i': math.pi / 2,
+    '-i': -math.pi / 2,
+    '\u221ai': math.pi / 4,      # √i
+    '\u221a-i': -math.pi / 4,    # √-i
+}
+# Compuerta no-op de Quirk: no afecta el estado (Spacer / elipsis).
+_SCALAR_NOOP_GATES = frozenset({'\u2026'})
+# Compuerta '0' de Quirk: ZeroGate, matriz nula (no unitaria, no traducible).
+_SCALAR_NULL_GATES = frozenset({'0'})
+
+
+def _scalar_gate_phase(value):
+    """Fase global (rad) de una compuerta escalar de Quirk, o None si no aplica.
+
+    Parámetros:
+        - value: celda de la columna (str u otro tipo).
+
+    Retorna:
+        - float | None: la fase en radianes; None si la celda no es escalar.
+    """
+    if not isinstance(value, str):
+        return None
+    return _SCALAR_GLOBAL_PHASES.get(value)
+
+
+def _scalar_relative_rz_angles(phase):
+    """Ángulos de las rotaciones Z de una fase relativa equivalente a gphase.
+
+    La secuencia ``rz(phi); rx(pi); rz(-phi); rx(-pi)`` sobre un qubit
+    convierte la fase global e^{i·phi} en una fase relativa sobre ese qubit,
+    de modo que ``ctrl @`` reproduce el efecto de una compuerta escalar
+    controlada de Quirk.
+
+    Parámetros:
+        - phase (float): fase global en radianes.
+
+    Retorna:
+        - tuple[float, float]: los ángulos ``(phi, phi)`` de las dos rz.
+    """
+    return phase, phase
+
+
+# Compuertas Quirk no traducibles (matriz no unitaria / desconocidas) ya
+# reportadas en la corrida, para no repetir el mismo aviso cientos de veces.
+_REPORTED_UNSUPPORTED_GATES = set()
+
+
+def _report_unsupported_gate(value):
+    """Registra en stderr un aviso por una celda Quirk no traducible.
+
+    Se emite una sola vez por identificador. No interrumpe la traducción;
+    el aviso permite detectar compuertas de Quirk no soportadas (p. ej. la
+    ZeroGate '0', no unitaria) que de otro modo se perderían en silencio.
+
+    Parámetros:
+        - value: celda de la columna (identificador de la compuerta).
+    """
+    key = str(value)
+    if key in _REPORTED_UNSUPPORTED_GATES:
+        return
+    _REPORTED_UNSUPPORTED_GATES.add(key)
+    print(
+        f'[advertencia] Compuerta Quirk {key!r} no es traducible a OpenQASM; '
+        'se omite del circuito generado.',
+        file=sys.stderr,
+    )
+
+
+def _angle_literal(radians):
+    """Expresión OpenQASM para un ángulo en radianes múltiplo de pi/4.
+
+    Parámetros:
+        - radians (float): ángulo en radianes.
+
+    Retorna:
+        - str: literal OpenQASM (p. ej. 'pi', 'pi/2', '-pi/4', '0').
+    """
+    if radians == 0:
+        return '0'
+    units = round(radians / (math.pi / 4))  # unidades de pi/4
+    if abs(radians - units * (math.pi / 4)) > 1e-9:
+        return repr(radians)
+    sign = '-' if units < 0 else ''
+    numerator = abs(units)  # 1..4 → pi/4, pi/2, 3pi/4, pi
+    divisor = math.gcd(numerator, 4)
+    numerator, denominator = numerator // divisor, 4 // divisor
+    if denominator == 1:
+        return f'{sign}pi' if numerator == 1 else f'{sign}{numerator}*pi'
+    return f'{sign}pi/{denominator}' if numerator == 1 else f'{sign}{numerator}*pi/{denominator}'
+
+
 def _quirk2_col_to_qasm(col, offset, gate_map, gate_names=None):
     """Traduce una columna Quirk a líneas OpenQASM 3.0 (wrapper con nombres).
 
@@ -613,6 +713,24 @@ def _quirk2_col_to_qasm_core(col, offset, gate_map, gate_names=None):
         for index, value in enumerate(col):
             if index in occupied or value in (1, '1', None, 'Measure'):
                 continue
+            scalar_phase = _scalar_gate_phase(value)
+            if scalar_phase is not None:
+                # Escalar controlada de Quirk: el factor e^{i·phi}·I aparece solo
+                # cuando TODOS los controles están en |1>. Sobre esos qubits de
+                # control la fase es una fase relativa condicionada:
+                #   1 control  -> p(phi) sobre el control;
+                #   k controles -> ctrl @ p(phi) sobre el primer control.
+                angle = _angle_literal(scalar_phase)
+                control_wires = [f'q[{i + offset}]' for i in control_indices]
+                if len(control_wires) == 1:
+                    lines.append(f'p({angle}) {control_wires[0]};')
+                else:
+                    modifier_inner = 'ctrl @ ' * (len(control_wires) - 1)
+                    lines.append(
+                        f'{modifier_inner}p({angle}) '
+                        f'{", ".join(control_wires)};'
+                    )
+                continue
             if isinstance(value, str) and _is_gate_ref(value, gate_map):
                 gate_id = value.split(':')[0]
                 gate = gate_map[gate_id]
@@ -622,6 +740,8 @@ def _quirk2_col_to_qasm_core(col, offset, gate_map, gate_names=None):
                 target = basic_gates.get(value)
                 gate_height = 1
             if target is None:
+                if value not in _SCALAR_NOOP_GATES and value not in _SCALAR_NULL_GATES and value != '•':
+                    _report_unsupported_gate(value)
                 continue
             target_indices = range(index, index + gate_height)
             qubits = [f'q[{i + offset}]' for i in control_indices]
@@ -675,6 +795,16 @@ def _quirk2_col_to_qasm_core(col, offset, gate_map, gate_names=None):
                     continue
                 if isinstance(value, str) and _is_gate_ref(value, gate_map):
                     continue
+                scalar_phase = _scalar_gate_phase(value)
+                if scalar_phase is not None:
+                    # Escalar sin control: fase global (gphase) de OpenQASM 3.0.
+                    lines.append(f'gphase({_angle_literal(scalar_phase)});')
+                    continue
+                if value in _SCALAR_NOOP_GATES:
+                    continue
+                if value in _SCALAR_NULL_GATES:
+                    _report_unsupported_gate(value)
+                    continue
                 if value in basic_gates:
                     qi = index + offset
                     lines.append(
@@ -684,6 +814,8 @@ def _quirk2_col_to_qasm_core(col, offset, gate_map, gate_names=None):
                             f'c[{offset}]', f'c[{qi}]'
                         )
                     )
+                else:
+                    _report_unsupported_gate(value)
             return lines
     return lines
     
@@ -1075,6 +1207,11 @@ def quirk_to_qasm(url, offset=0, qasm_version='3.0'):
 def qasm3_to_qasm2(qasm3_source):
     """Transpila OpenQASM 3.0 del proyecto a OpenQASM 2.0 vía Qiskit.
 
+    OpenQASM 2.0 no tiene ``gphase``: las fases globales (compuertas escalares
+    de Quirk como NeGate, i, -i, √i, √-i) no son representables y se descartan.
+    Si el circuito las contiene, se emite un aviso por stderr ya que la
+    equivalencia funcional del circuito baja a salvo de fase global.
+
     Parámetros:
         - qasm3_source (str): código OpenQASM 3.0.
 
@@ -1084,6 +1221,8 @@ def qasm3_to_qasm2(qasm3_source):
     from qiskit import qasm2, qasm3, transpile
 
     circuit = qasm3.loads(qasm3_source)
+    if abs(complex(circuit.global_phase)) > 1e-12 and re.search(r'\bgphase\s*\(', qasm3_source):
+        _report_global_phase_dropped(circuit.global_phase)
     lowered_circuit = transpile(
         circuit,
         basis_gates=['u1', 'u2', 'u3', 'cx'],
@@ -1094,6 +1233,25 @@ def qasm3_to_qasm2(qasm3_source):
     if len(lines) >= 2 and lines[1].startswith('include') and lines[2] != '':
         lines.insert(2, '')
     return '\n'.join(lines)
+
+
+def _report_global_phase_dropped(phase):
+    """Avisa por stderr que una fase global se pierde al bajar a OpenQASM 2.0.
+
+    Se emite una sola vez, ya que OpenQASM 2.0 no soporta ``gphase``.
+
+    Parámetros:
+        - phase: fase global del circuito (radianes).
+    """
+    if 'gphase' in _REPORTED_UNSUPPORTED_GATES:
+        return
+    _REPORTED_UNSUPPORTED_GATES.add('gphase')
+    print(
+        f'[advertencia] El circuito incluye una fase global (gphase={phase!r}) '
+        'que OpenQASM 2.0 no representa; se descarta en el código 2.0 '
+        '(equivale al original salvo fase global).',
+        file=sys.stderr,
+    )
 
 
 # ---------------------------------------------------------------------------
