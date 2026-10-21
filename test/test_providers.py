@@ -38,6 +38,20 @@ cx q[0],q[1];
 measure q[0] -> c[0];
 """
 
+QASM3_POSTSELECT = """OPENQASM 3.0;
+include "stdgates.inc";
+
+qreg q[2];
+creg c[2];
+creg ps[2];
+h q[0];
+h q[1];
+ps[0] = measure q[0];
+ps[1] = measure q[1];
+c[0] = measure q[0];
+c[1] = measure q[1];
+"""
+
 
 class ProviderConfigTests(unittest.TestCase):
     def test_supported_providers_and_directories(self):
@@ -143,6 +157,22 @@ class CargarCircuitoQasmTests(unittest.TestCase):
     def test_provider_python_source_accepts_aliases(self):
         source = provider_python_source(QASM3, 'ibm')
         compile(source, '<ibm>', 'exec')
+
+    def test_braket_script_keeps_one_measure_per_qubit(self):
+        # Las post-selecciones miden el mismo qubit dos veces (ps y c); Braket
+        # sólo admite una medición por qubit y el generador las difiere al final.
+        source = provider_python_source(QASM3_POSTSELECT, 'braket')
+        compile(source, '<braket-postselect>', 'exec')
+        self.assertEqual(source.count('circuit.measure([0])'), 1)
+        self.assertEqual(source.count('circuit.measure([1])'), 1)
+        self.assertIn('una sola medición por qubit', source)
+
+    def test_braket_loads_qasm_with_repeated_measures(self):
+        from braket.circuits import Circuit
+
+        circuit = cargar_circuito_qasm(QASM3_POSTSELECT, 'braket')
+        self.assertIsInstance(circuit, Circuit)
+        self.assertEqual(circuit.qubit_count, 2)
 
 
 if __name__ == '__main__':

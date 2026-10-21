@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Utilidades de URLs de Quirk y extracción desde la colección Postman.
+r"""Utilidades de URLs de Quirk y extracción desde la colección Postman.
 
 - `parse_quirk_url(url)` extrae y evalúa el JSON embebido en una URL de Quirk.
 - `canonicalize_quirk_url(url)` reescribe la QFT inversa a la forma canónica
   `QFT†n` que Quirk reconoce (las variantes `QFTn†`/`QFT^†n` pintan una
   compuerta "parse error" en Quirk).
+- `normalize_quirk_url(url)` normaliza una URL pegada a mano (comillas y
+  backslashes de más) a un JSON estricto canónico, sin perder los escapes
+  `\uXXXX` de las compuertas Unicode.
 - `encode_quirk_url(url)` percent-encodea el `circuit=` para usarla como `href`.
 - `main()` recorre la colección Postman del proyecto y escribe `quirks_urls.txt`.
 
@@ -144,12 +147,99 @@ def canonicalize_quirk_url(url):
     return head + 'circuit=' + canonical_text
 
 
+def _loads_circuit(text):
+    """Parsea el JSON del circuito de una URL de Quirk.
+
+    Acepta JSON estricto (comillas dobles) y, como respaldo, literales de
+    Python (comillas simples), que es lo que se obtiene al copiar una URL
+    desde un archivo JSON del proyecto.
+
+    Parámetros:
+        - text (str): texto del JSON del circuito.
+
+    Retorna:
+        - dict | None: el circuito parseado; None si no se pudo parsear.
+    """
+    for loader in (json.loads, ast.literal_eval):
+        try:
+            value = loader(text)
+        except Exception:
+            continue
+        if isinstance(value, dict):
+            return value
+    return None
+
+
+def _circuit_text_variants(fragment):
+    """Variantes del fragmento ``circuit=`` que se intentan parsear.
+
+    Cubre el pegado manual de una URL: JSON con comillas escapadas (``\\"``),
+    con comillas simples y con backslashes de más.
+
+    Parámetros:
+        - fragment (str): fragmento ``circuit=`` ya des-percent-encoded.
+
+    Yields:
+        - str: variante del fragmento a parsear.
+    """
+    yield fragment
+    unescaped = fragment.replace('\\"', '"').replace("\\'", "'")
+    if unescaped != fragment:
+        yield unescaped
+    plain = unescaped.replace('\\', '')
+    if plain != unescaped:
+        yield plain
+
+
+def normalize_quirk_url(url):
+    r"""Normaliza una URL de Quirk a un JSON estricto canónico.
+
+    Extrae el JSON del circuito, lo interpreta (respetando los escapes
+    ``\\uXXXX``) y lo vuelve a serializar en JSON estricto y ASCII, de modo que
+    la URL sirva tal cual para abrirse en Quirk.  Es tolerante con el pegado
+    manual: comillas externas, comillas escapadas (``\\"``), comillas simples,
+    percent-encoding y backslashes de más.
+
+    La QFT inversa se canonicaliza a ``QFT†<n>`` (la única forma que Quirk
+    reconoce) igual que en :func:`canonicalize_quirk_url`.
+
+    Parámetros:
+        - url (str): URL de Quirk (cruda, escapada o percent-encoded).
+
+    Retorna:
+        - str: URL normalizada; la original si no se pudo interpretar el
+          circuito.
+    """
+    if not isinstance(url, str):
+        raise ValueError('La URL debe ser una cadena.')
+    text = url.strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in ('"', "'"):
+        text = text[1:-1]
+    text = text.strip()
+    index = text.find('https://')
+    if index > 0:
+        text = text[index:]
+    if 'circuit=' not in text:
+        return text
+    head, fragment = text.split('circuit=', 1)
+    for candidate in _circuit_text_variants(unquote(fragment)):
+        circuit = _loads_circuit(candidate)
+        if circuit is None:
+            continue
+        _canonicalize_qft_in_place(circuit)
+        return head + 'circuit=' + json.dumps(
+            circuit, ensure_ascii=True, separators=(',', ':')
+        )
+    return text
+
+
 def encode_quirk_url(url):
     """Percent-encodea el ``circuit=`` de una URL de Quirk para usarla como ``href``.
 
     Antes de codificar se canoniza la QFT inversa (``QFT<n>†`` → ``QFT†<n>``),
     de modo que el enlace generado se grafique en Quirk sin la compuerta
-    "parse error".
+    "parse error".  Si el JSON del circuito no es interpretable (por ejemplo,
+    una URL pegada con comillas o backslashes de más) se normaliza primero.
 
     Parámetros:
         - url (str): URL de Quirk con ``circuit=<JSON>`` (puede venir sin codificar).
@@ -159,6 +249,11 @@ def encode_quirk_url(url):
     """
     try:
         circuit_json = unquote(url).split('circuit=')[1]
+        if _loads_circuit(circuit_json) is None:
+            # URL pegada a mano: se normaliza y se vuelve a codificar.
+            normalized = normalize_quirk_url(url)
+            if 'circuit=' in normalized:
+                circuit_json = unquote(normalized).split('circuit=')[1]
         canonical_json = _canonicalize_circuit_json(circuit_json)
         if canonical_json is not None:
             circuit_json = canonical_json

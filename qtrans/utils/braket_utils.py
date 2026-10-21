@@ -22,6 +22,10 @@ _STD_INCLUDE_RE = re.compile(r'^\s*include\s+"(?:stdgates\.inc|qelib1\.inc)"\s*;
 def _braket_python_source(parsed_circuit, preserve_custom_gates=False):
     """Genera el script Python (SDK Amazon Braket) que reconstruye el circuito.
 
+    Las mediciones se difieren al final; si un qubit se mide más de una vez
+    (p. ej. post-selección ``ps[i]`` y lectura final ``c[i]``) se emite una
+    sola, porque Braket sólo admite una medición por qubit.
+
     Parámetros:
         - parsed_circuit (qiskit.QuantumCircuit): circuito de referencia parseado.
         - preserve_custom_gates (bool): si True, cada compuerta custom se define
@@ -34,6 +38,7 @@ def _braket_python_source(parsed_circuit, preserve_custom_gates=False):
     instructions = []
     measurements = []
     measurement_qubits = set()
+    repeated_measures = set()
     custom_functions = {}
 
     def custom_function(operation, qubits):
@@ -64,7 +69,13 @@ def _braket_python_source(parsed_circuit, preserve_custom_gates=False):
         if operation.name == 'measure':
             qubit = qubits[0]
             if qubit in measurement_qubits:
-                raise ValueError(f'Braket no permite medir más de una vez el qubit {qubit}')
+                # Braket sólo admite una medición por qubit. Como este
+                # generador difiere todas las mediciones al final del circuito,
+                # una medición repetida del mismo qubit lee el mismo valor
+                # (p. ej. la post-selección ``ps[i]`` y la lectura ``c[i]``),
+                # así que se descarta y se deja una sola.
+                repeated_measures.add(qubit)
+                return
             measurement_qubits.add(qubit)
             measurements.append((clbits[0], qubit))
             return
@@ -183,6 +194,12 @@ def _braket_python_source(parsed_circuit, preserve_custom_gates=False):
     if measurements:
         python_lines.append('')
         python_lines.append('# Mediciones en orden clásico, diferidas al final')
+        if repeated_measures:
+            listed = ', '.join(str(qubit) for qubit in sorted(repeated_measures))
+            python_lines.append(
+                f'# Qubit(s) {listed} medido(s) más de una vez en OpenQASM: '
+                'Braket admite una sola medición por qubit'
+            )
         python_lines.extend(
             f'circuit.measure([{qubit}])'
             for _, qubit in sorted(measurements)

@@ -57,6 +57,18 @@ La información estructurada ofrecida por `quirk_circuit_info` habilita funciona
 - **Adaptadores por ecosistema**: Nuevos destinos pueden implementarse como adaptadores externos al proyecto, reutilizando QTransLIFIA como traductor Quirk→IR estable. Esto evita proliferación de lógicas específicas de Quirk por backend.
 - **Soporte a flujos multi-destino**: Un único circuito Quirk puede migrarse a OpenQASM una vez y distribuirse a múltiples toolchains, lo cual facilita la incorporación progresiva de nuevos ecosistemas.
 
+### 6.1 Contrato de Salida: OpenQASM como Interfaz Estable
+
+El **contrato principal** de QTransLIFIA es la **emisión de código OpenQASM textual**, devuelto en el campo `qasm` del JSON de salida (`output.qasm.code`). Ese string —y no un objeto de circuito dependiente del proveedor— es la interfaz que la librería garantiza, versiona y mantiene estable. La razón de diseño es el desacoplamiento: un texto OpenQASM es serializable, diffeable y portable, mientras que un objeto de circuito (`QuantumCircuit` de Qiskit, `Circuit` de Braket, `QNode` de PennyLane) es una estructura **en memoria**, atada a la versión de librería y al entorno local.
+
+QTransLIFIA ofrece además, en `output.migrated_code`, un **script Python por proveedor** (`ibm_qiskit_code`, `aws_braket_code`, `xanadu_pennylane_code`) que sirve de **puente**: el usuario lo ejecuta en **su propio entorno** para materializar el objeto de circuito del ecosistema elegido. De este modo, la librería no necesita instanciar ni mantener viva ninguna integración nativa en su propio proceso.
+
+### 6.2 El *loads* y la Ejecución como Responsabilidad del Proveedor
+
+La carga efectiva del OpenQASM (`loads`/`from_ir`/`exec` de script migrado) y, sobre todo, la **ejecución** no forman parte del contrato de la librería, porque **dependen intrínsecamente del proveedor** y son heterogéneas entre ellos (como evidencia el propio pipeline: el parser nativo de Qiskit cubre el 100 % de los casos, Braket no conoce la compuerta `p` y requiere respaldo, y PennyLane no dispone de un parser OpenQASM nativo útil). Por ello, el *loads* y la ejecución (asignación de *shots*, *backend*, transpilación a topología de dispositivo) se realizan habitualmente de forma **conjunta y aislada en un entorno propio de cada proveedor**, fuera del núcleo del traductor.
+
+Esta separación es, precisamente, lo que hace extensible al sistema: incorporar un nuevo ecosistema destino no obliga a modificar Quirk→OpenQASM ni a acoplar el núcleo a ese SDK; basta con que el nuevo consumidor sepa interpretar el OpenQASM (o su script migrado) en su propio entorno. La traducción permanece estable mientras el ecosistema destino evoluciona en forma independiente.
+
 ## 7. Consideraciones de Extensibilidad y Robustez
 
 - **Crecimiento controlado**: El límite de anidamiento (≤ 10) es una decisión de diseño orientada a robustez ante posibles estructuras recursivas complejas, compatible con ampliar ese umbral si se justifica con criterios de validación.

@@ -327,6 +327,23 @@ en el \emph{determinismo} del traductor ---una misma URL produce siempre el mism
 OpenQASM---, que habilita pruebas de regresión robustas, y en la \emph{trazabilidad} de cada
 instrucción hasta la columna y la definición de compuerta que le dieron origen.
 
+Conviene distinguir con precisión qué garantiza la librería y qué queda del lado del
+proveedor, porque ello delimita también el alcance de la verificación. El \emph{contrato
+verificable} es el OpenQASM emitido en el JSON de salida: sobre ese artefacto textual se
+aplican los niveles sintáctico y estructural, y sobre él se construye la comprobación
+semántica mediante ZX. La equivalencia Quirk~$\leftrightarrow$~OpenQASM es, por tanto,
+responsabilidad y garantía de QTransLIFIA. En cambio, la carga del OpenQASM y su ejecución
+dependen del proveedor y ocurren \emph{fuera} del contrato: materializar el circuito y
+ejecutarlo son operaciones específicas de cada ecosistema, con analizadores y capacidades
+heterogéneos, por lo que se realizan de forma conjunta y aislada en un entorno propio de cada
+proveedor, típicamente mediante los scripts migrados que genera la propia librería. En
+consecuencia, la equivalencia funcional entre el OpenQASM y el \emph{backend} solo es
+contrastable dentro del entorno del proveedor, y su resultado depende tanto de la fidelidad
+de la traducción ---ya verificada en origen--- como de las particularidades del SDK y del
+\emph{backend}. Mantener clara esa frontera permite atribuir cualquier discrepancia observada
+en la ejecución a la traducción o al proveedor, sin ambigüedad sobre dónde reside la
+responsabilidad.
+
 \subsection{Testing}
 
 El flujo no es una transformación monolítica, sino una tubería de etapas, y cada
@@ -400,6 +417,27 @@ Estos principios habilitan cuatro líneas de evolución:
         se integran como adaptadores o consumidores externos, sin proliferar lógica específica
         de Quirk por \emph{backend}.
 \end{itemize}
+
+El \emph{contrato principal} de la herramienta es la emisión del OpenQASM textual, devuelto
+en el campo \code{qasm} del JSON de salida. Ese texto ---y no un objeto de circuito
+dependiente del proveedor--- es la interfaz que la librería garantiza, versiona y mantiene
+estable, por ser serializable, diffeable y portable; un objeto de circuito nativo
+(\code{QuantumCircuit} de Qiskit, \code{Circuit} de Braket, \code{QNode} de PennyLane) es,
+en cambio, una estructura en memoria atada a la versión de librería y al entorno local. La
+librería ofrece además, en \code{output.migrated\_code}, un script Python por proveedor que
+sirve de puente: el usuario lo ejecuta en su propio entorno para materializar el circuito
+del ecosistema elegido.
+
+La carga efectiva del OpenQASM y, sobre todo, la ejecución no forman parte de ese contrato,
+porque \emph{dependen intrínsecamente del proveedor} y son heterogéneas entre ellos: el
+analizador nativo de Qiskit cubre la totalidad de los casos, Braket no conoce la compuerta
+\code{p} y requiere respaldo, y PennyLane no dispone de un analizador OpenQASM nativo útil.
+Por ello, la carga (\emph{loads}) y la ejecución ---asignación de \emph{shots},
+\emph{backend}, transpilación a topología de dispositivo--- se realizan habitualmente de forma
+\emph{conjunta y aislada en un entorno propio de cada proveedor}, fuera del núcleo del
+traductor. Esta separación es, precisamente, lo que hace extensible al sistema: incorporar un
+nuevo destino no obliga a modificar el núcleo ni a acoplarlo a ese SDK, y la traducción
+permanece estable mientras el ecosistema destino evoluciona de forma independiente.
 
 % ===========================================================================
 \section{Verificación y validación}

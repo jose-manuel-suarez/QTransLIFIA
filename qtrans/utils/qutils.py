@@ -646,8 +646,10 @@ _POSTSELECT_GATES = {
     '|1⟩⟨1|':           (['x'], 1, 'Postselect On (|1>)'),
     '|+⟩⟨+|':           (['h'], 0, 'Postselect X-Off (|+>)'),
     '|-⟩⟨-|':           (['h'], 1, 'Postselect X-On (|->)'),
-    '|X⟩⟨X|':           (['h', 'sdg'], 0, 'Postselect Y-Off (|+i>)'),
-    '|/⟩⟨/|':           (['h', 'sdg'], 1, 'Postselect Y-On (|-i>)'),
+    # La base Y se mide con S† y luego H (S†·H·Z·H·S = Y): el orden inverso
+    # mediría la base X y el post-select no distinguiría |+i⟩ de |−i⟩.
+    '|X⟩⟨X|':           (['sdg', 'h'], 0, 'Postselect Y-Off (|+i>)'),
+    '|/⟩⟨/|':           (['sdg', 'h'], 1, 'Postselect Y-On (|-i>)'),
 }
 
 
@@ -689,6 +691,107 @@ def _postselect_lines(value, qubit_index, offset):
     return lines
 
 
+# Compuertas de control de Quirk (familia "Controls" del Toolbox). No son
+# compuertas por sí mismas: condicionan la columna en la que aparecen.
+#
+# Cada entrada describe:
+#   - 'setup'/'cleanup': rotaciones de base que Quirk aplica antes y después de
+#     la operación de la columna. El mask de control se evalúa sobre el estado
+#     ya girado por el setup, así que la traducción debe hacer lo mismo.
+#   - 'negate': True si el control se satisface con el qubit en OFF
+#     (anti-control). OpenQASM solo tiene controles positivos, así que se
+#     implementa conjugando por X el qubit de control.
+#
+# OJO: para los controles X/Y el símbolo dibujado y el id serializado están
+# intercambiados (src/gates/Controls.js: "The drawn +/- convention was
+# changed, but the serialized id must stay the same"):
+#   id '⊕' (dibujado '⊖') = X-Axis Anti-Control -> dispara con X eigen +1 (|+⟩)
+#   id '⊖' (dibujado '⊕') = X-Axis Control      -> dispara con X eigen -1 (|−⟩)
+#   id '⊗' (dibujado '(/)') = Y-Axis Anti-Control -> dispara con Y eigen +1 (|+i⟩)
+#   id '(/)' (dibujado '⊗') = Y-Axis Control      -> dispara con Y eigen -1 (|−i⟩)
+_CONTROL_GATES = {
+    '•': {'setup': (), 'cleanup': (), 'negate': False},
+    '◦': {'setup': (), 'cleanup': (), 'negate': True},
+    '⊕': {'setup': ('h',), 'cleanup': ('h',), 'negate': True},
+    '⊖': {'setup': ('h',), 'cleanup': ('h',), 'negate': False},
+    '⊗': {'setup': ('rx(pi/2)',), 'cleanup': ('rx(-pi/2)',), 'negate': True},
+    '(/)': {'setup': ('rx(pi/2)',), 'cleanup': ('rx(-pi/2)',), 'negate': False},
+}
+
+
+def _is_control(value):
+    """Indica si una celda Quirk es una compuerta de control.
+
+    Parámetros:
+        - value: celda de la columna (identificador de la compuerta).
+
+    Retorna:
+        - bool: True si ``value`` es un control de Quirk ('•', '◦', '⊕', '⊖',
+          '⊗' o '(/)').
+    """
+    return isinstance(value, str) and value in _CONTROL_GATES
+
+
+def _control_setup_lines(control_cells, offset):
+    """Rotaciones de base y negaciones previas a la operación de la columna.
+
+    El setup lleva cada qubit de control a la base en la que Quirk evalúa la
+    condición (X o Y); a continuación se conjugan por X los anti-control, de
+    modo que la condición "el qubit está en OFF" se traduzca como un control
+    positivo de OpenQASM.
+
+    Parámetros:
+        - control_cells (list): pares (índice, id) de los controles de la columna.
+        - offset (int): desplazamiento de los índices q[i].
+
+    Retorna:
+        - list[str]: líneas OpenQASM (sin terminador ';').
+    """
+    lines = []
+    for index, value in control_cells:
+        for operation in _CONTROL_GATES[value]['setup']:
+            lines.append(f'{operation} q[{index + offset}];')
+    for index, value in control_cells:
+        if _CONTROL_GATES[value]['negate']:
+            lines.append(f'x q[{index + offset}];')
+    return lines
+
+
+def _control_cleanup_lines(control_cells, offset):
+    """Deshace el marco de control tras la operación de la columna.
+
+    Primero se deshace la conjugación por X de los anti-control y después se
+    aplica el cleanup (rotación inversa del setup) de cada control.
+
+    Parámetros:
+        - control_cells (list): pares (índice, id) de los controles de la columna.
+        - offset (int): desplazamiento de los índices q[i].
+
+    Retorna:
+        - list[str]: líneas OpenQASM (sin terminador ';').
+    """
+    lines = []
+    for index, value in control_cells:
+        if _CONTROL_GATES[value]['negate']:
+            lines.append(f'x q[{index + offset}];')
+    for index, value in control_cells:
+        for operation in _CONTROL_GATES[value]['cleanup']:
+            lines.append(f'{operation} q[{index + offset}];')
+    return lines
+
+
+# Expresiones OpenQASM de las compuertas simples de Quirk (una sola fila).
+_BASIC_GATE_EXPRESSIONS = {
+    'H': 'h', 'X': 'x', 'Y': 'y', 'Z': 'z',
+    'X^½': 'rx(pi/2)', 'X^-½': 'rx(-pi/2)',
+    'X^¼': 'rx(pi/4)', 'X^-¼': 'rx(-pi/4)',
+    'Y^½': 'ry(pi/2)', 'Y^-½': 'ry(-pi/2)',
+    'Y^¼': 'ry(pi/4)', 'Y^-¼': 'ry(-pi/4)',
+    'Z^½': 'p(pi/2)', 'Z^-½': 'p(-pi/2)',
+    'Z^¼': 'p(pi/4)', 'Z^-¼': 'p(-pi/4)',
+}
+
+
 def _quirk2_col_to_qasm(col, offset, gate_map, gate_names=None):
     """Traduce una columna Quirk a líneas OpenQASM 3.0 (wrapper con nombres).
 
@@ -706,32 +809,20 @@ def _quirk2_col_to_qasm(col, offset, gate_map, gate_names=None):
     """
     if gate_names is None:
         gate_names = _resolve_gate_names(gate_map)
-    col = list(col)
-    controls = [index for index, value in enumerate(col) if value == '•']
-    qft_lines = []
-    for index, value in enumerate(col):
-        info = _qft_token(value)
-        if info is None:
-            continue
-        span, inverse = info
-        target_wires = [f'q[{index + k + offset}]' for k in range(span)]
-        control_wires = [f'q[{control + offset}]' for control in controls]
-        modifier = 'ctrl @ ' * len(controls)
-        name = _qft_gate_name(span, inverse)
-        qft_lines.append(
-            f'{modifier}{name} {", ".join(control_wires + target_wires)};'
-        )
-        for k in range(span):
-            if index + k < len(col):
-                col[index + k] = 1
-    return qft_lines + _quirk2_col_to_qasm_core(col, offset, gate_map, gate_names)
+    return _quirk2_col_to_qasm_core(list(col), offset, gate_map, gate_names)
 
 
 def _quirk2_col_to_qasm_core(col, offset, gate_map, gate_names=None):
     """Núcleo de la traducción de columna Quirk a OpenQASM 3.0.
 
-    Maneja controles '•' (ctrl @), Swap, puertas con parámetros (rx/ry/rz/p,
-    u1/u2/u3), matrices de fase y referencias a custom gates.
+    Maneja controles (eje Z con '•'/'◦' y ejes X/Y con '⊕'/'⊖'/'⊗'/(/)),
+    Swap, QFT nativas, puertas con parámetros (rx/ry/rz/p, u1/u2/u3), matrices
+    de fase, post-selecciones y referencias a custom gates.
+
+    En Quirk el mask de control de una columna se evalúa sobre el estado tras
+    aplicar el "setup" de cada control (rotación de base) y la columna se
+    deshace con el "cleanup" correspondiente, de modo que aquí se emite el
+    setup antes de la operación y el cleanup después.
 
     Parámetros:
         - col (list): columna del circuito (lista de celdas).
@@ -745,162 +836,120 @@ def _quirk2_col_to_qasm_core(col, offset, gate_map, gate_names=None):
     lines = []
     if gate_names is None:
         gate_names = _resolve_gate_names(gate_map)
-    if '•' in col:
-        control_indices = [i for i, value in enumerate(col) if value == '•']
-        modifier = 'ctrl @ ' * len(control_indices)
-        if 'Swap' in col:
-            swap_indices = [i for i, value in enumerate(col) if value == 'Swap']
-            if len(swap_indices) == 2:
-                qubits = [f'q[{i + offset}]' for i in control_indices + swap_indices]
-                lines.append(f'{modifier}swap {", ".join(qubits)};')
-            return lines
+    control_cells = [
+        (index, value) for index, value in enumerate(col) if _is_control(value)
+    ]
+    control_indices = [index for index, _ in control_cells]
+    modifier = 'ctrl @ ' * len(control_indices)
+    occupied = set(control_indices)
+    body = []
 
-        basic_gates = {
-            'H': 'h', 'X': 'x', 'Y': 'y', 'Z': 'z',
-            'X^½': 'rx(pi/2)', 'X^-½': 'rx(-pi/2)',
-            'X^¼': 'rx(pi/4)', 'X^-¼': 'rx(-pi/4)',
-            'Y^½': 'ry(pi/2)', 'Y^-½': 'ry(-pi/2)',
-            'Y^¼': 'ry(pi/4)', 'Y^-¼': 'ry(-pi/4)',
-            'Z^½': 'p(pi/2)', 'Z^-½': 'p(-pi/2)',
-            'Z^¼': 'p(pi/4)', 'Z^-¼': 'p(-pi/4)',
-        }
-        occupied = set(control_indices)
-        for index, value in enumerate(col):
-            if index in occupied or value in (1, '1', None, 'Measure'):
+    if 'Swap' in col:
+        swap_indices = [i for i, value in enumerate(col) if value == 'Swap']
+        if len(swap_indices) == 2:
+            qubits = [f'q[{i + offset}]' for i in control_indices + swap_indices]
+            body.append(f'{modifier}swap {", ".join(qubits)};')
+        return (
+            _control_setup_lines(control_cells, offset)
+            + body
+            + _control_cleanup_lines(control_cells, offset)
+        )
+
+    # Compuertas que ocupan varias filas: QFT nativas y custom gates.
+    for index, value in enumerate(col):
+        if index in occupied or value in (1, '1', None):
+            continue
+        qft_info = _qft_token(value)
+        if qft_info is not None:
+            span, inverse = qft_info
+            qubits = [f'q[{i + offset}]' for i in control_indices]
+            qubits.extend(f'q[{index + k + offset}]' for k in range(span))
+            name = _qft_gate_name(span, inverse)
+            body.append(f'{modifier}{name} {", ".join(qubits)};')
+            occupied.update(range(index, index + span))
+            continue
+        if isinstance(value, str) and _is_gate_ref(value, gate_map):
+            gate_id = value.split(':')[0]
+            gate = gate_map[gate_id]
+            operation = _gate_operation(gate, gate_id, gate_names)
+            gate_height = _gate_height(gate) or 1
+            qubits = [f'q[{i + offset}]' for i in control_indices]
+            qubits.extend(f'q[{index + k + offset}]' for k in range(gate_height))
+            body.append(f'{modifier}{operation} {", ".join(qubits)};')
+            occupied.update(range(index, index + gate_height))
+
+    # Compuertas de una sola fila.
+    for index, value in enumerate(col):
+        if index in occupied or value in (1, '1', None):
+            continue
+        if value == 'Measure':
+            if control_cells:
+                # Medir dentro de una columna controlada no es representable
+                # en OpenQASM (no existe una medición condicionada).
                 continue
-            scalar_phase = _scalar_gate_phase(value)
-            if scalar_phase is not None:
+            qi = index + offset
+            body.append(f'c[{qi}] = measure q[{qi}];')
+            continue
+        scalar_phase = _scalar_gate_phase(value)
+        if scalar_phase is not None:
+            angle = _angle_literal(scalar_phase)
+            if control_cells:
                 # Escalar controlada de Quirk: el factor e^{i·phi}·I aparece solo
-                # cuando TODOS los controles están en |1>. Sobre esos qubits de
+                # cuando TODOS los controles están en ON. Sobre esos qubits de
                 # control la fase es una fase relativa condicionada:
                 #   1 control  -> p(phi) sobre el control;
                 #   k controles -> ctrl @ p(phi) sobre el primer control.
-                angle = _angle_literal(scalar_phase)
                 control_wires = [f'q[{i + offset}]' for i in control_indices]
                 if len(control_wires) == 1:
-                    lines.append(f'p({angle}) {control_wires[0]};')
+                    body.append(f'p({angle}) {control_wires[0]};')
                 else:
                     modifier_inner = 'ctrl @ ' * (len(control_wires) - 1)
-                    lines.append(
+                    body.append(
                         f'{modifier_inner}p({angle}) '
                         f'{", ".join(control_wires)};'
                     )
-                continue
-            if _is_postselect(value):
+            else:
+                # Escalar sin control: fase global (gphase) de OpenQASM 3.0.
+                body.append(f'gphase({angle});')
+            continue
+        if _is_postselect(value):
+            if control_cells:
                 # Una post-selección controlada no tiene traducción directa:
                 # OpenQASM no permite medir dentro de una compuerta controlada.
                 _report_unsupported_gate(value)
                 continue
-            if isinstance(value, str) and _is_gate_ref(value, gate_map):
-                gate_id = value.split(':')[0]
-                gate = gate_map[gate_id]
-                target = _gate_operation(gate, gate_id, gate_names)
-                gate_height = _gate_height(gate) or 1
-            else:
-                target = basic_gates.get(value)
-                gate_height = 1
-            if target is None:
-                if value in _SCALAR_NOOP_GATES:
-                    lines.append(
-                        "// Spacer Quirk ('\u2026'): compuerta identidad (no-op), "
-                        "no altera el estado."
-                    )
-                elif value in _SCALAR_NULL_GATES:
-                    lines.append(
-                        "// ZeroGate Quirk ('0'): matriz nula idempotente (0\u00b70=0), "
-                        "no unitaria; se omite del circuito."
-                    )
-                    _report_unsupported_gate(value)
-                elif value != '•':
-                    _report_unsupported_gate(value)
-                continue
-            target_indices = range(index, index + gate_height)
-            qubits = [f'q[{i + offset}]' for i in control_indices]
-            qubits.extend(f'q[{i + offset}]' for i in target_indices)
-            lines.append(f'{modifier}{target} {", ".join(qubits)};')
-            occupied.update(target_indices)
-    else:
-        if 'Swap' in col:
-            swap_indices = [k for k, g in enumerate(col) if g == 'Swap']
-            if len(swap_indices) == 2:
-                lines.append(f'swap q[{swap_indices[0] + offset}], q[{swap_indices[1] + offset}];')
-            return lines
-        else:
-            occupied = set()
-            for index, value in enumerate(col):
-                if index in occupied or value in (1, '1', None):
-                    continue
-                if not (isinstance(value, str) and _is_gate_ref(value, gate_map)):
-                    continue
-                gate_id = value.split(':')[0]
-                gate = gate_map[gate_id]
-                operation = _gate_operation(gate, gate_id, gate_names)
-                gate_height = _gate_height(gate) or 1
-                qubits = ', '.join(
-                    f'q[{i + offset}]'
-                    for i in range(index, index + gate_height)
+            body.extend(_postselect_lines(value, index, offset))
+            continue
+        expression = _BASIC_GATE_EXPRESSIONS.get(value)
+        if expression is None:
+            if value in _SCALAR_NOOP_GATES:
+                body.append(
+                    "// Spacer Quirk ('\u2026'): compuerta identidad (no-op), "
+                    "no altera el estado."
                 )
-                lines.append(f'{operation} {qubits};')
-                occupied.update(range(index, index + gate_height))
-            basic_gates = {
-                'Measure': f'c[{offset}] = measure q[{offset}];',
-                'H': f'h q[{offset}];',
-                'X': f'x q[{offset}];',
-                'Y': f'y q[{offset}];',
-                'Z': f'z q[{offset}];',
-                'X^½': f'rx(pi/2) q[{offset}];',
-                'X^-½': f'rx(-pi/2) q[{offset}];',
-                'X^¼': f'rx(pi/4) q[{offset}];',
-                'X^-¼': f'rx(-pi/4) q[{offset}];',
-                'Y^½': f'ry(pi/2) q[{offset}];',
-                'Y^-½': f'ry(-pi/2) q[{offset}];',
-                'Y^¼': f'ry(pi/4) q[{offset}];',
-                'Y^-¼': f'ry(-pi/4) q[{offset}];',
-                'Z^½': f'p(pi/2) q[{offset}];',
-                'Z^-½': f'p(-pi/2) q[{offset}];',
-                'Z^¼': f'p(pi/4) q[{offset}];',
-                'Z^-¼': f'p(-pi/4) q[{offset}];',
-            }
-            for index, value in enumerate(col):
-                if index in occupied or value in (1, '1', None):
-                    continue
-                if isinstance(value, str) and _is_gate_ref(value, gate_map):
-                    continue
-                scalar_phase = _scalar_gate_phase(value)
-                if scalar_phase is not None:
-                    # Escalar sin control: fase global (gphase) de OpenQASM 3.0.
-                    lines.append(f'gphase({_angle_literal(scalar_phase)});')
-                    continue
-                if value in _SCALAR_NOOP_GATES:
-                    lines.append(
-                        "// Spacer Quirk ('\u2026'): compuerta identidad (no-op), "
-                        "no altera el estado."
-                    )
-                    continue
-                if value in _SCALAR_NULL_GATES:
-                    lines.append(
-                        "// ZeroGate Quirk ('0'): matriz nula idempotente (0\u00b70=0), "
-                        "no unitaria; se omite del circuito."
-                    )
-                    _report_unsupported_gate(value)
-                    continue
-                if _is_postselect(value):
-                    lines.extend(_postselect_lines(value, index, offset))
-                    continue
-                if value in basic_gates:
-                    qi = index + offset
-                    lines.append(
-                        basic_gates[value].replace(
-                            f'q[{offset}]', f'q[{qi}]'
-                        ).replace(
-                            f'c[{offset}]', f'c[{qi}]'
-                        )
-                    )
-                else:
-                    _report_unsupported_gate(value)
-            return lines
-    return lines
-    
+            elif value in _SCALAR_NULL_GATES:
+                body.append(
+                    "// ZeroGate Quirk ('0'): matriz nula idempotente (0\u00b70=0), "
+                    "no unitaria; se omite del circuito."
+                )
+                _report_unsupported_gate(value)
+            else:
+                _report_unsupported_gate(value)
+            continue
+        qi = index + offset
+        if control_cells:
+            qubits = [f'q[{i + offset}]' for i in control_indices]
+            qubits.append(f'q[{qi}]')
+            body.append(f'{modifier}{expression} {", ".join(qubits)};')
+        else:
+            body.append(f'{expression} q[{qi}];')
+
+    return (
+        _control_setup_lines(control_cells, offset)
+        + body
+        + _control_cleanup_lines(control_cells, offset)
+    )
+
 # Borrar esta función, se reemplaza por _col_to_qasm_with_gates() o _quirk2_col_to_qasm()
 def _quirk_col_to_qasm(col, offset):
     """Traduce una columna Quirk a OpenQASM (ruta legacy, sin custom gates).

@@ -169,6 +169,16 @@ Dado que OpenQASM actúa como *punto de referencia intermedio*, la equivalencia 
 - **Quirk ↔ OpenQASM**: Verificable estructuralmente mediante `quirk_circuit_info` + inspección del OpenQASM generado (trazabilidad de puertas, conteos, conectividad).
 - **OpenQASM ↔ múltiples backends**: Verificable funcionalmente mediante ejecución cruzada con resultados consistentes entre ecosistemas.
 
+### 6.4 Alcance del Contrato: Traducción vs. *Loads* y Ejecución
+
+Conviene distinguir con precisión **qué garantiza QTransLIFIA y qué queda del lado del proveedor**, porque ello delimita también el alcance de la verificación:
+
+- **El contrato verificable de la librería es el OpenQASM emitido en el JSON de salida** (`output.qasm.code`). Sobre ese artefacto textual —no sobre un objeto de circuito nativo— se aplican los niveles sintáctico y estructural (secciones 3.1 y 6.1), y sobre él se construye la comprobación semántica mediante ZX (sección 3.7). La equivalencia Quirk ↔ OpenQASM es responsabilidad y garantía de QTransLIFIA.
+
+- **El *loads* y la ejecución dependen del proveedor y ocurren fuera del contrato.** Materializar el circuito (`QuantumCircuit` de Qiskit, `Circuit` de Braket, `QNode` de PennyLane) y ejecutarlo (asignación de *shots*, *backend*, transpilación, *routing*) son operaciones específicas de cada ecosistema, con parsers y capacidades heterogéneas —Qiskit carga el 100 % de los casos por vía nativa, Braket no conoce la compuerta `p` y requiere respaldo, y PennyLane no ofrece un parser OpenQASM nativo útil—. Por eso se realizan habitualmente de forma **conjunta y aislada en un entorno propio de cada proveedor**, típicamente mediante scripts migrados generados por la propia librería (`output.migrated_code`) que el usuario ejecuta en su entorno.
+
+- **Consecuencia para la verificación**: la equivalencia funcional OpenQASM ↔ backend solo es contrastable **dentro del entorno del proveedor**, y su resultado depende tanto de la fidelidad de la traducción (ya verificada en origen) como de las particularidades del SDK y del *backend*. Al mantener la frontera clara, cualquier discrepancia observada en la ejecución puede atribuirse a la traducción —descartada en las etapas iniciales— o al proveedor, sin ambigüedad sobre dónde reside la responsabilidad.
+
 ## 7. Mecanismos que Facilitan la Verificación Automatizada
 
 ### 7.1 Determinismo como Requisito Crítico

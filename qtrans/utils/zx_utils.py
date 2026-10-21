@@ -17,8 +17,10 @@ import re
 from fractions import Fraction
 
 from .qutils import (
+    _CONTROL_GATES,
     _build_gate_map,
     _column_extent,
+    _is_control,
     _matrix_to_rows,
     _qft_token,
 )
@@ -371,6 +373,27 @@ def _zx_append_qft(circuit, base, span, inverse, controls=()):
             emit_h(args[i])
 
 
+def _zx_control_matrix(operation):
+    """Matriz 2x2 de la rotación de base que usa un control X/Y de Quirk.
+
+    Parámetros:
+        - operation (str): operación del setup/cleanup ('h', 'rx(pi/2)', …).
+
+    Retorna:
+        - tuple: matriz 2x2 como tupla de tuplas de complejos.
+
+    Lanza:
+        - ValueError: si la rotación no está soportada.
+    """
+    if operation == 'h':
+        scale = 1 / math.sqrt(2)
+        return ((scale, scale), (scale, -scale))
+    match = re.fullmatch(r'rx\((.+)\)', operation)
+    if match:
+        return _zx_rotation_matrix('x', _zx_parse_angle(match.group(1)))
+    raise ValueError(f'Rotación de control no soportada en ZX: {operation}')
+
+
 def quirk_to_zx_graph(url, offset=0, time=0.5):
     """Construye el grafo ZX de PyZX directamente desde una URL de Quirk.
 
@@ -397,7 +420,21 @@ def quirk_to_zx_graph(url, offset=0, time=0.5):
     circuit = zx.Circuit(n_qubits)
 
     for col in cols:
-        controls = [index + offset for index, value in enumerate(col) if value == '•']
+        control_cells = [
+            (index + offset, value)
+            for index, value in enumerate(col)
+            if _is_control(value)
+        ]
+        controls = [index for index, _ in control_cells]
+        # Setup de los controles: Quirk evalúa el mask sobre el estado ya girado
+        # a la base del control, y los anti-control se implementan conjugando
+        # por X (así quedan todos como controles positivos).
+        for index, value in control_cells:
+            for operation in _CONTROL_GATES[value]['setup']:
+                _zx_append_unitary(circuit, index, _zx_control_matrix(operation))
+        for index, value in control_cells:
+            if _CONTROL_GATES[value]['negate']:
+                circuit.add_gate('NOT', index)
         swap_indices = [index + offset for index, value in enumerate(col) if value == 'Swap']
         if swap_indices:
             if len(swap_indices) % 2:
@@ -412,7 +449,7 @@ def quirk_to_zx_graph(url, offset=0, time=0.5):
                     circuit.add_gate('SWAP', first, second)
 
         for index, token in enumerate(col):
-            if token in (1, '1', None, '•', 'Swap', 'Measure'):
+            if token in (1, '1', None, 'Swap', 'Measure') or _is_control(token):
                 continue
             qft_info = _qft_token(token)
             if qft_info is not None:
@@ -424,6 +461,15 @@ def quirk_to_zx_graph(url, offset=0, time=0.5):
                 _zx_gate_matrix(token, gate_map, time),
                 controls,
             )
+
+        # Cleanup de los controles: se deshace la conjugación por X y se
+        # devuelve cada qubit de control a su base original.
+        for index, value in control_cells:
+            if _CONTROL_GATES[value]['negate']:
+                circuit.add_gate('NOT', index)
+        for index, value in control_cells:
+            for operation in _CONTROL_GATES[value]['cleanup']:
+                _zx_append_unitary(circuit, index, _zx_control_matrix(operation))
 
     return circuit.to_graph()
 

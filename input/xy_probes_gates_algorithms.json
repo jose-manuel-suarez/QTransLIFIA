@@ -1,0 +1,98 @@
+{
+  "xy_xaxis_control_2q": {
+    "desc": "Control de eje X nativo Quirk \u2296 (X-Axis Control: dispara con el eigenvalor X = \u22121) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", 1], [\"Z\", 1], [\"\\u2296\", \"X\"], [\"H\", 1], [\"Measure\", \"Measure\"]]}"
+  },
+  "xy_xaxis_control_4q": {
+    "desc": "Control de eje X nativo Quirk \u2296 (X-Axis Control: dispara con el eigenvalor X = \u22121) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", 1, \"H\", 1], [\"Z\", 1, 1, 1], [\"\\u2296\", \"X\", 1, 1], [1, 1, \"\\u2296\", \"X\"], [\"H\", 1, \"H\", 1], [\"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_xaxis_control_6q": {
+    "desc": "Control de eje X nativo Quirk \u2296 (X-Axis Control: dispara con el eigenvalor X = \u22121) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", 1, \"H\", 1, \"H\", 1], [\"Z\", 1, 1, 1, \"Z\", 1], [\"\\u2296\", \"X\", 1, 1, 1, 1], [1, 1, \"\\u2296\", \"X\", 1, 1], [1, 1, 1, 1, \"\\u2296\", \"X\"], [\"H\", 1, \"H\", 1, \"H\", 1], [\"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_xaxis_anticontrol_2q": {
+    "desc": "Anti-control de eje X nativo Quirk \u2295 (X-Axis Anti-Control: dispara con el eigenvalor X = +1) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", 1], [1, 1], [\"\\u2295\", \"X\"], [\"H\", 1], [\"Measure\", \"Measure\"]]}"
+  },
+  "xy_xaxis_anticontrol_4q": {
+    "desc": "Anti-control de eje X nativo Quirk \u2295 (X-Axis Anti-Control: dispara con el eigenvalor X = +1) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", 1, \"H\", 1], [1, 1, \"Z\", 1], [\"\\u2295\", \"X\", 1, 1], [1, 1, \"\\u2295\", \"X\"], [\"H\", 1, \"H\", 1], [\"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_xaxis_anticontrol_6q": {
+    "desc": "Anti-control de eje X nativo Quirk \u2295 (X-Axis Anti-Control: dispara con el eigenvalor X = +1) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", 1, \"H\", 1, \"H\", 1], [1, 1, \"Z\", 1, 1, 1], [\"\\u2295\", \"X\", 1, 1, 1, 1], [1, 1, \"\\u2295\", \"X\", 1, 1], [1, 1, 1, 1, \"\\u2295\", \"X\"], [\"H\", 1, \"H\", 1, \"H\", 1], [\"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_yaxis_control_2q": {
+    "desc": "Control de eje Y nativo Quirk (/) (Y-Axis Control: dispara con el eigenvalor Y = \u22121) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", 1], [\"Z^-\\u00bd\", 1], [\"(/)\", \"X\"], [\"Z^-\\u00bd\", 1], [\"H\", 1], [\"Measure\", \"Measure\"]]}"
+  },
+  "xy_yaxis_control_4q": {
+    "desc": "Control de eje Y nativo Quirk (/) (Y-Axis Control: dispara con el eigenvalor Y = \u22121) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", 1, \"H\", 1], [\"Z^-\\u00bd\", 1, \"Z^\\u00bd\", 1], [\"(/)\", \"X\", 1, 1], [1, 1, \"(/)\", \"X\"], [\"Z^-\\u00bd\", 1, \"Z^-\\u00bd\", 1], [\"H\", 1, \"H\", 1], [\"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_yaxis_control_6q": {
+    "desc": "Control de eje Y nativo Quirk (/) (Y-Axis Control: dispara con el eigenvalor Y = \u22121) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", 1, \"H\", 1, \"H\", 1], [\"Z^-\\u00bd\", 1, \"Z^\\u00bd\", 1, \"Z^-\\u00bd\", 1], [\"(/)\", \"X\", 1, 1, 1, 1], [1, 1, \"(/)\", \"X\", 1, 1], [1, 1, 1, 1, \"(/)\", \"X\"], [\"Z^-\\u00bd\", 1, \"Z^-\\u00bd\", 1, \"Z^-\\u00bd\", 1], [\"H\", 1, \"H\", 1, \"H\", 1], [\"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_yaxis_anticontrol_2q": {
+    "desc": "Anti-control de eje Y nativo Quirk \u2297 (Y-Axis Anti-Control: dispara con el eigenvalor Y = +1) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", 1], [\"Z^\\u00bd\", 1], [\"\\u2297\", \"X\"], [\"Z^-\\u00bd\", 1], [\"H\", 1], [\"Measure\", \"Measure\"]]}"
+  },
+  "xy_yaxis_anticontrol_4q": {
+    "desc": "Anti-control de eje Y nativo Quirk \u2297 (Y-Axis Anti-Control: dispara con el eigenvalor Y = +1) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", 1, \"H\", 1], [\"Z^\\u00bd\", 1, \"Z^-\\u00bd\", 1], [\"\\u2297\", \"X\", 1, 1], [1, 1, \"\\u2297\", \"X\"], [\"Z^-\\u00bd\", 1, \"Z^-\\u00bd\", 1], [\"H\", 1, \"H\", 1], [\"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_yaxis_anticontrol_6q": {
+    "desc": "Anti-control de eje Y nativo Quirk \u2297 (Y-Axis Anti-Control: dispara con el eigenvalor Y = +1) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", 1, \"H\", 1, \"H\", 1], [\"Z^\\u00bd\", 1, \"Z^-\\u00bd\", 1, \"Z^\\u00bd\", 1], [\"\\u2297\", \"X\", 1, 1, 1, 1], [1, 1, \"\\u2297\", \"X\", 1, 1], [1, 1, 1, 1, \"\\u2297\", \"X\"], [\"Z^-\\u00bd\", 1, \"Z^-\\u00bd\", 1, \"Z^-\\u00bd\", 1], [\"H\", 1, \"H\", 1, \"H\", 1], [\"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_postselect_x_off_2q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |+\u27e9\u27e8+| (Postselect X-Off, estado propio) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", \"H\"], [\"|+\\u27e9\\u27e8+|\", \"|+\\u27e9\\u27e8+|\"], [\"Measure\", \"Measure\"]]}"
+  },
+  "xy_postselect_x_off_4q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |+\u27e9\u27e8+| (Postselect X-Off, estado propio) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", \"H\", \"H\", \"H\"], [\"|+\\u27e9\\u27e8+|\", \"|+\\u27e9\\u27e8+|\", \"|+\\u27e9\\u27e8+|\", \"|+\\u27e9\\u27e8+|\"], [\"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_postselect_x_off_6q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |+\u27e9\u27e8+| (Postselect X-Off, estado propio) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", \"H\", \"H\", \"H\", \"H\", \"H\"], [\"|+\\u27e9\\u27e8+|\", \"|+\\u27e9\\u27e8+|\", \"|+\\u27e9\\u27e8+|\", \"|+\\u27e9\\u27e8+|\", \"|+\\u27e9\\u27e8+|\", \"|+\\u27e9\\u27e8+|\"], [\"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_postselect_x_on_2q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |-\u27e9\u27e8-| (Postselect X-On, estado propio) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", \"H\"], [\"Z\", \"Z\"], [\"|-\\u27e9\\u27e8-|\", \"|-\\u27e9\\u27e8-|\"], [\"Measure\", \"Measure\"]]}"
+  },
+  "xy_postselect_x_on_4q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |-\u27e9\u27e8-| (Postselect X-On, estado propio) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", \"H\", \"H\", \"H\"], [\"Z\", \"Z\", \"Z\", \"Z\"], [\"|-\\u27e9\\u27e8-|\", \"|-\\u27e9\\u27e8-|\", \"|-\\u27e9\\u27e8-|\", \"|-\\u27e9\\u27e8-|\"], [\"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_postselect_x_on_6q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |-\u27e9\u27e8-| (Postselect X-On, estado propio) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", \"H\", \"H\", \"H\", \"H\", \"H\"], [\"Z\", \"Z\", \"Z\", \"Z\", \"Z\", \"Z\"], [\"|-\\u27e9\\u27e8-|\", \"|-\\u27e9\\u27e8-|\", \"|-\\u27e9\\u27e8-|\", \"|-\\u27e9\\u27e8-|\", \"|-\\u27e9\\u27e8-|\", \"|-\\u27e9\\u27e8-|\"], [\"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_postselect_y_off_2q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |X\u27e9\u27e8X| (Postselect Y-Off, estado propio) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", \"H\"], [\"Z^\\u00bd\", \"Z^\\u00bd\"], [\"|X\\u27e9\\u27e8X|\", \"|X\\u27e9\\u27e8X|\"], [\"Measure\", \"Measure\"]]}"
+  },
+  "xy_postselect_y_off_4q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |X\u27e9\u27e8X| (Postselect Y-Off, estado propio) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", \"H\", \"H\", \"H\"], [\"Z^\\u00bd\", \"Z^\\u00bd\", \"Z^\\u00bd\", \"Z^\\u00bd\"], [\"|X\\u27e9\\u27e8X|\", \"|X\\u27e9\\u27e8X|\", \"|X\\u27e9\\u27e8X|\", \"|X\\u27e9\\u27e8X|\"], [\"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_postselect_y_off_6q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |X\u27e9\u27e8X| (Postselect Y-Off, estado propio) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", \"H\", \"H\", \"H\", \"H\", \"H\"], [\"Z^\\u00bd\", \"Z^\\u00bd\", \"Z^\\u00bd\", \"Z^\\u00bd\", \"Z^\\u00bd\", \"Z^\\u00bd\"], [\"|X\\u27e9\\u27e8X|\", \"|X\\u27e9\\u27e8X|\", \"|X\\u27e9\\u27e8X|\", \"|X\\u27e9\\u27e8X|\", \"|X\\u27e9\\u27e8X|\", \"|X\\u27e9\\u27e8X|\"], [\"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_postselect_y_on_2q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |/\u27e9\u27e8/| (Postselect Y-On, estado propio) (2 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", \"H\"], [\"Z^-\\u00bd\", \"Z^-\\u00bd\"], [\"|/\\u27e9\\u27e8/|\", \"|/\\u27e9\\u27e8/|\"], [\"Measure\", \"Measure\"]]}"
+  },
+  "xy_postselect_y_on_4q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |/\u27e9\u27e8/| (Postselect Y-On, estado propio) (4 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", \"H\", \"H\", \"H\"], [\"Z^-\\u00bd\", \"Z^-\\u00bd\", \"Z^-\\u00bd\", \"Z^-\\u00bd\"], [\"|/\\u27e9\\u27e8/|\", \"|/\\u27e9\\u27e8/|\", \"|/\\u27e9\\u27e8/|\", \"|/\\u27e9\\u27e8/|\"], [\"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  },
+  "xy_postselect_y_on_6q": {
+    "desc": "Post-selecci\u00f3n nativa Quirk |/\u27e9\u27e8/| (Postselect Y-On, estado propio) (6 qubits)",
+    "url": "https://algassert.com/quirk#circuit={\"cols\": [[\"H\", \"H\", \"H\", \"H\", \"H\", \"H\"], [\"Z^-\\u00bd\", \"Z^-\\u00bd\", \"Z^-\\u00bd\", \"Z^-\\u00bd\", \"Z^-\\u00bd\", \"Z^-\\u00bd\"], [\"|/\\u27e9\\u27e8/|\", \"|/\\u27e9\\u27e8/|\", \"|/\\u27e9\\u27e8/|\", \"|/\\u27e9\\u27e8/|\", \"|/\\u27e9\\u27e8/|\", \"|/\\u27e9\\u27e8/|\"], [\"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\", \"Measure\"]]}"
+  }
+}
