@@ -99,5 +99,36 @@ class NormalizeQuirkUrlTests(unittest.TestCase):
         self.assertNotIn('u00bd', unquote(encoded).replace('u00bd', ''))
 
 
+class EncodeQuirkUrlLegibleTests(unittest.TestCase):
+    """Modo ``legible=True``: imita a Quirk y deja el JSON crudo."""
+
+    SIMPLE_URL = BASE + '{"cols":[["Z^0.25"],["Y^0.055556"],["Z^-0.25"]]}'
+
+    def test_default_escapes_json_for_html_href(self):
+        encoded = encode_quirk_url(self.SIMPLE_URL)
+        self.assertNotIn('"', encoded)
+        self.assertNotIn('{', encoded)
+        self.assertIn('%7B%22cols%22', encoded)
+
+    def test_legible_keeps_json_readable(self):
+        legible = encode_quirk_url(self.SIMPLE_URL, legible=True)
+        self.assertEqual(legible, self.SIMPLE_URL)
+        self.assertIn('{"cols":[["Z^0.25"]', legible)
+
+    def test_legible_escapes_when_json_has_percent_or_ampersand(self):
+        # Quirk parte el fragmento por '&' y decodifica con decodeURIComponent:
+        # un '%' o un '&' crudo rompería el enlace, así que se escapa igual.
+        for extra in ('{"cols":[["X%25"]]}', '{"cols":[["X"]],"&x":1}'):
+            url = BASE + extra
+            self.assertEqual(encode_quirk_url(url, legible=True),
+                             encode_quirk_url(url))
+
+    def test_legible_keeps_the_circuit_translatable(self):
+        legible = encode_quirk_url(BASE + '{"cols": [["H"]]}', legible=True)
+        # El JSON se deja tal cual (sólo se canoniza la QFT inversa).
+        self.assertEqual(unquote(legible), BASE + '{"cols": [["H"]]}')
+        self.assertEqual(quirk_circuit_info(legible)['n_qubits'], 1)
+
+
 if __name__ == '__main__':
     unittest.main()
