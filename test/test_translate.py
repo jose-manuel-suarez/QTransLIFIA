@@ -24,6 +24,7 @@ OUTPUT_KEYS = {
     "migrated_code",
     "zx_calculus_result",
     "circuit_info",
+    "custom_gates",
     "img",
     "comparison_doc",
     "errors",

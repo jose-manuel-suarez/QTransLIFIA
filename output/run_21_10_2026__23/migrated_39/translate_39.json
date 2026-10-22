@@ -1,0 +1,79 @@
+{
+  "input": {
+    "offset": 0,
+    "qasm_version": "3.0",
+    "provider": [
+      "qiskit",
+      "braket",
+      "pennylane"
+    ],
+    "shots": 1000,
+    "preserve_custom_gates": false,
+    "comparison": false,
+    "zx": {
+      "enabled": false,
+      "time": 0.5,
+      "timeout": 120
+    },
+    "images": {
+      "quirk": false,
+      "qasm": false,
+      "composer": false,
+      "capture_timeout": 15
+    },
+    "url": "https://algassert.com/quirk#circuit={\"cols\":[[\"H\",\"H\"],[\"~edqr\"],[\"~cu10000\",\"•\"],[\"•\",\"~cu10001\"],[\"~ipt0\",\"~pi31\"],[\"Measure\",\"Measure\"]],\"gates\":[{\"id\":\"~cu10000\",\"name\":\"cu1(pi / 512)\",\"matrix\":\"{{1,0},{0,0.9999811753+0.006135884649i}}\"},{\"id\":\"~cu10001\",\"name\":\"cu1(pi / 256)\",\"matrix\":\"{{1,0},{0,0.9999247018+0.01227153829i}}\"},{\"id\":\"~edqr\",\"name\":\"mia\",\"matrix\":\"{{0.5341571-0.0812871i,-0.2911111+0.3243367i,0.2354813-0.5239272i,-0.3141007+0.2991959i},{0.0922618-0.0590391i,0.1507841+0.3020887i,0.5312675+0.5239244i,0.3141036+0.4675529i},{0.664025+0.1403262i,0.6640229-0.1403212i,-0.1403227+0.1403248i,-0.1403248-0.1403227i},{0.3593634+0.3260492i,-0.3593634-0.3260492i,-0.2667888-0.0524325i,0.6329801+0.2334746i}}\"},{\"id\":\"~ipt0\",\"name\":\"jo\",\"matrix\":\"{{0.9512512+0.1677313i,0.0449435-0.254887i},{0.0449435-0.254887i,0.9512512+0.1677313i}}\"},{\"id\":\"~rfnt\",\"name\":\"pi\",\"matrix\":\"{{0.9238795,-0.3826834i},{-0.3826834i,0.9238795}}\"},{\"id\":\"~bkbo\",\"name\":\"prueba\",\"matrix\":\"{{0.9238795,-0.2705981-0.2705981i},{0.2705981-0.2705981i,0.9238795}}\"},{\"id\":\"~pi31\",\"name\":\"3ejes\",\"matrix\":\"{{0.9238795-0.2209424i,-0.2209424-0.2209424i},{0.2209424-0.2209424i,0.9238795+0.2209424i}}\"},{\"id\":\"~f0b8\",\"name\":\"complex_rotation\",\"matrix\":\"{{0.6338146-0.3885086i,-0.4025149-0.5341553i},{0.5341553-0.4025149i,0.5021742+0.5481615i}}\"}]}"
+  },
+  "output": {
+    "qasm": {
+      "code": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\n\ngate cu1_pi_512 a {\np(pi / 512) a;\n}\ngate cu1_pi_256 a {\np(pi / 256) a;\n}\ngate mia a,b {\np(1.022086548338751) a;\nrz(-1.022086548338751) a;\nU(2.6572556550648576, -0.7494504172766678, 1.6303968037558327) a;\nU(1.7722832659115826, 1.7993318097017053, -0.15769545148268982) b;\ncx a, b;\nU(0.6610620143917973, -1.5707963267948966, 1.5707963267948966) a;\nU(1.146322550785802, -0.6825452469363378, -0.4689493306248971) b;\ncx a, b;\nU(0.4249056861253225, 0.0, -1.5707963267948966) a;\nU(1.047197551196598, 2.526112944919406, -0.6154797086703869) b;\ncx a, b;\nU(1.661438225728421, -1.939568706812894, 0.7979501493332246) a;\nU(0.899625573385694, 0.41532997728071486, -1.6762487268948827) b;\n}\ngate jo a {\np(0.34906596460815587) a;\nrz(-0.34906596460815587) a;\nrz(1.570796326794896) a;\nry(0.5235988043049772) a;\nrz(-1.570796326794896) a;\n}\ngate pi_gate a {\nrz(1.5707963267948966) a;\nry(0.7853981284776206) a;\nrz(-1.5707963267948966) a;\n}\ngate prueba a {\nrz(0.7853981633974483) a;\nry(0.7853983187457914) a;\nrz(-0.7853981633974483) a;\n}\ngate gate_3ejes a {\nrz(1.020135819677448) a;\nry(0.6355626524430418) a;\nrz(-0.5506605071174487) a;\n}\ngate complex_rotation a {\np(0.27925271914795163) a;\nrz(-0.27925271914795163) a;\nrz(1.474925426620587) a;\nry(1.4652808586822317) a;\nrz(-0.09587090017430966) a;\n}\nqreg q[2];\ncreg c[2];\nh q[0];\nh q[1];\nmia q[0], q[1];\nctrl @ cu1_pi_512 q[1], q[0];\nctrl @ cu1_pi_256 q[0], q[1];\njo q[0];\ngate_3ejes q[1];\nc[0] = measure q[0];\nc[1] = measure q[1];",
+      "version": "3.0",
+      "lines": 64,
+      "gates": {
+        "custom": {
+          "count": 5,
+          "names": [
+            "cu1_pi_256",
+            "cu1_pi_512",
+            "gate_3ejes",
+            "jo",
+            "mia"
+          ]
+        },
+        "native": {
+          "count": 4,
+          "names": [
+            "h",
+            "measure"
+          ]
+        }
+      }
+    },
+    "migrated_code": {
+      "ibm_qiskit_code": "# Importación de paquetes requeridos\nimport math\nfrom qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister\n\n# Generación de registros cuánticos y clásicos\nqreg_q = QuantumRegister(2, 'q')\ncreg_c = ClassicalRegister(2, 'c')\n\n# Creación del circuito cuántico\ncircuit = QuantumCircuit(qreg_q, creg_c)\n\ncircuit.h(qreg_q[0])\ncircuit.h(qreg_q[1])\ncircuit.p(1.022086548338751, qreg_q[0])\ncircuit.rz(-1.022086548338751, qreg_q[0])\ncircuit.u(2.6572556550648576, -0.7494504172766678, 1.6303968037558327, qreg_q[0])\ncircuit.u(1.7722832659115826, 1.7993318097017053, -0.15769545148268982, qreg_q[1])\ncircuit.cx(qreg_q[0], qreg_q[1])\ncircuit.u(0.6610620143917973, -math.pi/2, math.pi/2, qreg_q[0])\ncircuit.u(1.146322550785802, -0.6825452469363378, -0.4689493306248971, qreg_q[1])\ncircuit.cx(qreg_q[0], qreg_q[1])\ncircuit.u(0.4249056861253225, 0, -math.pi/2, qreg_q[0])\ncircuit.u(1.047197551196598, 2.526112944919406, -0.6154797086703869, qreg_q[1])\ncircuit.cx(qreg_q[0], qreg_q[1])\ncircuit.u(1.661438225728421, -1.939568706812894, 0.7979501493332246, qreg_q[0])\ncircuit.u(0.899625573385694, 0.41532997728071486, -1.6762487268948827, qreg_q[1])\ncircuit.cp(math.pi/512, qreg_q[1], qreg_q[0])\ncircuit.cp(math.pi/256, qreg_q[0], qreg_q[1])\ncircuit.p(0.34906596460815587, qreg_q[0])\ncircuit.rz(-0.34906596460815587, qreg_q[0])\ncircuit.rz(math.pi/2, qreg_q[0])\ncircuit.ry(0.5235988043049772, qreg_q[0])\ncircuit.rz(-math.pi/2, qreg_q[0])\ncircuit.rz(1.020135819677448, qreg_q[1])\ncircuit.ry(0.6355626524430418, qreg_q[1])\ncircuit.rz(-0.5506605071174487, qreg_q[1])\ncircuit.measure(qreg_q[0], creg_c[0])\ncircuit.measure(qreg_q[1], creg_c[1])\n",
+      "aws_braket_code": "# Importación de paquetes requeridos\nimport math\nfrom braket.circuits import Circuit\n\n# Creación del circuito AWS Braket\ncircuit = Circuit()\n\n# Puertas migradas desde OpenQASM\ncircuit.h(0)\ncircuit.h(1)\ncircuit.u(0, 0, 0, 1.022086548338751)\ncircuit.rz(0, -1.022086548338751)\ncircuit.u(0, 2.6572556550648576, -0.7494504172766678, 1.6303968037558327)\ncircuit.u(1, 1.7722832659115826, 1.7993318097017053, -0.15769545148268982)\ncircuit.x(1, control=[0])\ncircuit.u(0, 0.6610620143917973, -math.pi/2, math.pi/2)\ncircuit.u(1, 1.146322550785802, -0.6825452469363378, -0.4689493306248971)\ncircuit.x(1, control=[0])\ncircuit.u(0, 0.4249056861253225, 0, -math.pi/2)\ncircuit.u(1, 1.047197551196598, 2.526112944919406, -0.6154797086703869)\ncircuit.x(1, control=[0])\ncircuit.u(0, 1.661438225728421, -1.939568706812894, 0.7979501493332246)\ncircuit.u(1, 0.899625573385694, 0.41532997728071486, -1.6762487268948827)\ncircuit.cphaseshift([1], 0, math.pi/512)\ncircuit.cphaseshift([0], 1, math.pi/256)\ncircuit.u(0, 0, 0, 0.34906596460815587)\ncircuit.rz(0, -0.34906596460815587)\ncircuit.rz(0, math.pi/2)\ncircuit.ry(0, 0.5235988043049772)\ncircuit.rz(0, -math.pi/2)\ncircuit.rz(1, 1.020135819677448)\ncircuit.ry(1, 0.6355626524430418)\ncircuit.rz(1, -0.5506605071174487)\n\n# Mediciones en orden clásico, diferidas al final\ncircuit.measure([0])\ncircuit.measure([1])\n",
+      "xanadu_pennylane_code": "# Importación de paquetes requeridos\nimport math\nimport pennylane as qml\n\ndevice = qml.device('default.qubit', wires=2, shots=1000)\n\n@qml.qnode(device)\ndef circuit():\n    qml.Hadamard(wires=0)\n    qml.Hadamard(wires=1)\n    qml.PhaseShift(1.022086548338751, wires=0)\n    qml.RZ(-1.022086548338751, wires=0)\n    qml.U3(2.6572556550648576, -0.7494504172766678, 1.6303968037558327, wires=0)\n    qml.U3(1.7722832659115826, 1.7993318097017053, -0.15769545148268982, wires=1)\n    qml.ctrl(qml.PauliX, control=[0])(wires=1)\n    qml.U3(0.6610620143917973, -math.pi/2, math.pi/2, wires=0)\n    qml.U3(1.146322550785802, -0.6825452469363378, -0.4689493306248971, wires=1)\n    qml.ctrl(qml.PauliX, control=[0])(wires=1)\n    qml.U3(0.4249056861253225, 0, -math.pi/2, wires=0)\n    qml.U3(1.047197551196598, 2.526112944919406, -0.6154797086703869, wires=1)\n    qml.ctrl(qml.PauliX, control=[0])(wires=1)\n    qml.U3(1.661438225728421, -1.939568706812894, 0.7979501493332246, wires=0)\n    qml.U3(0.899625573385694, 0.41532997728071486, -1.6762487268948827, wires=1)\n    qml.ctrl(qml.PhaseShift, control=[1])(math.pi/512, wires=0)\n    qml.ctrl(qml.PhaseShift, control=[0])(math.pi/256, wires=1)\n    qml.PhaseShift(0.34906596460815587, wires=0)\n    qml.RZ(-0.34906596460815587, wires=0)\n    qml.RZ(math.pi/2, wires=0)\n    qml.RY(0.5235988043049772, wires=0)\n    qml.RZ(-math.pi/2, wires=0)\n    qml.RZ(1.020135819677448, wires=1)\n    qml.RY(0.6355626524430418, wires=1)\n    qml.RZ(-0.5506605071174487, wires=1)\n    measurement_0_0 = qml.measure(wires=0)\n    measurement_1_1 = qml.measure(wires=1)\n    return (\n        qml.sample(measurement_0_0),\n        qml.sample(measurement_1_1),\n    )\n"
+    },
+    "zx_calculus_result": null,
+    "circuit_info": {
+      "n_qubits": 2,
+      "n_cols": 6,
+      "gates": [
+        "H",
+        "Measure",
+        "~cu10000",
+        "~cu10001",
+        "~edqr",
+        "~ipt0",
+        "~pi31",
+        "•"
+      ]
+    },
+    "img": {
+      "quirk": null,
+      "qasm": null,
+      "composer": null
+    },
+    "comparison_doc": null,
+    "errors": []
+  }
+}

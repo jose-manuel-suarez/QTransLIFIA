@@ -1594,6 +1594,78 @@ def quirk_circuit_info(url):
     }
 
 
+def custom_gates_catalog(url):
+    """Catálogo exhaustivo de las compuertas custom declaradas en un circuito.
+
+    A diferencia de ``quirk_circuit_info``, que informa de las compuertas
+    *usadas* en las columnas, esta función recorre **todas** las compuertas
+    declaradas en el campo ``gates`` de Quirk (las definidas por el usuario,
+    se usen o no) e indica con ``used_in_circuit`` cuáles aparecen en el
+    circuito, ya sea directamente o anidadas dentro de otra compuerta custom.
+
+    Parámetros:
+        - url (str): URL de Quirk con ``circuit=<JSON>``.
+
+    Retorna:
+        - list[dict]: una entrada por compuerta custom declarada, con las
+          claves ``id``, ``name``, ``qasm_name``, ``kind`` ('matrix',
+          'circuit' o 'unknown'), ``n_qubits`` y ``used_in_circuit``.
+    """
+    circuito = parse_quirk_url(url)
+    gate_map = _build_gate_map(circuito)
+    gate_names = _resolve_gate_names(gate_map)
+
+    def canonical_id(definition):
+        """Identificador canónico (sin sufijo ':k') de una definición de gate."""
+        raw = definition.get('id')
+        return raw.split(':')[0] if isinstance(raw, str) else None
+
+    used_ids = set()
+    pending = [circuito.get('cols', [])]
+    while pending:
+        current = pending.pop()
+        for col in current:
+            for value in col:
+                if not isinstance(value, str):
+                    continue
+                definition = gate_map.get(value.split(':')[0])
+                if definition is None:
+                    continue
+                identifier = canonical_id(definition)
+                if identifier is None or identifier in used_ids:
+                    continue
+                used_ids.add(identifier)
+                nested = definition.get('circuit', {}).get('cols')
+                if nested:
+                    pending.append(nested)
+
+    catalog = []
+    for definition in circuito.get('gates', []):
+        identifier = canonical_id(definition)
+        raw_name = definition.get('name')
+        if isinstance(raw_name, str):
+            qasm_name = gate_names.get(raw_name)
+        else:
+            qasm_name = None
+        if qasm_name is None and identifier is not None:
+            qasm_name = gate_names.get(identifier)
+        if 'matrix' in definition:
+            kind = 'matrix'
+        elif 'circuit' in definition:
+            kind = 'circuit'
+        else:
+            kind = 'unknown'
+        catalog.append({
+            'id': identifier,
+            'name': raw_name,
+            'qasm_name': qasm_name,
+            'kind': kind,
+            'n_qubits': _gate_height(definition),
+            'used_in_circuit': identifier in used_ids,
+        })
+    return catalog
+
+
 def capture_quirk_circuit(url, output_path, timeout=15):
     """Captura la vista completa de un circuito Quirk en un archivo PNG.
 

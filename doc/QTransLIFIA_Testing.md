@@ -77,10 +77,11 @@ Para circuitos de pocos qubits (estados Bell, Toffoli, «la demostración por la
 | Batería | Ubicación | Ejecución | Garantía principal |
 | --- | --- | --- | --- |
 | A. Análisis estático | `tools/check_static.py` | `python tools/check_static.py qtrans test` | Integridad referencial y ausencia de imports muertos |
-| B. Suite unitaria | `test/test_*.py` (114 pruebas) | `python -m unittest discover -s test -p "test_*.py"` | Contrato funcional del traductor, de la API y del pipeline |
+| B. Suite unitaria | `test/test_*.py` (121 pruebas) | `python -m unittest discover -s test -p "test_*.py"` | Contrato funcional del traductor, de la API y del pipeline |
 | C. Verificación numérica de matrices | `tools/verify_matrix_gates.py` | `python tools/verify_matrix_gates.py` | Fidelidad de las *custom gates* con campo `matrix` |
 | D. Equivalencia ZX | `qtrans/utils/zx_utils.py` + `input/*.json` | Etapa ZX del pipeline (`QTRANS_GENERATE_ZX=true`) | Equivalencia unitaria Quirk ↔ OpenQASM |
 | E. Equivalencia cruzada entre backends | `tools/verify_backend_equivalence.py` | `python tools/verify_backend_equivalence.py` | La ruta nativa y la ruta migrada describen el mismo circuito |
+| E2. Migración aislada de un circuito | `tools/migrate_circuit.py` | `python tools/migrate_circuit.py --file input/popular_algorithms.json --index 39` | El JSON de la API (OpenQASM + un script por proveedor) se materializa y se imprime en consola |
 | F. Corrida end-to-end | CLI `python -m qtrans` | `python -m qtrans --input-mode batch --input-file ""` | Integración completa y artefactos de corrida |
 | G. Comprobaciones manuales | `test/test_qasm.py`, `test/test_translate_lib.py`, `notebooks/` | Ejecución directa del script | Exploración y documentación de cara al usuario |
 
@@ -102,7 +103,7 @@ python tools/check_static.py qtrans test tools
 
 ### 4.2 Batería B — Suite unitaria de integración
 
-El repositorio incluye **114 pruebas** distribuidas en nueve archivos, organizados por el contrato que cada uno congela:
+El repositorio incluye **121 pruebas** distribuidas en diez archivos, organizados por el contrato que cada uno congela:
 
 | Archivo | Pruebas | Contrato congelado |
 | --- | --- | --- |
@@ -115,10 +116,11 @@ El repositorio incluye **114 pruebas** distribuidas en nueve archivos, organizad
 | `test/test_xy_probes.py` | 9 | X/Y Probes (controles de eje X/Y) y post-selecciones nativas de Quirk, incluida su traza ZX |
 | `test/test_qft_canonical.py` | 9 | Canonicidad de `QFT†n`, sus variantes y la regresión sobre `input/qft_algorithms.json` |
 | `test/test_url_utils.py` | 9 | Normalización y canonicalización de URLs de Quirk pegadas a mano y codificación percent-encoded |
+| `test/test_custom_gates.py` | 7 | Tratamiento exhaustivo de las compuertas custom: catálogo con `used_in_circuit`, traslado de las declaradas sin uso al script migrado y conservación de los parámetros de las compuertas controladas |
 
 ```bash
 python -m unittest discover -s test -p "test_*.py"
-# Ran 114 tests ... FAILED (failures=1)   ← ver §7 (fallo preexistente y conocido)
+# Ran 121 tests ... FAILED (failures=1)   ← ver §7 (fallo preexistente y conocido)
 ```
 
 **Corpora de entrada.** Las pruebas y las baterías C–F se apoyan en registros de algoritmos que actúan como *fixtures* estables: `input/popular_algorithms.json` (39 algoritmos reales: Shor, Bernstein-Vazirani, Grover, Deutsch-Jozsa, Simon, QFT, QPE, post-selecciones y compuertas personalizadas), `input/xy_probes_gates_algorithms.json` (24 sondas de X/Y Probes y post-selecciones, todas deterministas), `input/qft_algorithms.json` (12 casos de QFT), `input/main_algorithms.json` (15 algoritmos), `input/natives_post_select_algorithms.json` (16 casos) e `input/scalar_gates_algorithms.json` (28 casos).
@@ -244,7 +246,7 @@ Comprobaciones que no encajan en una aserción automática pero que son parte de
 Orden recomendado antes de dar por cerrada una modificación (cualquiera que toque `qtrans/`, el contrato de la API o el flujo de traducción):
 
 1. **Análisis estático**: `python tools/check_static.py qtrans test tools` (sin referencias rotas ni imports muertos).
-2. **Suite unitaria**: `python -m unittest discover -s test -p "test_*.py"` (114 pruebas; el único fallo permitido es el conocido de §7).
+2. **Suite unitaria**: `python -m unittest discover -s test -p "test_*.py"` (121 pruebas; el único fallo permitido es el conocido de §7).
 3. **Fidelidad numérica**: `python tools/verify_matrix_gates.py` (residuo ≤ `1e-6`; se espera `≈5e-8`).
 4. **Equivalencia entre backends**: `python tools/verify_backend_equivalence.py` (39/39 en Qiskit y Braket).
 5. **Corrida end-to-end**: `python -m qtrans --input-mode batch --input-file ""` y revisión del resumen (0 errores de traducción; los errores de la etapa ZX son los de compuertas no comparables descritos en §4.4).

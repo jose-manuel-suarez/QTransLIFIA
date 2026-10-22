@@ -59,7 +59,8 @@ Las tres vías de ejecución —**API de librería** (`translate_circuit`), **CL
 ├── tools/                                # Baterías de verificación ejecutables
 │   ├── check_static.py                   # Análisis estático (AST): nombres no definidos e imports muertos
 │   ├── verify_matrix_gates.py            # Fidelidad numérica de las compuertas custom con 'matrix'
-│   └── verify_backend_equivalence.py     # Equivalencia entre el parser nativo y el script migrado
+│   ├── verify_backend_equivalence.py     # Equivalencia entre el parser nativo y el script migrado
+│   └── migrate_circuit.py                # Migración aislada de un circuito (JSON en consola)
 ├── doc/                                  # Documentación QSE y paper (qtrans.tex)
 ├── pyproject.toml                        # Empaquetado (pip install)
 ├── requirements.txt                      # Librerías requeridas
@@ -270,7 +271,7 @@ python -m qtrans --help
 | `--run-label` | Etiqueta de la corrida (default: `DD_MM_YYYY__HH_MM`, fecha y hora con minutos). |
 | `--qasm-version {2.0,3.0}` | Versión de OpenQASM generada (default: `3.0`). |
 | `--providers` | Ecosistemas objetivo separados por comas: `qiskit`, `braket`, `pennylane`. |
-| `--preserve-custom-gates` / `--no-preserve-custom-gates` | Conserva / expande en línea las compuertas custom y nativas (p. ej. `QFT`) en los scripts migrados (default: `QTRANS_PRESERVE_CUSTOM_GATES`). |
+| `--preserve-custom-gates` / `--no-preserve-custom-gates` | Conserva / expande en línea las compuertas custom y nativas (p. ej. `QFT`) en los scripts migrados (default: `QTRANS_PRESERVE_CUSTOM_GATES`). Con `preserve` se definen **todas** las compuertas custom declaradas en el original (las que se usan y las que no), cada una como función local. |
 | `--shots` | Shots para los QNodes PennyLane (default: `1000`). |
 | `--zx-time` | Snapshot temporal Quirk para gates como `Rxft`, rango `0..1` (default: `0.5`). |
 | `--zx-timeout` | Límite en segundos por comparación/reducción ZX; al excederse se marca `NO DEMOSTRADO (timeout)` (default: `120`). |
@@ -321,6 +322,7 @@ objeto incluye además `name`):
 | `migrated_code` | Código Python por proveedor, con clave `<subcarpeta_proveedor>_code` (`ibm_qiskit_code`, `aws_braket_code`, `xanadu_pennylane_code`). |
 | `zx_calculus_result` | `'equivalente'` \| `'no-equivalente'` \| `'no-comprobado'`; `null` si `zx.enabled=false`. |
 | `circuit_info` | `n_qubits`, `n_cols`, `gates`. |
+| `custom_gates` | Catálogo **exhaustivo** de las compuertas custom declaradas en la URL de Quirk (las que se usan y las que no): `id`, `name`, `qasm_name`, `kind` (`matrix`/`circuit`/`unknown`), `n_qubits` y `used_in_circuit` (booleano). |
 | `img` | `{quirk, qasm, composer}` en base64 (PNG) o `null` si no se pidió o falló. |
 | `comparison_doc` | Markdown inline o `null`. |
 | `errors` | `[{stage, message}]` de etapas opcionales fallidas. |
@@ -472,6 +474,30 @@ Los scripts migrados se generan en Python ejecutable, uno por algoritmo y ecosis
 - **AWS Braket** (provider `braket` → `migrated_circuits/aws_braket/`): requiere `amazon-braket-sdk`.
 - **PennyLane** (provider `pennylane` → `migrated_circuits/xanadu_pennylane/`): QNodes con `QTRANS_SHOTS` shots; requiere `pennylane`.
 
+### Migrar un solo circuito desde la terminal
+
+Para migrar **un circuito suelto** (sin cálculo ZX ni imágenes) e imprimir el JSON que
+devuelve la API, está `tools/migrate_circuit.py`:
+
+```bash
+# El circuito n.º 39 de input/popular_algorithms.json (el de compuertas custom),
+# migrado a los tres proveedores, con el JSON en la consola.
+.venv/Scripts/python.exe tools/migrate_circuit.py --file input/popular_algorithms.json --index 39
+```
+
+El JSON impreso es el de `translate_circuit` (`input` con la configuración efectiva y `output`
+con `qasm`, `migrated_code` —un script por proveedor—, `circuit_info`, `custom_gates`, `zx_calculus_result`,
+`img`, `comparison_doc` y `errors`). Opciones útiles:
+
+| Opción | Efecto |
+| --- | --- |
+| `--name "39. complex_customs"` | Selecciona la entrada por nombre en lugar de por posición |
+| `--providers qiskit,braket` | Limina los proveedores destino |
+| `--out <carpeta>` | Escribe además los scripts migrados (`<carpeta>/<proveedor>/<nombre>.py`) |
+| `--json-out <fichero>` | Guarda el JSON devuelto en un fichero |
+| `--preserve-custom-gates` | Conserva las compuertas custom como funciones locales en el script |
+| `--zx` / `--images` | Activa las etapas que por omisión están desactivadas |
+
 ## API HTTP heredada
 
 Por trazabilidad se creó el directorio `original/` para conservar circuitos y requerimientos iniciales provistos por UnEx.
@@ -498,7 +524,7 @@ procedimiento, garantía y límites) está en
 | Batería | Procedimiento | Garantía |
 | --- | --- | --- |
 | A. Análisis estático | `python tools/check_static.py qtrans test tools` | Integridad referencial del paquete y ausencia de imports muertos |
-| B. Suite unitaria (114 pruebas) | `python -m unittest discover -s test -p "test_*.py" -v` | Contrato funcional del traductor, de la API y del pipeline |
+| B. Suite unitaria (121 pruebas) | `python -m unittest discover -s test -p "test_*.py" -v` | Contrato funcional del traductor, de la API y del pipeline |
 | C. Fidelidad numérica de matrices | `python tools/verify_matrix_gates.py` | Residuo ≤ `1e-6` entre la matriz de origen y la descomposición emitida |
 | D. Equivalencia ZX | `QTRANS_GENERATE_ZX=true python -m qtrans ...` | Veredicto de equivalencia unitaria por circuito |
 | E. Equivalencia entre backends | `python tools/verify_backend_equivalence.py` | La ruta nativa del parser y la ruta del script migrado coinciden |

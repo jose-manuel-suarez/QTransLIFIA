@@ -199,6 +199,10 @@ def detect_qasm_version(qasm_str, qasm_version=None):
 
 
 _QASM_DECL_RE = re.compile(r"^gate\s+([A-Za-z_][A-Za-z0-9_]*)")
+_QASM_DECL_FULL_RE = re.compile(
+    r"^gate\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+    r"(?:\s+(?P<params>[A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*))?\s*\{"
+)
 _QASM_MODIFIER_RE = re.compile(r"^(?:(?:ctrl|inv|pow\s*\([^)]*\))\s*@\s*)+")
 _NON_OPERATION_PREFIXES = ("qreg", "creg", "qubit", "bit", "measure", "barrier", "reset")
 
@@ -253,3 +257,86 @@ def qasm_gate_summary(qasm3_source):
         "custom": {"count": len(custom_operations), "names": sorted(set(custom_operations))},
         "native": {"count": len(native_operations), "names": sorted(set(native_operations))},
     }
+
+
+def qasm_gate_blocks(qasm_source):
+    """Extrae las declaraciones ``gate`` completas del código OpenQASM.
+
+    Devuelve el texto literal de cada declaración (cabecera y cuerpo), tal y
+    como aparece en el código, para poder reutilizarla en otro documento
+    OpenQASM (p. ej. para reconstruir una compuerta custom que el parser
+    descarta por no usarse en el circuito).
+
+    Parámetros:
+        - qasm_source (str): código OpenQASM.
+
+    Retorna:
+        - list[tuple[str, int, str]]: triplets (nombre, número de qubits,
+          bloque de texto de la declaración).
+    """
+    blocks = []
+    lines = (qasm_source or '').splitlines()
+    index = 0
+    while index < len(lines):
+        line = lines[index].strip()
+        match = _QASM_DECL_FULL_RE.match(line)
+        if match is None:
+            index += 1
+            continue
+        chunk = [line]
+        depth = line.count('{') - line.count('}')
+        while depth > 0 and index + 1 < len(lines):
+            index += 1
+            chunk.append(lines[index])
+            depth += lines[index].count('{') - lines[index].count('}')
+        params = match.group('params')
+        n_qubits = len(params.split(',')) if params else 0
+        blocks.append((match.group('name'), n_qubits, '\n'.join(chunk)))
+        index += 1
+    return blocks
+
+
+def qasm_custom_gate_operations(qasm_source):
+    """Operaciones de todas las compuertas custom **declaradas** en el código.
+
+    El parser de Qiskit solo conserva en el circuito las compuertas custom que
+    se usan; las que se declaran pero no aparecen en el cuerpo se descartan.
+    Esta función las recupera: reconstruye un OpenQASM sintético con las
+    mismas declaraciones y una llamada por compuerta, lo parsea y devuelve las
+    operaciones resultantes (con su ``definition``).
+
+    Parámetros:
+        - qasm_source (str): código OpenQASM 3.0.
+
+    Retorna:
+        - list[tuple[str, object]]: pares (nombre de la compuerta, operación
+          de Qiskit). Lista vacía si no hay declaraciones o si el código no se
+          puede parsear.
+    """
+    blocks = qasm_gate_blocks(qasm_source)
+    if not blocks:
+        return []
+    total_qubits = sum(n_qubits for _, n_qubits, _ in blocks)
+    if total_qubits == 0:
+        return []
+    synthetic = ['OPENQASM 3.0;', 'include "stdgates.inc";']
+    synthetic.extend(block for _, _, block in blocks)
+    synthetic.append(f'qubit[{total_qubits}] q;')
+    offset = 0
+    for name, n_qubits, _ in blocks:
+        arguments = ', '.join(f'q[{offset + position}]' for position in range(n_qubits))
+        synthetic.append(f'{name} {arguments};')
+        offset += n_qubits
+    try:
+        from qiskit import qasm3
+
+        circuit = qasm3.loads('\n'.join(synthetic))
+    except Exception:  # noqa: BLE001 — mejor efforts: sin declaraciones extra
+        return []
+    operations = []
+    for item, (name, _, _) in zip(circuit.data, blocks):
+        operation = item.operation
+        if operation.name != name:
+            continue
+        operations.append((name, operation))
+    return operations

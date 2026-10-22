@@ -7,7 +7,7 @@ lee los JSON de entrada, captura los circuitos Quirk, traduce a OpenQASM (versi�
 
 Todas las salidas se agrupan por corrida en ``<output>/run_DD_MM_YYYY__HH``, donde ``<output>`` es el directorio de salida configurado y la etiqueta de la corrida se genera a partir de la fecha y hora actual.
 
-Como librería instalable con pip, expone la función core ``translate_circuit(payload)``: recibe un objeto JSON (dict o cadena) con el grupo ``input`` (circuito como ``url``/``json`` o lote ``circuits``, más ``offset``, ``qasm_version``, ``provider`` y las etapas opcionales) y devuelve ``{"input": ..., "output": ...}``; cada circuito de ``output`` incluye ``qasm`` (``code``, ``version``, ``lines`` y ``gates`` con ``custom``/``native``), ``migrated_code`` (por proveedor), ``zx_calculus_result``, ``circuit_info``, ``img`` (PNG en base64), ``comparison_doc`` y ``errors`` (más ``name`` si es un lote).
+Como librería instalable con pip, expone la función core ``translate_circuit(payload)``: recibe un objeto JSON (dict o cadena) con el grupo ``input`` (circuito como ``url``/``json`` o lote ``circuits``, más ``offset``, ``qasm_version``, ``provider`` y las etapas opcionales) y devuelve ``{"input": ..., "output": ...}``; cada circuito de ``output`` incluye ``qasm`` (``code``, ``version``, ``lines`` y ``gates`` con ``custom``/``native``), ``migrated_code`` (por proveedor), ``zx_calculus_result``, ``circuit_info``, ``custom_gates`` (catálogo exhaustivo de las compuertas custom declaradas, con ``used_in_circuit``), ``img`` (PNG en base64), ``comparison_doc`` y ``errors`` (más ``name`` si es un lote).
 
 Este módulo es el **orquestador**: resuelve la configuración (variables ``QTRANS_*`` de
 ``.env``), la línea de comandos y el flujo por corrida, y delega cada etapa en los
@@ -960,6 +960,7 @@ def _translate_circuit_entry(name, url, offset, settings):
         "n_cols": info["n_cols"],
         "gates": info["gates"],
     }
+    custom_gates = quirk_utils.custom_gates_catalog(url)
 
     migrated_code = {}
     for provider in settings["provider"]:
@@ -1020,6 +1021,7 @@ def _translate_circuit_entry(name, url, offset, settings):
         "migrated_code": migrated_code,
         "zx_calculus_result": zx_calculus_result,
         "circuit_info": circuit_info,
+        "custom_gates": custom_gates,
         "img": img,
         "comparison_doc": comparison_doc,
         "errors": errors,
@@ -1076,6 +1078,10 @@ def translate_circuit(payload):
             - zx_calculus_result (str | None): 'equivalente' |
               'no-equivalente' | 'no-comprobado'; None si zx.enabled=false.
             - circuit_info (dict): n_qubits, n_cols, gates.
+            - custom_gates (list): catálogo exhaustivo de las compuertas custom
+              **declaradas** en el circuito Quirk (las que se usan y las que no),
+              con id, name, qasm_name, kind ('matrix'|'circuit'|'unknown'),
+              n_qubits y used_in_circuit (bool).
             - img (dict): {quirk, qasm, composer} en base64 (PNG) o None si
               no se pidió o falló.
             - comparison_doc (str | None): Markdown inline o None.

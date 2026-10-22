@@ -210,6 +210,11 @@ def main(argv=None):
         '--simulate', action='store_true',
         help='añade la comparación estadística con el simulador local de Braket',
     )
+    parser.add_argument(
+        '--preserve', action='store_true',
+        help='compara el script migrado en modo preserve_custom_gates (las '
+             'compuertas custom se conservan como funciones locales)',
+    )
     args = parser.parse_args(argv)
 
     warnings.filterwarnings('ignore')
@@ -234,7 +239,13 @@ def main(argv=None):
             try:
                 native = load_provider_circuit(qasm, provider, qasm_version='3.0')
                 migrated = _exec_script(
-                    provider_python_source(qasm, provider, qasm_version='3.0'), provider
+                    provider_python_source(
+                        qasm,
+                        provider,
+                        qasm_version='3.0',
+                        preserve_custom_gates=args.preserve,
+                    ),
+                    provider,
                 )
             except Exception as exc:  # noqa: BLE001 - la batería reporta, no propaga
                 failures.append((provider, name, f'error al cargar: {exc}'))

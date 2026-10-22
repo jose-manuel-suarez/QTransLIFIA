@@ -14,7 +14,7 @@ import os
 import warnings
 from pathlib import Path
 
-from .qasm_utils import detect_qasm_version
+from .qasm_utils import detect_qasm_version, qasm_custom_gate_operations
 from .pipeline_utils import log_stage
 
 
@@ -148,13 +148,30 @@ def provider_python_source(qasm_source, provider, qasm_version='3.0', shots=1000
         raise ValueError("qasm_version debe ser '2.0' o '3.0'")
 
     circuit = _load_qiskit_native(qasm_source, qasm_version, fallback=False)
+    custom_gate_definitions = None
+    if preserve_custom_gates:
+        # El parser solo conserva las compuertas custom que se usan en el
+        # circuito; las declaradas y no usadas se recuperan del OpenQASM para
+        # que el script migrado sea exhaustivo con la biblioteca del original.
+        custom_gate_definitions = qasm_custom_gate_operations(qasm_source)
 
     if provider == 'qiskit':
-        return _qiskit_python_source(circuit, preserve_custom_gates=preserve_custom_gates)
+        return _qiskit_python_source(
+            circuit,
+            preserve_custom_gates=preserve_custom_gates,
+            custom_gate_definitions=custom_gate_definitions,
+        )
     if provider == 'braket':
-        return _braket_python_source(circuit, preserve_custom_gates=preserve_custom_gates)
+        return _braket_python_source(
+            circuit,
+            preserve_custom_gates=preserve_custom_gates,
+            custom_gate_definitions=custom_gate_definitions,
+        )
     return _pennylane_python_source(
-        circuit, shots=shots, preserve_custom_gates=preserve_custom_gates
+        circuit,
+        shots=shots,
+        preserve_custom_gates=preserve_custom_gates,
+        custom_gate_definitions=custom_gate_definitions,
     )
 
 

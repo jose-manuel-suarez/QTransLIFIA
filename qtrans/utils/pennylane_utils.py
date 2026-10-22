@@ -12,7 +12,8 @@ from .qasm_utils import (
 )
 
 
-def _pennylane_python_source(parsed_circuit, shots=1000, preserve_custom_gates=False):
+def _pennylane_python_source(parsed_circuit, shots=1000, preserve_custom_gates=False,
+                             custom_gate_definitions=None):
     """Genera el script Python (PennyLane) que reconstruye el circuito como QNode.
 
     Parámetros:
@@ -21,6 +22,10 @@ def _pennylane_python_source(parsed_circuit, shots=1000, preserve_custom_gates=F
         - preserve_custom_gates (bool): si True, cada compuerta custom se define
           una sola vez como función local (sin parámetro circuit); si False se
           expande en línea.
+        - custom_gate_definitions (list | None): pares (nombre, operación) de
+          compuertas custom declaradas en el OpenQASM que el parser descartó por
+          no usarse en el circuito; si ``preserve_custom_gates`` es True se
+          definen igualmente como funciones locales (exhaustividad).
 
     Retorna:
         - str: código Python ejecutable que construye la variable ``circuit``
@@ -46,15 +51,19 @@ def _pennylane_python_source(parsed_circuit, shots=1000, preserve_custom_gates=F
     measurement_count = 0
     custom_functions = {}
 
-    def custom_function(operation, qubits):
-        """Define (una sola vez) una función local y emite su llamada."""
-        name = _sanitize_gate_name(operation.name, 'custom_gate')
-        if name not in custom_functions:
-            definition = operation.definition
-            params = [f'w{index}' for index in range(len(definition.qubits))]
-            qubit_positions = {bit: index for index, bit in enumerate(definition.qubits)}
-            clbit_positions = {bit: index for index, bit in enumerate(definition.clbits)}
-            before = len(instructions)
+    custom_scope = []
+
+    def define_custom(name, operation):
+        """Registra (una sola vez) la función local de una compuerta custom."""
+        if name in custom_functions:
+            return
+        definition = operation.definition
+        params = [f'w{index}' for index in range(len(definition.qubits))]
+        qubit_positions = {bit: index for index, bit in enumerate(definition.qubits)}
+        clbit_positions = {bit: index for index, bit in enumerate(definition.clbits)}
+        before = len(instructions)
+        custom_scope.append(name)
+        try:
             for sub_item in definition.data:
                 emit(
                     sub_item.operation,
@@ -62,9 +71,21 @@ def _pennylane_python_source(parsed_circuit, shots=1000, preserve_custom_gates=F
                     [f'cl{clbit_positions[bit]}' for bit in sub_item.clbits],
                     1,
                 )
-            body = _unquote_parameters(instructions[before:], params)
-            del instructions[before:]
-            custom_functions[name] = (params, body)
+        finally:
+            custom_scope.pop()
+        body = _unquote_parameters(instructions[before:], params)
+        del instructions[before:]
+        custom_functions[name] = (params, body)
+
+    def custom_function(operation, qubits):
+        """Define (una sola vez) una función local y emite su llamada."""
+        base = _sanitize_gate_name(operation.name, 'custom_gate')
+        # Las compuertas anidadas se nombran con el prefijo de la compuerta
+        # que las contiene: si no, dos compuertas custom distintas que
+        # compartan una operación interna (p. ej. ``mcphase``) reutilizarían
+        # el cuerpo de la primera y perderían sus propios parámetros.
+        name = f'{custom_scope[-1]}__{base}' if custom_scope else base
+        define_custom(name, operation)
         instructions.append(f"{name}({', '.join(str(qubit) for qubit in qubits)})")
 
     def emit(operation, qubits, clbits, depth=0):
@@ -136,6 +157,13 @@ def _pennylane_python_source(parsed_circuit, shots=1000, preserve_custom_gates=F
             [parsed_circuit.find_bit(bit).index for bit in item.qubits],
             [parsed_circuit.find_bit(bit).index for bit in item.clbits],
         )
+
+    # Compuertas custom declaradas en el OpenQASM pero no usadas en el
+    # circuito: el parser las descartó, así que se recuperan aparte para que
+    # el script sea exhaustivo con la biblioteca de compuertas del original.
+    if preserve_custom_gates:
+        for name, operation in (custom_gate_definitions or []):
+            define_custom(_sanitize_gate_name(name, 'custom_gate'), operation)
 
     measured_classical_bits = sorted(measurement_variables)
     device_shots = shots if measured_classical_bits else None
