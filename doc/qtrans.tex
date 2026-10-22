@@ -222,8 +222,9 @@ El flujo funcional es único y se ofrece mediante tres puntos de entrada:
 La entrada se especifica como uno o más archivos JSON en los que cada clave es un nombre de
 algoritmo y cada valor contiene una URL de Quirk, un desplazamiento de índices opcional y
 una descripción opcional. Los artefactos se agrupan por corrida en un directorio con marca
-temporal, de forma que las ejecuciones dentro de la misma ventana temporal se consolidan y
-las corridas históricas quedan preservadas.
+temporal de fecha y hora, con resolución de hora: las ejecuciones dentro de la misma hora
+se consolidan en el mismo directorio y sobrescriben sus artefactos, mientras que las
+corridas de horas distintas quedan preservadas como directorios independientes.
 
 % ===========================================================================
 \section{Atributos de calidad desde la ingeniería de software cuántica}
@@ -246,7 +247,7 @@ resume y anticipa cómo se materializa cada uno.
 Abstracción & Traducción semántica con preservación de compuertas personalizadas; separación entre análisis y generación; ocultamiento de la complejidad del formato de Quirk. \\
 Expresividad & Conservación funcional de las compuertas definibles en Quirk (por circuito y por matriz), respetando el punto de partida de diseño. \\
 Verificabilidad & Equivalencia estructural y funcional entre el circuito de Quirk y el OpenQASM generado, apoyada en metadatos y determinismo. \\
-\emph{Testing} & Estrategias complementarias por etapa: verificación estática, equivalencia por cálculo ZX y comprobación visual. \\
+\emph{Testing} & Siete baterías desplegadas: análisis estático, suite unitaria, fidelidad numérica de matrices, equivalencia ZX, equivalencia entre backends, corrida extremo a extremo y comprobaciones manuales. \\
 Escalabilidad & Crecimiento vertical (complejidad del circuito) y horizontal (múltiples ecosistemas) sobre OpenQASM como interfaz estable. \\
 Extensibilidad & Incorporación de nuevas compuertas, versiones de OpenQASM y consumidores sin rediseñar el núcleo. \\
 \bottomrule
@@ -345,6 +346,7 @@ en la ejecución a la traducción o al proveedor, sin ambigüedad sobre dónde r
 responsabilidad.
 
 \subsection{Testing}
+\label{sec:testing}
 
 El flujo no es una transformación monolítica, sino una tubería de etapas, y cada
 transformación es una oportunidad de introducir un defecto. QTransLIFIA articula tres
@@ -367,10 +369,74 @@ familias de estrategias complementarias:
 
 Ninguna estrategia es suficiente por sí sola: la estática garantiza que no se pierden
 piezas, la semántica aporta la garantía formal de equivalencia y la visual ofrece la lectura
-inmediata que acelera la detección de defectos. El repositorio complementa estas
-estrategias con una suite de pruebas automatizadas que ejercita los modos de entrada, los
-circuitos canónicos, los desplazamientos de índice, las compuertas personalizadas y la
-opción de preservación de compuertas nativas.
+inmediata que acelera la detección de defectos.
+
+Sobre esas tres familias se despliega el arsenal de pruebas del proyecto, organizado en
+\emph{siete baterías} con un alcance, un procedimiento de ejecución y una garantía
+explícita cada una. La Tabla~\ref{tab:baterias} las resume. La disciplina de fondo es que
+cada batería \emph{congela un contrato}: debe poder fallar ---es decir, ser capaz de
+detectar un defecto real--- y su documentación se actualiza en la misma entrega en que se
+modifica el comportamiento congelado.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Baterías de testing desplegadas en QTransLIFIA.}
+\label{tab:baterias}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.16\textwidth}
+                    >{\raggedright\arraybackslash}p{0.27\textwidth}
+                    >{\raggedright\arraybackslash}p{0.19\textwidth}
+                    >{\raggedright\arraybackslash}p{0.28\textwidth}@{}}
+\toprule
+\textbf{Batería} & \textbf{Ámbito} & \textbf{Procedimiento} & \textbf{Garantía} \\
+\midrule
+A. Análisis estático & Integridad referencial entre módulos y ausencia de imports muertos &
+Script de análisis & Ninguna referencia rota ni dependencia colgando \\
+B. Suite unitaria & Contrato funcional del traductor, de la API y del pipeline: 114 pruebas
+en nueve archivos & Línea de órdenes & Detección de regresiones sobre el comportamiento
+congelado \\
+C. Fidelidad numérica & Compuertas personalizadas con campo \emph{matrix}: matriz de origen
+frente a la descomposición emitida & Script de verificación & Residuo $\leq 10^{-6}$
+(medido $\approx 5\times 10^{-8}$) \\
+D. Equivalencia ZX & Acción unitaria de la traducción y de las sondas de control &
+Etapa ZX del pipeline & Veredicto por circuito en el reporte de comparación \\
+E. Equivalencia entre backends & Ruta nativa del parser frente a la ruta del script migrado &
+Script de verificación & Ambas rutas describen el mismo circuito \\
+F. Corrida extremo a extremo & Integración completa y artefactos de la corrida &
+Línea de órdenes & Artefactos completos y cero errores por etapa \\
+G. Comprobaciones manuales & Exploración y documentación de la interfaz de uso &
+Scripts y cuadernos & Evidencia cualitativa y ejemplos \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Los procedimientos exactos son los siguientes:
+\begin{verbatim}
+python tools/check_static.py qtrans test
+python -m unittest discover -s test -p "test_*.py"
+python tools/verify_matrix_gates.py
+python tools/verify_backend_equivalence.py
+python -m qtrans --input-mode batch --input-file ""
+\end{verbatim}
+
+Las baterías A, B, C, E y F son automatizables, repetibles y constituyen el criterio de
+aceptación del proyecto; la G acompaña el flujo de trabajo del usuario. Tres precisiones
+sobre su alcance son pertinentes. La batería C existe porque las compuertas definidas por
+matriz son el punto donde la traducción puede perder información ---el traductor no copia la
+matriz, emite una \emph{descomposición equivalente}--- y una equivalencia de texto no basta:
+la batería reconstruye la unitaria a partir del cuerpo OpenQASM realmente emitido y la
+contrasta con la matriz de origen y con un camino de descomposición independiente, de modo que
+el residuo observado es el redondeo con el que la propia herramienta de origen serializa las
+matrices y no una pérdida de fidelidad. La batería E verifica una propiedad que las
+anteriores no cubren: el usuario puede materializar el circuito mediante el parser nativo de
+cada ecosistema o mediante el script migrado, y ambas rutas deben describirlo de igual
+modo, lo que exige canonicalizar las representaciones equivalentes que cada SDK ofrece
+para la fase y para las compuertas controladas. Finalmente, la batería D cubre un subconjunto
+del corpus: las post-selecciones nativas de Quirk no son unitarias, de modo que la
+equivalencia unitaria no está definida para ellas y quedan fuera de la comparación, con un
+veredicto explícito ---no comprobado--- en la API de biblioteca y con el incidente registrado
+en la etapa ZX del pipeline, en lugar de un falso negativo.
+
 
 \subsection{Escalabilidad}
 
@@ -482,12 +548,46 @@ contra una salida fija es estable a lo largo del tiempo.
 La batería de pruebas del repositorio ejercita los modos de entrada individual y por lotes,
 circuitos canónicos (estados de Bell, compuertas de Toffoli, compuertas personalizadas
 simples y anidadas), el desplazamiento de índices y la opción de preservación o expansión de
-compuertas. La verificación semántica por cálculo ZX se ejecuta sobre las colecciones de
-algoritmos de prueba, que abarcan algoritmos principales, variantes populares y diseños
-específicos de la transformada cuántica de Fourier y su inversa. El flujo completo ---
-incluidas la generación de imágenes, la comparación visual, los grafos ZX y la migración a
-proveedores--- se ejecuta de extremo a extremo tanto desde la línea de comandos como desde el
-cuaderno, sin intervención manual.
+compuertas. Concretamente, la suite reúne \textbf{114 pruebas en nueve archivos}: pipeline y
+línea de órdenes, contrato de la API de biblioteca (tanto en su forma serializable como en la
+forma que devuelve objetos nativos de cada ecosistema), convención de orden de qubits
+verificada en los tres destinos, fidelidad de las compuertas definidas por matriz,
+sondas de control de eje \emph{X}/\emph{Y} y post-selecciones, canonicidad de la
+transformada de Fourier y normalización de URLs de Quirk.
+
+La verificación semántica por cálculo ZX se ejecuta sobre las colecciones de algoritmos de
+prueba, que abarcan algoritmos principales, variantes populares y diseños específicos de la
+transformada cuántica de Fourier y su inversa. El flujo completo ---incluidas la generación de
+imágenes, la comparación visual, los grafos ZX y la migración a proveedores--- se ejecuta de
+extremo a extremo tanto desde la línea de órdenes como desde el cuaderno, sin intervención
+manual: sobre el corpus principal produce 39 archivos OpenQASM, 39 capturas del circuito
+original, 39 diagramas, 39 comparaciones lado a lado y 39 scripts migrados, sin errores por
+etapa. La única falla conocida y preexistente es una aserción sobre la idempotencia de la
+canonicalización de URLs, ajena al flujo de traducción.
+
+Sobre el corpus completo ---134 algoritmos en seis registros, con las tres etapas de
+verificación simultáneas--- la corrida produce 134 archivos OpenQASM, 134 capturas del
+circuito original, 134 diagramas, 134 comparaciones lado a lado y 402 scripts migrados, con
+las 134 imágenes de la herramienta de composición de IBM. La verificación semántica por
+cálculo ZX compara 77 de esos circuitos y obtiene \emph{equivalencia} en los 77; los 57
+restantes no admiten comparación ---post-selecciones no unitarias, compuertas escalares
+globales y una matriz de cuatro por cuatro--- y quedan registrados como incidencias de esa
+etapa, sin afectar a la traducción. El informe de equivalencia no omite esos casos: lista
+una fila por circuito analizado, con el motivo de cada no comparabilidad y una leyenda que
+explica el significado de cada veredicto, de modo que la ausencia de una prueba de
+equivalencia sea siempre visible y explicada. La propia corrida E2E detectó un defecto real
+que la suite unitaria no podía ver: en la consola de Windows, los símbolos del mensaje de
+error de la etapa ZX no son codificables y abortaban el informe de equivalencia; la
+impresión se hace ahora a prueba de codificación y la corrección queda congelada con
+pruebas de regresión.
+
+Los límites de la validación son explícitos: la equivalencia se establece salvo fase global;
+la verificación ZX puede resultar intratable en circuitos con muchas compuertas
+multi-controladas, de lo que resulta un veredicto de \emph{no comprobado} con límite de
+tiempo; las post-selecciones, por no ser unitarias, quedan fuera de la comparación
+semántica; y la confirmación final frente a un dispositivo real corresponde al proveedor, no
+al traductor.
+
 
 % ===========================================================================
 \section{Migración a ecosistemas destino}

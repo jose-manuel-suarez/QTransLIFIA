@@ -1,13 +1,16 @@
 """Lógica específica de AWS Braket: cargador nativo y generador de scripts.
 
-El parser nativo de Braket no resuelve ``include "stdgates.inc"`` en disco (sus
-gates estándar ya están soportados por el SDK), por lo que la línea se elimina
-antes de ``Circuit.from_ir``.
+El parser nativo de Braket (``Circuit.from_ir``) es un intérprete de OpenQASM
+propio, no un parser completo: reconoce un subconjunto de compuertas. Antes de
+``Circuit.from_ir`` el OpenQASM se normaliza con ``_normalize_for_braket``, que
+elimina los ``include "stdgates.inc"``/``"qelib1.inc"`` (que el parser nativo no
+resuelve en disco, pues sus compuertas estándar ya están soportadas por el SDK)
+y traduce las compuertas que Braket no define a sus equivalentes exactos.
 """
 
 import re
 
-from .qutils import (
+from .qasm_utils import (
     _angle_to_expr,
     _sanitize_gate_name,
     _unquote_parameters,
@@ -17,6 +20,116 @@ from .qutils import (
 # Include de librería estándar que el parser nativo de Braket no resuelve en disco
 # (sus gates estándar ya están soportados por el SDK, así que la línea se elimina).
 _STD_INCLUDE_RE = re.compile(r'^\s*include\s+"(?:stdgates\.inc|qelib1\.inc)"\s*;\s*$', re.I | re.M)
+
+
+def _split_arguments(text):
+    """Separa los argumentos de una llamada separando por comas de primer nivel.
+
+    Parámetros:
+        - text (str): contenido entre paréntesis (sin los paréntesis).
+
+    Retorna:
+        - list[str]: argumentos normalizados (sin espacios sobrantes).
+    """
+    arguments = []
+    depth = 0
+    current = ''
+    for character in text:
+        if character == '(':
+            depth += 1
+        elif character == ')':
+            depth -= 1
+        if character == ',' and depth == 0:
+            arguments.append(current.strip())
+            current = ''
+        else:
+            current += character
+    if current.strip():
+        arguments.append(current.strip())
+    return arguments
+
+
+def _rewrite_calls(text, name, build):
+    """Reescribe las llamadas ``name(argumentos)`` de un código OpenQASM.
+
+    Parámetros:
+        - text (str): código OpenQASM.
+        - name (str): nombre de la compuerta a reescribir.
+        - build (callable): recibe la lista de argumentos y devuelve el texto
+          sustituto, o ``None`` para dejar la llamada intacta.
+
+    Retorna:
+        - str: el código con las llamadas reescritas.
+    """
+    pattern = re.compile(rf'(?<![\w.]){re.escape(name)}\s*\(')
+    pieces = []
+    index = 0
+    while True:
+        match = pattern.search(text, index)
+        if match is None:
+            pieces.append(text[index:])
+            break
+        open_paren = text.index('(', match.start(), match.end())
+        depth = 0
+        close_paren = None
+        for position in range(open_paren, len(text)):
+            character = text[position]
+            if character == '(':
+                depth += 1
+            elif character == ')':
+                depth -= 1
+                if depth == 0:
+                    close_paren = position
+                    break
+        if close_paren is None:
+            pieces.append(text[index:])
+            break
+        arguments = _split_arguments(text[open_paren + 1:close_paren])
+        replacement = build(arguments)
+        pieces.append(text[index:match.start()])
+        pieces.append(
+            text[match.start():close_paren + 1] if replacement is None else replacement
+        )
+        index = close_paren + 1
+    return ''.join(pieces)
+
+
+def _normalize_for_braket(qasm_str):
+    """Adapta el OpenQASM al subconjunto de compuertas que entiende Braket.
+
+    Traducciones aplicadas (todas equivalencias exactas):
+
+    - ``p(theta)`` → ``U(0, theta, 0)``: la puerta de fase de OpenQASM es
+      ``diag(1, e^{i·theta})`` y ``U(0, phi, 0)`` es esa misma matriz.
+    - ``cx a, b`` → ``cnot a, b`` y ``u1/u2/u3`` → ``U(...)``: nombres de
+      OpenQASM 2.0 que Braket no define.
+
+    Los ``include`` de la librería estándar se eliminan (sus compuertas ya
+    están soportadas por el SDK). Las declaraciones ``gate`` se conservan: el
+    parser nativo de Braket las *expande* en línea, por lo que el circuito
+    obtenido es equivalente pero no conserva la estructura de compuerta
+    custom.
+
+    Parámetros:
+        - qasm_str (str): código OpenQASM (2.0 o 3.0).
+
+    Retorna:
+        - str: el código OpenQASM adaptado al parser nativo de Braket.
+    """
+    text = _STD_INCLUDE_RE.sub('', qasm_str)
+    text = _rewrite_calls(
+        text, 'u1', lambda args: f'U(0,0,{args[0]})' if len(args) == 1 else None
+    )
+    text = _rewrite_calls(
+        text, 'u2', lambda args: f'U(pi/2,{args[0]},{args[1]})' if len(args) == 2 else None
+    )
+    text = _rewrite_calls(
+        text, 'u3', lambda args: f'U({args[0]},{args[1]},{args[2]})' if len(args) == 3 else None
+    )
+    text = _rewrite_calls(
+        text, 'p', lambda args: f'U(0,{args[0]},0)' if len(args) == 1 else None
+    )
+    return re.sub(r'(?<![\w.])cx(?=\s)', 'cnot', text)
 
 
 def _braket_python_source(parsed_circuit, preserve_custom_gates=False):
@@ -210,8 +323,9 @@ def _braket_python_source(parsed_circuit, preserve_custom_gates=False):
 def _load_braket_native(qasm_str):
     """Parsea OpenQASM a un Circuit de Braket con su parser nativo.
 
-    Elimina los ``include "stdgates.inc"``/``"qelib1.inc"`` (que el parser nativo
-    no resuelve en disco) antes de llamar a ``Circuit.from_ir``.
+    Normaliza antes el código (ver ``_normalize_for_braket``): elimina los
+    ``include "stdgates.inc"``/``"qelib1.inc"`` y traduce las compuertas que el
+    parser nativo de Braket no define (``p``, ``cx``, ``u1/u2/u3``).
 
     Parámetros:
         - qasm_str (str): código OpenQASM (2.0 o 3.0).
@@ -221,5 +335,5 @@ def _load_braket_native(qasm_str):
     """
     from braket.circuits import Circuit
 
-    return Circuit.from_ir(_STD_INCLUDE_RE.sub('', qasm_str))
+    return Circuit.from_ir(_normalize_for_braket(qasm_str))
 

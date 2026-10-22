@@ -1,0 +1,11 @@
+OPENQASM 3.0;
+include "stdgates.inc";
+
+qreg q[2];
+creg c[2];
+h q[0];
+h q[1];
+// ZeroGate Quirk ('0'): matriz nula idempotente (0·0=0), no unitaria; se omite del circuito.
+// ZeroGate Quirk ('0'): matriz nula idempotente (0·0=0), no unitaria; se omite del circuito.
+c[0] = measure q[0];
+c[1] = measure q[1];

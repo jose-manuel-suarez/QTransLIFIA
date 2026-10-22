@@ -5,7 +5,7 @@ PennyLane no usa parser nativo en este proyecto: ``qml.from_qasm`` exige el plug
 indexados, por lo que el circuito se materializa siempre vía script migrado.
 """
 
-from .qutils import (
+from .qasm_utils import (
     _angle_to_expr,
     _sanitize_gate_name,
     _unquote_parameters,

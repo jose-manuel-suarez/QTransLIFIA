@@ -1,4 +1,6 @@
+import io
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -148,10 +150,57 @@ class QTransPipelineTests(unittest.TestCase):
         self.assertTrue((self.qasm_dir / '1__Bell_v3.0.txt').is_file())
         self.assertTrue((self.qasm_dir / 'popular_1__Popular_Bell_v3.0.txt').is_file())
 
+    def test_batch_mode_with_empty_inputs_processes_all_json(self):
+        self.write_algorithms('algorithms.json', '1. Bell')
+        self.write_algorithms('other.json', '2. Other')
+
+        summary = self.run_case(
+            input_mode='batch',
+            input_file='',
+            input_files=['', '   '],
+            **DISABLED_STAGES,
+        )
+
+        self.assertEqual(summary['files_processed'], 2)
+        self.assertEqual(summary['algorithms_processed'], 2)
+        self.assertTrue((self.qasm_dir / '1__Bell_v3.0.txt').is_file())
+        self.assertTrue((self.qasm_dir / '2__Other_v3.0.txt').is_file())
+
+    def test_batch_mode_ignores_blank_entries_and_keeps_selection(self):
+        self.write_algorithms('algorithms.json', '1. Bell')
+        self.write_algorithms('other.json', '2. Ignored')
+
+        summary = self.run_case(
+            input_mode='batch',
+            input_files=['', 'algorithms.json'],
+            **DISABLED_STAGES,
+        )
+
+        self.assertEqual(summary['files_processed'], 1)
+        self.assertTrue((self.qasm_dir / '1__Bell_v3.0.txt').is_file())
+        self.assertFalse((self.qasm_dir / '2__Ignored_v3.0.txt').exists())
+
+    def test_batch_mode_rejects_non_empty_input_file(self):
+        self.write_algorithms('algorithms.json', '1. Bell')
+
+        with self.assertRaises(ValueError):
+            self.run_case(input_mode='batch', input_file='algorithms.json')
+
+    def test_cli_allows_empty_input_files_flag(self):
+        from qtrans.core import build_argument_parser
+
+        parser = build_argument_parser()
+        args = parser.parse_args(['--input-mode', 'batch', '--input-files'])
+        self.assertEqual(args.input_files, [])
+        args = parser.parse_args(['--input-mode', 'batch', '--input-file', ''])
+        self.assertEqual(args.input_file, '')
+
     def test_capture_function_is_called_for_each_algorithm(self):
         self.write_algorithms('algorithms.json', '1. Bell')
 
-        with patch('qtrans.core.capture_quirk_circuit', return_value=True) as capture:
+        with patch(
+            'qtrans.utils.quirk_utils.capture_quirk_circuit', return_value=True
+        ) as capture:
             summary = self.run_case(
                 input_mode='algorithm',
                 input_file='algorithms.json',
@@ -260,6 +309,141 @@ class QTransPipelineTests(unittest.TestCase):
         )
 
         self.assertFalse(summary['preserve_custom_gates'])
+
+    def test_matrix_custom_gates_decompose_to_exact_unitaries(self):
+        import numpy as np
+        from qiskit import qasm3
+        from qiskit.quantum_info import Operator
+
+        half = 0.7071067811865476
+        circuit = {
+            'cols': [['~g2', '~g4'], [1, 1]],
+            'gates': [
+                {'id': '~g2', 'name': 'g2', 'matrix': [[half, half], [half, -half]]},
+                {
+                    'id': '~g4',
+                    'name': 'g4',
+                    'matrix': [
+                        [1, 0, 0, 0],
+                        [0, 1, 0, 0],
+                        [0, 0, 0, 1],
+                        [0, 0, 1, 0],
+                    ],
+                },
+            ],
+        }
+        qasm = quirk_to_qasm(quirk_url(circuit))
+        parsed = qasm3.loads(qasm)
+        wanted = {
+            'g2': np.array([[half, half], [half, -half]], dtype=complex),
+            'g4': np.array(circuit['gates'][1]['matrix'], dtype=complex),
+        }
+        seen = {}
+        for instruction in parsed.data:
+            if instruction.operation.name in wanted:
+                seen[instruction.operation.name] = Operator(
+                    instruction.operation.definition
+                ).data
+        self.assertEqual(set(seen), set(wanted))
+        for name, matrix in wanted.items():
+            np.testing.assert_allclose(seen[name], matrix, atol=1e-7)
+
+
+class RunDirectoryTests(unittest.TestCase):
+    """La carpeta de corrida se resuelve por hora y se reutiliza."""
+
+    def test_default_label_has_hour_resolution(self):
+        from datetime import datetime
+
+        from qtrans import core
+
+        with patch.object(core, 'DEFAULT_RUN_LABEL', None):
+            label = core._run_label()
+        self.assertRegex(label, r'^\d{2}_\d{2}_\d{4}__\d{2}$')
+        self.assertEqual(datetime.now().strftime('%d_%m_%Y__%H'), label)
+
+    def test_two_runs_in_the_same_hour_share_the_directory(self):
+        from qtrans.core import _run_directory
+
+        first = _run_directory(Path("C:/tmp/out"), run_label="DD_MM_YYYY__HH")
+        second = _run_directory(Path("C:/tmp/out"), run_label="DD_MM_YYYY__HH")
+        self.assertEqual(first, second)
+        self.assertTrue(first.name.startswith("run_"))
+
+    def test_reused_directory_clears_previous_artifacts(self):
+        from qtrans.core import (
+            RUN_MIGRATED_SUBDIR,
+            RUN_QASM_SUBDIR,
+            _prepare_run_directory,
+        )
+
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir = Path(temp) / "run_21_10_2026__13"
+            stale_qasm = run_dir / RUN_QASM_SUBDIR / "viejo.txt"
+            stale_script = run_dir / RUN_MIGRATED_SUBDIR / "ibm_qiskit" / "viejo.py"
+            for stale in (stale_qasm, stale_script):
+                stale.parent.mkdir(parents=True, exist_ok=True)
+                stale.write_text("obsoleto", encoding="utf-8")
+            (run_dir / ".qtrans_run").write_text("corrida previa", encoding="utf-8")
+
+            _prepare_run_directory(run_dir, verbose=False)
+            self.assertTrue((run_dir / ".qtrans_run").is_file())
+            self.assertFalse(stale_qasm.exists())
+            self.assertFalse(stale_script.exists())
+
+    def test_foreign_directory_is_not_touched(self):
+        from qtrans.core import _prepare_run_directory
+
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir = Path(temp) / "ajena"
+            keep = run_dir / "dato.txt"
+            keep.parent.mkdir(parents=True)
+            keep.write_text("no borrar", encoding="utf-8")
+
+            _prepare_run_directory(run_dir, verbose=False)
+            self.assertTrue(keep.is_file())
+
+
+class ConsoleEncodingTests(unittest.TestCase):
+    """La salida de consola no debe abortar una etapa por símbolos no codificables.
+
+    La consola de Windows usa ``cp1252``, que no representa ``⟩``, ``⟨`` ni ``†``;
+    antes de la corrección, el mensaje de error de la etapa ZX abortaba la corrida
+    entera con un ``UnicodeEncodeError``.
+    """
+
+    def _captured_stdout(self, encoding):
+        buffer = io.BytesIO()
+        stream = io.TextIOWrapper(buffer, encoding=encoding, errors="strict")
+        return buffer, stream
+
+    def test_safe_print_survives_non_encodable_characters(self):
+        from qtrans.utils.pipeline_utils import safe_print
+
+        buffer, stream = self._captured_stdout("cp1252")
+        with patch.object(sys, "stdout", stream):
+            safe_print("Compuerta Quirk no soportada: |+⟩⟨+|")
+            stream.flush()
+        self.assertIn("?", buffer.getvalue().decode("cp1252"))
+
+    def test_safe_print_keeps_text_on_utf8_console(self):
+        from qtrans.utils.pipeline_utils import safe_print
+
+        buffer, stream = self._captured_stdout("utf-8")
+        with patch.object(sys, "stdout", stream):
+            safe_print("dagger †")
+            stream.flush()
+        self.assertIn("dagger †", buffer.getvalue().decode("utf-8"))
+
+    def test_configure_console_encoding_is_idempotent(self):
+        from qtrans.core import _configure_console_encoding
+
+        original = sys.stdout
+        try:
+            _configure_console_encoding()
+            _configure_console_encoding()
+        finally:
+            sys.stdout = original
 
 
 if __name__ == '__main__':

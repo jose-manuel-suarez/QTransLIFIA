@@ -9,10 +9,10 @@ El proyecto ofrece **dos formas de ejecución**, independientes entre sí pero c
 
 | Modo | Punto de entrada | Entrada (default) | Salida (default) | Recomendado para |
 | --- | --- | --- | --- | --- |
-| **Librería Python** | `qtrans` (paquete: CLI + API) | `input/` | `output/run_DD_MM_YYYY__HH_MM/` | Automatización, scripts, integración en otros flujos |
+| **Librería Python** | `qtrans` (paquete: CLI + API) | `input/` | `output/run_DD_MM_YYYY__HH/` | Automatización, scripts, integración en otros flujos |
 | **Cuaderno Jupyter** | `notebooks/QTrans.ipynb` | `input/` | `output/run_DD_MM_YYYY__HH/` | Exploración, visualización y demostraciones |
 
-> En **ambos modos** `input/` y `output/` se resuelven en la **raíz del proyecto**. El cuaderno lo hace a partir de su propia ubicación (`qtrans/utils/qutils.py`), por lo que funciona aunque se ejecute desde otra carpeta.
+> En **ambos modos** `input/` y `output/` se resuelven en la **raíz del proyecto**. El cuaderno lo hace a partir de su propia ubicación (`qtrans/core.py`), por lo que funciona aunque se ejecute desde otra carpeta.
 
 Ambos modos comparten: lectura de JSON con URLs de Quirk, traducción a OpenQASM como lenguaje representacional intermedio, visualización (mediante capturas PNG, diagramas, comparaciones), grafos ZX y generación de scripts migrados.
 
@@ -33,17 +33,33 @@ Las tres vías de ejecución —**API de librería** (`translate_circuit`), **CL
 │   ├── core.py                           # Pipeline, CLI y API del pipeline
 │   └── utils/
 │       ├── __init__.py
-│       ├── qutils.py                     # Traducción Quirk/OpenQASM, proveedores y migración
+│       ├── qutils.py                     # Fachada de compatibilidad (reexporta todo)
+│       ├── qasm_utils.py                 # Utilidades de OpenQASM (tablas, ángulos, versiones)
+│       ├── quirk_utils.py                # Traducción Quirk/OpenQASM, capturas y comparación
+│       ├── provider_utils.py             # Registro de proveedores y dispatch de migración
+│       ├── qiskit_utils.py               # Qiskit (IBM): parser, diagramas y scripts
+│       ├── braket_utils.py               # AWS Braket
+│       ├── pennylane_utils.py            # Xanadu PennyLane
 │       ├── zx_utils.py                   # Grafos ZX (PyZX) desde Quirk y OpenQASM
 │       ├── url_utils.py                  # Parseo/encodeo de URLs Quirk + extracción Postman
 │       ├── main.py
 │       └── cleanup_outputs.py            # Limpieza de las corridas de salida
 ├── test/                                 # Directorio de pruebas funcionales
 │   ├── test_qtrans.py                    # Pruebas del pipeline/CLI
-│   ├── test_qasm.py                      # Pruebas de traducción OpenQASM
+│   ├── test_qasm.py                      # Pruebas de traducción OpenQASM (script manual)
 │   ├── test_translate.py                 # Pruebas del contrato de la API translate_circuit
+│   ├── test_translate_circuits.py        # Pruebas de la API de objetos translate_circuits
+│   ├── test_translate_lib.py             # Ejemplo imprimible de translate_circuit (script manual)
 │   ├── test_providers.py                 # Pruebas de migración por proveedor
-│   └── test_endianness.py                # Pruebas de convención de endianness
+│   ├── test_matrix_customs.py            # Pruebas de las compuertas custom con 'matrix'
+│   ├── test_endianness.py                # Pruebas de convención de endianness
+│   ├── test_xy_probes.py                 # X/Y Probes y post-selecciones de Quirk
+│   ├── test_qft_canonical.py             # Canonicidad de QFT†n y regresión sobre input/
+│   └── test_url_utils.py                 # Normalización y canonicalización de URLs
+├── tools/                                # Baterías de verificación ejecutables
+│   ├── check_static.py                   # Análisis estático (AST): nombres no definidos e imports muertos
+│   ├── verify_matrix_gates.py            # Fidelidad numérica de las compuertas custom con 'matrix'
+│   └── verify_backend_equivalence.py     # Equivalencia entre el parser nativo y el script migrado
 ├── doc/                                  # Documentación QSE y paper (qtrans.tex)
 ├── pyproject.toml                        # Empaquetado (pip install)
 ├── requirements.txt                      # Librerías requeridas
@@ -54,8 +70,8 @@ Las tres vías de ejecución —**API de librería** (`translate_circuit`), **CL
 
 En **ambos modos** todas las salidas se agrupan bajo un único directorio de corrida en la **raíz del proyecto** (`output/`), donde `<estampa_fecha_hora>` codifica la fecha y la hora de inicio. La única diferencia entre modos es el formato de la estampa:
 
-- **Librería/CLI** → `output/run_DD_MM_YYYY__HH_MM/` (fecha y hora **con minutos**, p. ej. `run_10_10_2026__13_45`), configurable con `QTRANS_OUTPUT_DIR`. **Cada ejecución crea su propio directorio**, por lo que en `output/` solo quedan carpetas `run_*` (una por corrida).
-- **Cuaderno** → `output/run_DD_MM_YYYY__HH/` (fecha y hora **sin minutos**). El cuaderno resuelve la raíz del proyecto a partir de su propia ubicación, por lo que **siempre** escribe en `output/` aunque se ejecute desde otra carpeta.
+- **Librería/CLI** → `output/run_DD_MM_YYYY__HH/` (fecha y hora **con hora, sin minutos**, p. ej. `run_10_10_2026__13`), configurable con `QTRANS_OUTPUT_DIR`. La resolución es **por hora**: dos ejecuciones dentro de la misma hora reutilizan la misma carpeta y **sobrescriben** sus archivos (los artefactos de la corrida previa se regeneran), de modo que en `output/` no se acumulan carpetas `run_*`.
+- **Cuaderno** → `output/run_DD_MM_YYYY__HH/` (misma resolución por hora). El cuaderno resuelve la raíz del proyecto a partir de su propia ubicación, por lo que **siempre** escribe en `output/` aunque se ejecute desde otra carpeta.
 
 Las entradas también viven en la raíz del proyecto (`input/`) en ambos modos.
 
@@ -152,7 +168,6 @@ QTRANS_QASM_VERSION=3.0
 QTRANS_ZX_TIME=0.5
 QTRANS_SHOTS=1000
 QTRANS_CAPTURE_TIMEOUT=15
-QTRANS_PROVIDERS=qiskit
 QTRANS_TARGET_PROVIDERS=qiskit
 QTRANS_PRESERVE_CUSTOM_GATES=true
 ```
@@ -177,8 +192,7 @@ QTRANS_PRESERVE_CUSTOM_GATES=true
 | `QTRANS_ZX_TIMEOUT` | Límite en segundos por comparación/reducción ZX; al excederse se marca `NO DEMOSTRADO (timeout)` en lugar de colgar el pipeline. Entero positivo. | `120` |
 | `QTRANS_SHOTS` | Número de shots para los QNodes PennyLane con mediciones. Entero positivo. | `1000` |
 | `QTRANS_CAPTURE_TIMEOUT` | Timeout de carga/captura del navegador Selenium, en segundos. Entero positivo. | `15` |
-| `QTRANS_PROVIDERS` | Lista separada por comas de proveedores migrados: `qiskit`, `braket`, `pennylane` (alias: `ibm`, `aws`, `xanadu`). Toma el cuaderno y el pipeline; los scripts se generan en `migrated_circuits/<prefijo>/` (`ibm_qiskit`, `aws_braket`, `xanadu_pennylane`). | `qiskit` |
-| `QTRANS_TARGET_PROVIDERS` | Clave legada de proveedores: se usa solo si `QTRANS_PROVIDERS` no está definida. | `qiskit` |
+| `QTRANS_TARGET_PROVIDERS` | Lista separada por comas de proveedores migrados: `qiskit`, `pennylane`, `braket` (alias: `ibm`, `aws`, `xanadu`). Toma el cuaderno y el pipeline; los scripts se generan en `migrated_circuits/<prefijo>/` (`ibm_qiskit`, `xanadu_pennylane`, `aws_braket`). | `qiskit` |
 | `QTRANS_PRESERVE_CUSTOM_GATES` | Si es `true`, las compuertas custom y las nativas de Quirk (p. ej. `QFT`) se conservan como funciones locales en los scripts migrados; si es `false`, se expanden en línea. Booleano. | `true` |
 
 ---
@@ -446,7 +460,7 @@ Resumen de generaciones activables por parámetro:
 | `QTRANS_GENERATE_COMPARISON` | `true/false` | Informes `.md` en `imgs/visual_comparations/` |
 | `QTRANS_GENERATE_ZX` | `true/false` | Grafos ZX y análisis en `ZXCalculus/` |
 | `QTRANS_GENERATE_ZX_IMAGES` | `true/false` | SVG de grafos ZX en `ZXCalculus/graphs/` |
-| `QTRANS_PROVIDERS` | `qiskit`, `braket`, `pennylane` | Scripts Python en `migrated_circuits/ibm_qiskit/`, `migrated_circuits/aws_braket/` o `migrated_circuits/xanadu_pennylane/` (clave legada: `QTRANS_TARGET_PROVIDERS`) |
+| `QTRANS_TARGET_PROVIDERS` | `qiskit`, `pennylane`, `braket` | Scripts Python en `migrated_circuits/ibm_qiskit/`, `migrated_circuits/xanadu_pennylane/` o `migrated_circuits/aws_braket/` |
 | `QTRANS_PRESERVE_CUSTOM_GATES` | `true/false` | Funciones locales para compuertas custom/nativas en los scripts migrados |
 | `QTRANS_GENERATE_COMPOSER_IMAGES` | `true/false` | PNG estilo IBM Composer en `migrated_circuits/ibm_qiskit/imgs/` |
 
@@ -477,7 +491,19 @@ La colección de Postman está en `postman/Quirk_Translator_IBM_AWS.postman_coll
 
 ## Pruebas funcionales y de integración
 
-Ejecuta la suite del proyecto con:
+El proyecto despliega **siete baterías de comprobación**; el detalle de cada una (ámbito,
+procedimiento, garantía y límites) está en
+[**doc/QTransLIFIA_Testing.md**](doc/QTransLIFIA_Testing.md).
+
+| Batería | Procedimiento | Garantía |
+| --- | --- | --- |
+| A. Análisis estático | `python tools/check_static.py qtrans test tools` | Integridad referencial del paquete y ausencia de imports muertos |
+| B. Suite unitaria (114 pruebas) | `python -m unittest discover -s test -p "test_*.py" -v` | Contrato funcional del traductor, de la API y del pipeline |
+| C. Fidelidad numérica de matrices | `python tools/verify_matrix_gates.py` | Residuo ≤ `1e-6` entre la matriz de origen y la descomposición emitida |
+| D. Equivalencia ZX | `QTRANS_GENERATE_ZX=true python -m qtrans ...` | Veredicto de equivalencia unitaria por circuito |
+| E. Equivalencia entre backends | `python tools/verify_backend_equivalence.py` | La ruta nativa del parser y la ruta del script migrado coinciden |
+| F. Corrida extremo a extremo | `python -m qtrans --input-mode batch --input-file ""` | Artefactos completos y cero errores por etapa |
+| G. Comprobaciones manuales | `python test/test_qasm.py`, cuadernos | Evidencia cualitativa y ejemplos de uso |
 
 ```bash
 python -m unittest discover -s test -p "test_*.py" -v

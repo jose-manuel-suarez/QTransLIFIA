@@ -1,16 +1,27 @@
-"""Lógica específica de Qiskit (IBM): cargador nativo y generador de scripts.
+"""Lógica específica de Qiskit (IBM): parser nativo, dibujo y generador de scripts.
 
-El dispatch público sigue en ``utils.qutils.provider_python_source``; este módulo
-expone el parser nativo (``_load_qiskit_native``) y la generación de código Qiskit
-(``_qiskit_python_source``) junto a sus helpers (``_native_gate_for_u``).
+Reúne todo lo que hace uso del SDK de Qiskit:
+
+- el parser nativo (``_load_qiskit_native``) y la carga de OpenQASM 2.0/3.0
+  (``load_qasm_circuit``);
+- el dibujo de circuitos con matplotlib en estilo Qiskit (``render_qasm_image``),
+  en su variante 'bw' (diagrama OpenQASM) y 'iqp' (estilo IBM Quantum Composer);
+- la generación de código Qiskit (``_qiskit_python_source``) junto a sus helpers
+  (``_native_gate_for_u``).
+
+El dispatch entre proveedores vive en ``utils.provider_utils``; las utilidades
+de OpenQASM compartidas, en ``utils.qasm_utils``.
 """
 
 import re
+from pathlib import Path
 
-from .qutils import (
+from .pipeline_utils import log_stage
+from .qasm_utils import (
     _angle_to_expr,
     _sanitize_gate_name,
     _unquote_parameters,
+    detect_qasm_version,
 )
 
 
@@ -248,4 +259,174 @@ def _load_qiskit_native(qasm_str, qasm_version, fallback=True):
             return loaders['3.0' if qasm_version == '2.0' else '2.0'](qasm_str)
         except Exception:
             raise primary_error
+
+
+def load_qasm_circuit(qasm_str, qasm_version=None):
+    """Carga un circuito Qiskit (``QuantumCircuit``) desde código OpenQASM 2.0 o 3.0.
+
+    Punto único de carga de OpenQASM hacia Qiskit, compartido por la generación de
+    imágenes, la celda de visualización del cuaderno y el pipeline CLI. La versión
+    se determina con ``detect_qasm_version`` (cabecera ``OPENQASM x.y;`` salvo que
+    se fuerce ``qasm_version``); si el parser 3.0 falla se reintenta con el parser
+    2.0 como respaldo.
+
+    Parámetros:
+        - qasm_str (str): código OpenQASM (2.0 o 3.0).
+        - qasm_version (str | None): '2.0' | '3.0' fuerza la versión; si es None se
+          detecta desde la cabecera del código.
+
+    Retorna:
+        - qiskit.QuantumCircuit: circuito cargado.
+
+    Lanza:
+        - ValueError: si ``qasm_str`` está vacío.
+    """
+    from qiskit import QuantumCircuit, qasm2, qasm3
+
+    text = (qasm_str or '').strip()
+    if not text:
+        raise ValueError('El contenido OpenQASM está vacío')
+    version = detect_qasm_version(text, qasm_version)
+    if version == '2.0':
+        return qasm2.loads(text)
+    try:
+        return qasm3.loads(text)
+    except Exception:
+        return QuantumCircuit.from_qasm_str(text)
+
+
+def render_qasm_image(qasm_code, qasm_version=None, style='bw', output_path=None):
+    """Dibuja un circuito OpenQASM con Qiskit (matplotlib) como PNG.
+
+    Punto único de dibujo de circuitos OpenQASM, compartido por las imágenes en
+    base64 de la API de librería y por la generación de archivos del pipeline CLI
+    y del cuaderno.
+
+    Parámetros:
+        - qasm_code (str): código OpenQASM (2.0 o 3.0).
+        - qasm_version (str | None): versión forzada del parser (None = autodetectar).
+        - style (str): estilo de dibujo de Qiskit ('bw' para QASM, 'iqp' para el
+          estilo de IBM Quantum Composer).
+        - output_path (str | Path | None): si se indica, guarda el PNG en esa ruta
+          y devuelve un ``Path``; si es None, devuelve los bytes PNG.
+
+    Retorna:
+        - bytes | pathlib.Path: bytes PNG si ``output_path`` es None; el ``Path``
+          del archivo guardado en caso contrario.
+    """
+    import io
+
+    import matplotlib
+    matplotlib.use('Agg', force=True)
+    import matplotlib.pyplot as plt
+
+    circuit = load_qasm_circuit(qasm_code, qasm_version)
+    figure = None
+    try:
+        figure = circuit.draw(output='mpl', style=style)
+        if output_path is not None:
+            output_path = Path(output_path)
+            figure.savefig(str(output_path), format='png', bbox_inches='tight')
+            return output_path
+        buffer = io.BytesIO()
+        figure.savefig(buffer, format='png', bbox_inches='tight')
+        return buffer.getvalue()
+    finally:
+        if figure is not None:
+            plt.close(figure)
+
+
+def image_qasm_base64(qasm_code, qasm_version=None, style='bw'):
+    """Diagrama PNG en base64 del circuito QASM (estilo Qiskit 'bw' o 'iqp').
+
+    Parámetros:
+        - qasm_code (str): código OpenQASM (2.0 o 3.0).
+        - qasm_version (str | None): versión del código, para elegir el parser.
+        - style (str): estilo de dibujo de Qiskit ('bw', 'iqp').
+
+    Retorna:
+        - str: imagen PNG codificada en base64.
+    """
+    import base64
+
+    return base64.b64encode(
+        render_qasm_image(qasm_code, qasm_version, style)
+    ).decode("ascii")
+
+
+def image_composer_base64(qasm_code, qasm_version=None):
+    """Diagrama PNG en base64 con el estilo de IBM Quantum Composer ('iqp').
+
+    Parámetros:
+        - qasm_code (str): código OpenQASM (2.0 o 3.0).
+        - qasm_version (str | None): versión del código, para elegir el parser.
+
+    Retorna:
+        - str: imagen PNG codificada en base64.
+    """
+    return image_qasm_base64(qasm_code, qasm_version, style='iqp')
+
+
+def generate_qasm_images(records, qasm_images_dir, qasm_version, verbose):
+    """Genera un PNG por circuito con el estilo 'bw' de Qiskit.
+
+    Parámetros:
+        - records (list[dict]): registros de los circuitos (claves ``name`` y
+          ``qasm_source``).
+        - qasm_images_dir (str | Path): carpeta de destino de los PNG.
+        - qasm_version (str): '2.0' o '3.0'.
+        - verbose (bool): muestra el log de cada etapa.
+
+    Retorna:
+        - tuple[list[pathlib.Path], list[tuple[str, Exception]]]: archivos
+          generados y los errores (``(etiqueta, excepción)``).
+    """
+    qasm_images_dir = Path(qasm_images_dir)
+    qasm_images_dir.mkdir(parents=True, exist_ok=True)
+    generated = []
+    errors = []
+    for record in records:
+        image_path = qasm_images_dir / f"{record['name']}.png"
+        try:
+            render_qasm_image(
+                record['qasm_source'], qasm_version, style='bw', output_path=image_path
+            )
+            generated.append(image_path)
+            log_stage(verbose, 'QASM PNG', f'Generado {image_path.name}.')
+        except Exception as exc:
+            errors.append((f"QASM PNG/{record['name']}", exc))
+            print(f"Error generando diagrama QASM {record['name']}: {exc}")
+    return generated, errors
+
+
+def generate_composer_images(records, images_dir, qasm_version, verbose):
+    """Genera un PNG por circuito migrado con el estilo de IBM Quantum Composer.
+
+    Parámetros:
+        - records (list[dict]): registros de los circuitos (claves ``name`` y
+          ``qasm_source``).
+        - images_dir (str | Path): carpeta de destino de los PNG.
+        - qasm_version (str): '2.0' o '3.0'.
+        - verbose (bool): muestra el log de cada etapa.
+
+    Retorna:
+        - tuple[list[pathlib.Path], list[tuple[str, Exception]]]: archivos
+          generados y los errores (``(etiqueta, excepción)``).
+    """
+    images_dir = Path(images_dir)
+    images_dir.mkdir(parents=True, exist_ok=True)
+    generated = []
+    errors = []
+    for record in records:
+        image_path = images_dir / f"{record['name']}.png"
+        try:
+            render_qasm_image(
+                record['qasm_source'], qasm_version, style='iqp', output_path=image_path
+            )
+            generated.append(image_path)
+            log_stage(verbose, 'Composer PNG', f'Generado {image_path.name}.')
+        except Exception as exc:
+            errors.append((f"Composer PNG/{record['name']}", exc))
+            print(f"Error generando imagen Composer {record['name']}: {exc}")
+    return generated, errors
 

@@ -1,4 +1,3 @@
-import os
 import unittest
 
 from qtrans.utils.qutils import (
@@ -6,6 +5,7 @@ from qtrans.utils.qutils import (
     SUPPORTED_PROVIDERS,
     cargar_circuito_qasm,
     detect_qasm_version,
+    load_provider_circuit,
     normalize_provider,
     parse_providers,
     provider_python_source,
@@ -55,7 +55,7 @@ c[1] = measure q[1];
 
 class ProviderConfigTests(unittest.TestCase):
     def test_supported_providers_and_directories(self):
-        self.assertEqual(SUPPORTED_PROVIDERS, ('qiskit', 'braket', 'pennylane'))
+        self.assertEqual(SUPPORTED_PROVIDERS, ('qiskit', 'pennylane', 'braket'))
         self.assertEqual(
             PROVIDER_DIRECTORY,
             {'qiskit': 'ibm_qiskit', 'braket': 'aws_braket', 'pennylane': 'xanadu_pennylane'},
@@ -79,27 +79,43 @@ class ProviderConfigTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_providers('  , ')
 
-    def test_providers_from_env_priority(self):
+    def test_providers_from_env(self):
         def getenv(mapping):
             return mapping.get
 
         self.assertEqual(
-            providers_from_env(getenv({'QTRANS_PROVIDERS': 'braket,ibm'})),
-            ('braket', 'qiskit'),
+            providers_from_env(
+                getenv({'QTRANS_TARGET_PROVIDERS': 'qiskit,braket,pennylane'})
+            ),
+            ('qiskit', 'braket', 'pennylane'),
+        )
+        # Se toleran alias y mayúsculas; el resultado son nombres canónicos.
+        self.assertEqual(
+            providers_from_env(getenv({'QTRANS_TARGET_PROVIDERS': 'IBM, AWS, XANADU'})),
+            ('qiskit', 'braket', 'pennylane'),
         )
         self.assertEqual(
             providers_from_env(getenv({'QTRANS_TARGET_PROVIDERS': 'pennylane'})),
             ('pennylane',),
         )
-        # QTRANS_PROVIDERS tiene prioridad sobre la clave legada.
-        self.assertEqual(
-            providers_from_env(getenv({
-                'QTRANS_PROVIDERS': 'qiskit',
-                'QTRANS_TARGET_PROVIDERS': 'braket',
-            })),
-            ('qiskit',),
-        )
         self.assertEqual(providers_from_env(getenv({})), ('qiskit',))
+        self.assertEqual(providers_from_env(getenv({}), default='braket'), ('braket',))
+
+    def test_providers_from_env_ignores_obsolete_qtrans_providers(self):
+        def getenv(mapping):
+            return mapping.get
+
+        # QTRANS_PROVIDERS quedó obsoleta: no decide los proveedores, sólo avisa.
+        with self.assertWarns(UserWarning):
+            self.assertEqual(providers_from_env(getenv({'QTRANS_PROVIDERS': 'braket'})), ('qiskit',))
+        with self.assertWarns(UserWarning):
+            self.assertEqual(
+                providers_from_env(getenv({
+                    'QTRANS_PROVIDERS': 'braket',
+                    'QTRANS_TARGET_PROVIDERS': 'pennylane',
+                })),
+                ('pennylane',),
+            )
 
     def test_detect_qasm_version(self):
         self.assertEqual(detect_qasm_version(QASM3), '3.0')
@@ -134,13 +150,61 @@ class CargarCircuitoQasmTests(unittest.TestCase):
 
         self.assertIsInstance(cargar_circuito_qasm(QASM3, 'aws'), Circuit)
 
-    def test_braket_falls_back_when_native_parser_fails(self):
-        # La puerta 'p' no está definida en el parser nativo de Braket.
+    def test_braket_native_parser_normalizes_phase_gate(self):
+        # El parser nativo de Braket no define la puerta 'p'; se normaliza a
+        # 'U(0, theta, 0)', que es la misma matriz, así que ya no hace falta
+        # el respaldo por script migrado.
         from braket.circuits import Circuit
 
         circuit = cargar_circuito_qasm(QASM3_PHASE, 'braket')
         self.assertIsInstance(circuit, Circuit)
         self.assertEqual(len(circuit.instructions), 1)
+
+    def test_braket_normalization_translates_unsupported_gates(self):
+        from qtrans.utils.braket_utils import _normalize_for_braket
+
+        normalized = _normalize_for_braket(
+            'OPENQASM 3.0;\ninclude "stdgates.inc";\np(pi/4) q[0];\n'
+            'ctrl @ p(pi/2) q[0], q[1];\ncx q[0], q[1];\n'
+        )
+        self.assertNotIn('include', normalized)
+        self.assertNotIn('p(', normalized)
+        self.assertIn('U(0,pi/4,0)', normalized)
+        self.assertIn('ctrl @ U(0,pi/2,0)', normalized)
+        self.assertIn('cnot', normalized)
+
+    def test_braket_normalization_maps_qasm2_u_gates(self):
+        from qtrans.utils.braket_utils import _normalize_for_braket
+
+        normalized = _normalize_for_braket(
+            'OPENQASM 2.0;\nu1(0.5) q[0];\nu2(0.1,0.2) q[0];\nu3(0.1,0.2,0.3) q[0];\n'
+        )
+        self.assertIn('U(0,0,0.5)', normalized)
+        self.assertIn('U(pi/2,0.1,0.2)', normalized)
+        self.assertIn('U(0.1,0.2,0.3)', normalized)
+
+    def test_braket_normalization_keeps_custom_gate_declarations(self):
+        from qtrans.utils.braket_utils import _normalize_for_braket
+
+        normalized = _normalize_for_braket(
+            'OPENQASM 3.0;\ngate mia a,b {\np(0.5) a;\n}\nqreg q[2];\nmia q[0],q[1];\n'
+        )
+        self.assertIn('gate mia', normalized)
+        self.assertIn('U(0,0.5,0)', normalized)
+
+    def test_load_provider_circuit_uses_provider_native_parser(self):
+        from braket.circuits import Circuit
+        from qiskit import QuantumCircuit
+
+        self.assertIsInstance(load_provider_circuit(QASM3, 'qiskit'), QuantumCircuit)
+        self.assertIsInstance(load_provider_circuit(QASM3, 'braket'), Circuit)
+
+    def test_load_provider_circuit_without_native_uses_migrated_source(self):
+        from qiskit import QuantumCircuit
+
+        circuit = load_provider_circuit(QASM3, 'qiskit', native=False)
+        self.assertIsInstance(circuit, QuantumCircuit)
+        self.assertEqual(circuit.num_qubits, 2)
 
     def test_pennylane_falls_back_to_migrated_source(self):
         import pennylane as qml

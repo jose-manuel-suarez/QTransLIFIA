@@ -21,6 +21,7 @@ Este módulo comprueba:
 
 import io
 import json
+import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
@@ -202,6 +203,56 @@ class ProbeZxTests(unittest.TestCase):
                     self.assertEqual(
                         'no-comprobado', self._zx_result(algorithms[name]['url'])
                     )
+
+
+class ProbeComparisonTableTests(unittest.TestCase):
+    """El informe ZX debe listar todos los circuitos, comparable o no."""
+
+    def _records(self):
+        algorithms = _algorithms()
+        records = []
+        for kind in list(CONTROL_EXPECTATIONS) + list(POSTSELECT_EXPECTATIONS):
+            for size in SIZES:
+                name = _probe_name(kind, size)
+                url = algorithms[name]['url']
+                records.append(
+                    {
+                        'name': name,
+                        'url': url,
+                        'offset': 0,
+                        'qasm_source': quirk_to_qasm(url, 0),
+                    }
+                )
+        return records
+
+    def test_report_lists_every_circuit_with_legend(self):
+        from qtrans.utils import zx_utils
+
+        records = self._records()
+        with tempfile.TemporaryDirectory() as temp:
+            result = zx_utils.run_zx_workflow(
+                records, Path(temp), 0.5, False, False, 60
+            )
+            comparisons = result['comparisons']
+            report = Path(result['comparison_path']).read_text(encoding='utf-8')
+
+        self.assertEqual(len(records), len(comparisons))
+        statuses = [c['Resultado'] for c in comparisons]
+        self.assertEqual(12, sum(1 for s in statuses if s.startswith('EQUIVALENTES')))
+        self.assertEqual(12, sum(1 for s in statuses if s.startswith('NO COMPARABLES')))
+
+        for comparison in comparisons:
+            if comparison['Resultado'].startswith('NO COMPARABLES'):
+                self.assertIn('no soportada', comparison['Motivo'])
+            else:
+                self.assertEqual('', comparison['Motivo'])
+
+        self.assertIn('## Leyenda', report)
+        self.assertIn('| EQUIVALENTES | 12 |', report)
+        self.assertIn('| NO COMPARABLES | 12 |', report)
+        self.assertIn('Motivos de no comparabilidad', report)
+        for comparison in comparisons:
+            self.assertIn(comparison['Nombre algoritmo'], report)
 
 
 if __name__ == '__main__':

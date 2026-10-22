@@ -1,0 +1,18 @@
+OPENQASM 3.0;
+include "stdgates.inc";
+
+qreg q[2];
+creg c[2];
+creg ps[2];  // post-selección: descartar shots con ps != esperado
+h q[0];
+h q[1];
+z q[0];
+z q[1];
+h q[0];
+// Postselect X-On (|->): post-selección (medición), conservar si ps[0] == 1
+ps[0] = measure q[0];
+h q[1];
+// Postselect X-On (|->): post-selección (medición), conservar si ps[1] == 1
+ps[1] = measure q[1];
+c[0] = measure q[0];
+c[1] = measure q[1];

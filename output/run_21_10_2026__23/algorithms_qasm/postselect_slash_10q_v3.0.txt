@@ -1,0 +1,76 @@
+OPENQASM 3.0;
+include "stdgates.inc";
+
+qreg q[10];
+creg c[10];
+creg ps[10];  // post-selección: descartar shots con ps != esperado
+h q[0];
+h q[1];
+h q[2];
+h q[3];
+h q[4];
+h q[5];
+h q[6];
+h q[7];
+h q[8];
+h q[9];
+p(-pi/2) q[0];
+p(-pi/2) q[1];
+p(-pi/2) q[2];
+p(-pi/2) q[3];
+p(-pi/2) q[4];
+p(-pi/2) q[5];
+p(-pi/2) q[6];
+p(-pi/2) q[7];
+p(-pi/2) q[8];
+p(-pi/2) q[9];
+sdg q[0];
+h q[0];
+// Postselect Y-On (|-i>): post-selección (medición), conservar si ps[0] == 1
+ps[0] = measure q[0];
+sdg q[1];
+h q[1];
+// Postselect Y-On (|-i>): post-selección (medición), conservar si ps[1] == 1
+ps[1] = measure q[1];
+sdg q[2];
+h q[2];
+// Postselect Y-On (|-i>): post-selección (medición), conservar si ps[2] == 1
+ps[2] = measure q[2];
+sdg q[3];
+h q[3];
+// Postselect Y-On (|-i>): post-selección (medición), conservar si ps[3] == 1
+ps[3] = measure q[3];
+sdg q[4];
+h q[4];
+// Postselect Y-On (|-i>): post-selección (medición), conservar si ps[4] == 1
+ps[4] = measure q[4];
+sdg q[5];
+h q[5];
+// Postselect Y-On (|-i>): post-selección (medición), conservar si ps[5] == 1
+ps[5] = measure q[5];
+sdg q[6];
+h q[6];
+// Postselect Y-On (|-i>): post-selección (medición), conservar si ps[6] == 1
+ps[6] = measure q[6];
+sdg q[7];
+h q[7];
+// Postselect Y-On (|-i>): post-selección (medición), conservar si ps[7] == 1
+ps[7] = measure q[7];
+sdg q[8];
+h q[8];
+// Postselect Y-On (|-i>): post-selección (medición), conservar si ps[8] == 1
+ps[8] = measure q[8];
+sdg q[9];
+h q[9];
+// Postselect Y-On (|-i>): post-selección (medición), conservar si ps[9] == 1
+ps[9] = measure q[9];
+c[0] = measure q[0];
+c[1] = measure q[1];
+c[2] = measure q[2];
+c[3] = measure q[3];
+c[4] = measure q[4];
+c[5] = measure q[5];
+c[6] = measure q[6];
+c[7] = measure q[7];
+c[8] = measure q[8];
+c[9] = measure q[9];

@@ -57,7 +57,54 @@ QTransLIFIA, en cambio, **transfiere esa abstracción**: mantiene la estructura 
 
 Al preservar las *custom gates*, estas dejan de ser un artefacto puramente visual para convertirse en **entidades trasladables, reutilizables y analizables** fuera de Quirk. Es decir, módulos funcionales e identificables perfectamente reutilizables, afectando positivamente el mantenimiento del software cuántico y su expresividad. Esto eleva el nivel de abstracción del proceso de migración: no se traduce únicamente una secuencia de puertas, sino también la **jerarquía de diseño** con la que fue concebido el algoritmo cuántico por parte del ingeniero.
 
-## 4. Conclusión
+## 4. Estructura de la URL de Quirk y Estrategias de Traducción a OpenQASM
+
+### 4.1 Anatomía de la URL: `cols` y `gates`
+
+La representación canónica de un circuito en Quirk es la URL:
+
+```
+https://algassert.com/quirk#circuit={"cols":[...],"gates":[...]}
+```
+
+- **`cols` (columnas)**: lista de columnas sincrónicas; cada celda de una columna es:
+  - un **string con una compuerta estándar** de Quirk — `H`, `X`, `Z`, `Measure`, `•` (control), `⊖`/`⊕`/`(/)`/`⊗` (sondas de eje X/Y), `X^½`/`Z^t` (rotaciones con ángulo como exponente), `QFT3`/`QFT†3` (QFT nativa), etc.;
+  - un **string `~id`**, que *referencia* una custom gate definida en el campo `gates`;
+  - un entero (`1` o la altura del bloque), que indica un canal inactivo (*idle*) ocupando qubits.
+- **`gates` (banco de definiciones)**: cada entrada tiene un `id` (referenciado como `~id`) y/o un `name`, y se define por **una de tres formas**:
+
+| Forma de definición | Estructura JSON | Ejemplo |
+|---|---|---|
+| **Circuito acotado** | `{"id": "~rvcr", "name": "MultiX", "circuit": {"cols": [["•","•","X","•"]]}}` | compuerta multi-control anidada |
+| **Matriz** | `{"id": "~edqr", "name": "mia", "matrix": [...]}` | unitaria 2×2 o 4×4 con entradas `{"re":..,"im":..}` o strings `"1/sqrt(2)"` |
+| **Ángulos / operación estándar** | `{"id": "~cu10000", "name": "cu1(pi/512)"}` | operación `op(args)` de `stdgates.inc` parametrizada por ángulo |
+
+Un circuito acotado puede, a su vez, referenciar otras custom gates (anidamiento soportado, profundidad ≤ 10) y usar el sufijo `:k` (p. ej. `~abc:1`) para distinguir expansiones de la misma `id` en contextos de columnas distintas.
+
+### 4.2 Estrategias de traducción a OpenQASM
+
+Para cada custom gate, `_build_gate_map` / `_resolve_gate_names` construyen el mapa de definiciones y `append_custom_gates` emite, una sola vez, la declaración `gate nombre(a, b, ...) { ... }` de OpenQASM con todas las definiciones del banco (incluso las no usadas en `cols`). El cuerpo se resuelve en **cadena de estrategias**, en orden de menor a mayor complejidad:
+
+**A. Definición por circuito acotado (`circuit.cols`)**
+Se expande recursivamente columna a columna con la misma maquinaria que el circuito principal (mapeo por columna, controles, altura consciente), anidamiento ≤ 10. La compuerta queda como una declaración `gate` reutilizable y, con `preserve_custom_gates=true`, se conserva como función local en los scripts migrados; si no, se expande en línea.
+
+**B. Definición por matriz: operación única primero (`_resolve_matrix_operation`)**
+Antes de descomponer, se intenta resolver la matriz a **una sola operación** de `stdgates.inc`:
+1. **`name` con forma `op(args)`**: se contrasta contra la tabla de operaciones estándar (`cu1(pi/512)` → `cp`, `op(0.3)` → rotación por ángulo, etc.).
+2. **Fases conocidas**: fases fijas reconocibles (`U(-pi/2, …)` → `p(-pi/2)`, `cu1(θ)` de un qubit → `p(θ)`).
+3. **Matriz diagonal de fase 2×2** (`{{1,0},{0,z}}`) → `p(phase(z))`.
+
+**C. Definición por matriz: descomposición numérica (fallback unitario)**
+Si B no aplica y la matriz es unitaria de dimensión adecuada (`_unitary_matrix_body`; tolerancia 1e-6 sobre Frobenius, con proyección SVD a la unitaria más cercana porque Quirk publica matrices redondeadas ~7 dígitos):
+- **2×2 (1 qubit) → `p` + ZYZ** (`_euler_matrix_body`): toda unitaria 2×2 es `e^{i·g}·rz(β)·ry(γ)·rz(δ)` con `g = phase(det)/2` — el mismo algoritmo ZYZ del pipeline ZX. Como `p` **no** es una fase global (es `diag(1, e^{i·α})`, fase *relativa*), la fase se materializa con la identidad `e^{i·g}·I = p(2g)·rz(−2g)`, que sí es escalar por identidad y conmuta con el resto. Se emite: `p(α); rz(−α); rz(δ); ry(γ); rz(β);` (líneas nulas omitidas, `id` si es casi identidad).
+- **4×4 (2 qubits) → KAK + `U`/`cx`** (`_two_qubit_kak_body`): síntesis de dos qubits de Qiskit (`transpile` a base `['u','cx']`); cada `u` se serializa como la **`U` intrínseca** de OpenQASM 3 (la `u` minúscula de Qiskit no está en `stdgates.inc` y su parser la rechaza) y la fase global del resultado del KAK se emite con la misma identidad `p(2φ); rz(−2φ);`.
+- Si la matriz **no** es unitaria de dimensión 2 o 4, ni `name`/diagonal la resuelven, la traducción falla con un error accionable (no emite QASM inválido).
+
+**D. Casos nativos**: las QFT de Quirk (`QFTn`, `QFTn†` → `QFT†n` canónico) tienen tratamiento propio con declaración `gate QFTn a,b,c {…}` y sus controles (`ctrl @ QFTn …`).
+
+**Convención de bits**: en Quirk el wire superior de un bloque es el **bit menos significativo**, la misma convención de OpenQASM/Qiskit, por lo que las matrices se descomponen sin invertir qubits (el qubit 0 de Qiskit corresponde a la letra `a` de la declaración `gate`). Los nombres se sanitizan para no chocar con palabras reservadas de QASM (`pi` → `pi_gate`, dígitos iniciales → `gate_N`), y el resultado carga con `qasm3.loads`/`qasm2.loads` y produce scripts migrados válidos en los tres ecosistemas.
+
+## 5. Conclusión
 
 QTransLIFIA adopta un enfoque de **traducción semántica con preservación de abstracciones**, en lugar de una mera transliteración sintáctica. La conservación sistemática de las *custom gates* definidas por el usuario, junto con un modelo de análisis estructurado y una clara separación entre dominios, constituyen sus características determinantes. Esto garantiza que la **expresividad algorítmica** del circuito original se mantenga íntegra al migrar hacia OpenQASM y, posteriormente, hacia cualquier ecosistema destino. Además debemos considerar la modularidad de funcionalidad y reutilización inherente cuando se conservan las funcionalidades locales asociadas a la definición de las compuertas definidas por el usuario.
 

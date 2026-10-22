@@ -5,7 +5,7 @@ la fuente Quirk (``quirk_to_zx_graph``) y desde el OpenQASM generado
 (``qasm_to_zx_graph``), más los helpers ``_zx_*`` que las sustentan.
 
 Los helpers compartidos con la traducción Quirk→OpenQASM (``_build_gate_map``,
-``_column_extent``, ``_matrix_to_rows``, ``_qft_token``) viven en ``utils.qutils``
+``_column_extent``, ``_matrix_to_rows``, ``_qft_token``) viven en ``utils.quirk_utils``
 y el parseo de URLs de Quirk (``parse_quirk_url``) en ``utils.url_utils``.
 """
 
@@ -14,9 +14,12 @@ import cmath
 import itertools
 import math
 import re
+import threading
 from fractions import Fraction
+from pathlib import Path
 
-from .qutils import (
+from .pipeline_utils import algorithm_sort_key, log_stage, safe_print
+from .quirk_utils import (
     _CONTROL_GATES,
     _build_gate_map,
     _column_extent,
@@ -742,3 +745,361 @@ def reduce_and_draw_zx_svg(graph, output_path, figsize=None):
     figure.savefig(str(output_path), format='svg')
     plt.close(figure)
     return reduced_graph
+
+
+_ZX_TIMEOUT = object()
+
+
+def zx_run_with_timeout(target, timeout):
+    """Ejecuta ``target`` en un hilo daemon con límite de tiempo.
+
+    Devuelve el valor de retorno si termina antes del timeout, la centinela
+    ``_ZX_TIMEOUT`` si se excede el límite y relanza la excepción del worker si
+    falla. Un hilo que supera el límite queda ejecutándose en segundo plano
+    hasta la salida del proceso, pero no bloquea al pipeline.
+
+    Parámetros:
+        - target (callable): función a ejecutar en el hilo.
+        - timeout (int): límite de tiempo en segundos.
+
+    Retorna:
+        - object: el valor de ``target`` o la centinela ``_ZX_TIMEOUT``.
+
+    Lanza:
+        - Exception: la excepción propagada por el worker, si falla.
+    """
+    outcome = {}
+
+    def worker():
+        try:
+            outcome["ok"] = True
+            outcome["value"] = target()
+        except Exception as exc:  # noqa: BLE001
+            outcome["ok"] = False
+            outcome["error"] = exc
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        return _ZX_TIMEOUT
+    if outcome.get("ok"):
+        return outcome["value"]
+    raise outcome["error"]
+
+
+def zx_compare_once(base_graph, qasm_graph, timeout):
+    """Compara dos grafos ZX con un límite de tiempo.
+
+    La regla de equivalencia vive en ``compare_zx_graphs``; aquí solo se
+    envuelve en un límite de tiempo porque la comparación puede ser
+    computacionalmente intratable en circuitos con muchas compuertas
+    multi-controladas; en ese caso se devuelve un resultado de "no demostrado"
+    por timeout en lugar de colgar el pipeline.
+
+    Parámetros:
+        - base_graph (pyzx.PyZXGraph): grafo construido desde la fuente Quirk.
+        - qasm_graph (pyzx.PyZXGraph): grafo construido desde el OpenQASM.
+        - timeout (int): límite de tiempo en segundos.
+
+    Retorna:
+        - tuple[str, str]: método usado y veredicto de la comparación.
+    """
+    def worker():
+        return compare_zx_graphs(base_graph, qasm_graph)
+
+    result = zx_run_with_timeout(worker, timeout)
+    if result is _ZX_TIMEOUT:
+        return "timeout", f"NO DEMOSTRADO (timeout {timeout}s)"
+    return result
+
+
+ZX_STATUS_LEGEND = {
+    "EQUIVALENTES": (
+        "Los grafos ZX del circuito de Quirk y del OpenQASM generado son "
+        "equivalentes (salvo fase global)."
+    ),
+    "NO EQUIVALENTES": (
+        "Los grafos ZX son distintos: la traducción no conserva la acción "
+        "unitaria del circuito original."
+    ),
+    "NO COMPARABLES": (
+        "No se pudo establecer la equivalencia (el grafo ZX no es construible "
+        "o la comparación no está definida); el motivo figura en la columna "
+        "«Motivo»."
+    ),
+    "NO DEMOSTRADO": (
+        "La comparación excedió el límite de tiempo configurado y no pudo "
+        "completarse."
+    ),
+    "ERROR": (
+        "Excepción durante la comparación; el motivo figura en la columna "
+        "«Motivo»."
+    ),
+}
+
+
+def _md_cell(value):
+    """Escapa un valor para que no rompa una tabla Markdown.
+
+    Parámetros:
+        - value (str | int): valor de la celda.
+
+    Retorna:
+        - str: texto sin saltos de línea y con las barras verticales escapadas.
+    """
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def _zx_status(result):
+    """Extrae el estado normalizado de un veredicto de comparación ZX.
+
+    Parámetros:
+        - result (str): veredicto devuelto por la comparación (p. ej.
+          ``'EQUIVALENTES'`` o ``'NO DEMOSTRADO (timeout 120s)'``).
+
+    Retorna:
+        - str: estado normalizado (clave de :data:`ZX_STATUS_LEGEND`).
+    """
+    text = str(result)
+    for status in ("EQUIVALENTES", "NO EQUIVALENTES", "NO COMPARABLES",
+                   "NO DEMOSTRADO", "ERROR"):
+        if text.startswith(status):
+            return status
+    return text.split(" ", 1)[0]
+
+
+def _zx_qubit_count(record):
+    """Calcula el número de cúbits de un registro para la tabla de comparación.
+
+    Parámetros:
+        - record (dict): registro del circuito (clave ``qasm_source``).
+
+    Retorna:
+        - int | str: número de cúbits si se puede determinar, ``'?'`` si no.
+    """
+    text = str(record.get("qasm_source", ""))
+    for pattern in (r"qubit\s*\[\s*(\d+)\s*\]", r"qreg\s+\w+\s*\[\s*(\d+)\s*\]"):
+        sizes = re.findall(pattern, text)
+        if sizes:
+            return int(sizes[0])
+    return "?"
+
+
+def run_zx_workflow(records, zx_dir, zx_time, generate_images, verbose, zx_timeout):
+    """Ejecuta la fase ZX completa: grafos base/QASM, comparación y SVG.
+
+    Parámetros:
+        - records (list[dict]): registros de los circuitos (claves ``name``,
+          ``url``, ``offset`` y ``qasm_source``).
+        - zx_dir (str | Path): carpeta raíz de la fase ZX.
+        - zx_time (int): límite de tiempo (s) de la construcción de los grafos.
+        - generate_images (bool): genera además los SVG reducidos.
+        - verbose (bool): muestra el log de cada etapa.
+        - zx_timeout (int): límite de tiempo (s) de cada comparación y reducción.
+
+    Retorna:
+        - dict: ``base_graphs``, ``qasm_graphs`` (recuentos), ``comparisons``
+          (lista de dicts), ``comparison_path`` (ruta del Markdown),
+          ``images`` (SVG generados) y ``errors``.
+    """
+    zx_dir = Path(zx_dir)
+    base_dir = zx_dir / "algorithms_base"
+    qasm_dir = zx_dir / "algorithms_qasm"
+    graphs_dir = zx_dir / "graphs"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    qasm_dir.mkdir(parents=True, exist_ok=True)
+    if generate_images:
+        graphs_dir.mkdir(parents=True, exist_ok=True)
+
+    base_graphs = {}
+    qasm_graphs = {}
+    errors = []
+    not_comparable = {}
+    log_stage(
+        verbose,
+        "ZX",
+        f"Iniciando generación de grafos para {len(records)} algoritmos.",
+    )
+    for record in records:
+        name = record["name"]
+        try:
+            base_graph = quirk_to_zx_graph(
+                record["url"], record["offset"], time=zx_time
+            )
+            qasm_graph = qasm_to_zx_graph(record["qasm_source"])
+            base_path = base_dir / f"{name}.json"
+            qasm_path = qasm_dir / f"{name}.json"
+            base_path.write_text(base_graph.to_json(), encoding="utf-8")
+            qasm_path.write_text(qasm_graph.to_json(), encoding="utf-8")
+            base_graphs[name] = base_graph
+            qasm_graphs[name] = qasm_graph
+            log_stage(verbose, "Grafo ZX", f"Generados grafos base/QASM para {name}.")
+        except Exception as exc:
+            errors.append((f"Grafo ZX/{name}", exc))
+            not_comparable[name] = {
+                "Cúbits": _zx_qubit_count(record),
+                "Método": "sin grafo",
+                "Resultado": "NO COMPARABLES",
+                "Motivo": str(exc),
+            }
+            safe_print(f"Error generando grafos ZX para {name}: {exc}")
+
+    comparisons = []
+    log_stage(
+        verbose,
+        "ZX",
+        f"Iniciando comprobación Quirk vs OpenQASM para "
+        f"{len(base_graphs.keys() & qasm_graphs.keys())} circuitos.",
+    )
+    for name in sorted(base_graphs.keys() & qasm_graphs.keys(), key=algorithm_sort_key):
+        base_graph = base_graphs[name]
+        qasm_graph = qasm_graphs[name]
+        base_qubits = base_graph.num_inputs()
+        qasm_qubits = qasm_graph.num_inputs()
+        method = "sin comparar"
+        result = "NO COMPARABLES"
+        reason = "Los grafos no admiten una comparación directa."
+
+        try:
+            method, result = zx_compare_once(
+                base_graph, qasm_graph, zx_timeout
+            )
+            reason = ""
+        except Exception as exc:
+            errors.append((f"Comparación ZX/{name}", exc))
+            result = "ERROR"
+            reason = f"{type(exc).__name__}: {exc}"
+            safe_print(f"Error comparando grafos ZX para {name}: {exc}")
+
+        comparisons.append(
+            {
+                "Nombre algoritmo": name,
+                "Cúbits": base_qubits,
+                "Método": method,
+                "Resultado": result,
+                "Motivo": reason,
+            }
+        )
+        log_stage(
+            verbose,
+            "Comparación ZX",
+            f"Quirk vs OpenQASM de {name}: {result} (método: {method}).",
+        )
+
+    for name in sorted(not_comparable, key=algorithm_sort_key):
+        entry = not_comparable[name]
+        comparisons.append({"Nombre algoritmo": name, **entry})
+        log_stage(
+            verbose,
+            "Comparación ZX",
+            f"Quirk vs OpenQASM de {name}: {entry['Resultado']} "
+            f"(motivo: {entry['Motivo']}).",
+        )
+
+    comparisons.sort(key=lambda c: algorithm_sort_key(c["Nombre algoritmo"]))
+
+    if verbose and comparisons:
+        equivalent = sum(
+            1 for c in comparisons if c["Resultado"].startswith("EQUIVALENTES")
+        )
+        not_demonstrated = sum(
+            1 for c in comparisons if c["Resultado"].startswith("NO DEMOSTRADO")
+        )
+        not_comparable_count = sum(
+            1 for c in comparisons if c["Resultado"].startswith("NO COMPARABLES")
+        )
+        safe_print(
+            f"[Comparación ZX] Grafos reducidos Quirk vs OpenQASM: "
+            f"{equivalent}/{len(comparisons)} circuitos EQUIVALENTES"
+            + (f", {not_demonstrated} NO DEMOSTRADOS" if not_demonstrated else "")
+            + (f", {not_comparable_count} NO COMPARABLES" if not_comparable_count else "")
+            + "."
+        )
+        safe_print(
+            f"[Comparación ZX] Listado de comparaciones ({len(comparisons)}):"
+        )
+        for index, comparison in enumerate(comparisons, start=1):
+            motive = f" — {comparison['Motivo']}" if comparison["Motivo"] else ""
+            safe_print(
+                f"[Comparación ZX] {index:>2}. {comparison['Nombre algoritmo']} "
+                f"({comparison['Cúbits']}q) -> {comparison['Resultado']}{motive}"
+            )
+
+    comparison_path = zx_dir / "comparison_results.md"
+    status_counts = {}
+    reason_counts = {}
+    for comparison in comparisons:
+        status = _zx_status(comparison["Resultado"])
+        status_counts[status] = status_counts.get(status, 0) + 1
+        if comparison["Motivo"]:
+            reason_counts[comparison["Motivo"]] = (
+                reason_counts.get(comparison["Motivo"], 0) + 1
+            )
+    comparable = sum(
+        count for status, count in status_counts.items() if status != "NO COMPARABLES"
+    )
+    markdown_lines = [
+        "# Resultados de equivalencia Quirk vs OpenQASM (ZX-Calculus)",
+        "",
+        f"Total de circuitos analizados: {len(comparisons)} "
+        f"({comparable} comparados, {len(comparisons) - comparable} no comparables).",
+        "",
+        "| Nombre algoritmo | Cúbits | Método | Resultado | Motivo |",
+        "| --- | :-: | --- | --- | --- |",
+    ]
+    for comparison in comparisons:
+        markdown_lines.append(
+            f"| {_md_cell(comparison['Nombre algoritmo'])} | "
+            f"{_md_cell(comparison['Cúbits'])} | "
+            f"{_md_cell(comparison['Método'])} | "
+            f"{_md_cell(comparison['Resultado'])} | "
+            f"{_md_cell(comparison['Motivo'])} |"
+        )
+    markdown_lines += ["", "## Leyenda", ""]
+    markdown_lines += [
+        "| Estado | Circuitos | Significado |",
+        "| --- | :-: | --- |",
+    ]
+    for status, description in ZX_STATUS_LEGEND.items():
+        markdown_lines.append(
+            f"| {status} | {status_counts.get(status, 0)} | {description} |"
+        )
+    if reason_counts:
+        markdown_lines += ["", "### Motivos de no comparabilidad", ""]
+        markdown_lines += ["| Motivo | Circuitos |", "| --- | :-: |"]
+        for reason, count in sorted(
+            reason_counts.items(), key=lambda item: (-item[1], item[0])
+        ):
+            markdown_lines.append(f"| {_md_cell(reason)} | {count} |")
+    comparison_path.write_text("\n".join(markdown_lines) + "\n", encoding="utf-8")
+
+    generated_images = []
+    if generate_images:
+        for name, graph in base_graphs.items():
+            image_path = graphs_dir / f"{name}.svg"
+            try:
+                def render_worker(graph=graph, path=image_path):
+                    return reduce_and_draw_zx_svg(graph, path)
+
+                if zx_run_with_timeout(render_worker, zx_timeout) is _ZX_TIMEOUT:
+                    log_stage(
+                        verbose,
+                        "ZX SVG",
+                        f"Reducción de {name} excedió {zx_timeout}s; se omite el SVG.",
+                    )
+                    continue
+                generated_images.append(image_path)
+                log_stage(verbose, "ZX SVG", f"Generado {image_path.name}.")
+            except Exception as exc:
+                errors.append((f"ZX SVG/{name}", exc))
+                safe_print(f"Error generando SVG ZX para {name}: {exc}")
+
+    return {
+        "base_graphs": len(base_graphs),
+        "qasm_graphs": len(qasm_graphs),
+        "comparisons": comparisons,
+        "comparison_path": comparison_path,
+        "images": generated_images,
+        "errors": errors,
+    }
