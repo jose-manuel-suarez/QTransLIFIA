@@ -2,6 +2,8 @@ import base64
 import json
 import unittest
 
+from qiskit import QuantumCircuit
+
 from qtrans import translate_circuit
 
 
@@ -22,6 +24,7 @@ QUIRK_URL = "https://algassert.com/quirk#circuit=" + json.dumps(
 OUTPUT_KEYS = {
     "qasm",
     "migrated_code",
+    "circuits",
     "zx_calculus_result",
     "circuit_info",
     "custom_gates",
@@ -39,6 +42,7 @@ INPUT_KEYS = {
     "zx",
     "images",
     "comparison",
+    "return_circuit",
 }
 QASM_KEYS = {"code", "version", "lines", "gates"}
 
@@ -73,6 +77,7 @@ class TranslateSingleTests(unittest.TestCase):
         self.assertEqual(3, output["circuit_info"]["n_qubits"])
         self.assertEqual({"n_qubits", "n_cols", "gates"}, set(output["circuit_info"]))
         self.assertEqual({"quirk": None, "qasm": None, "composer": None}, output["img"])
+        self.assertIsNone(output["circuits"])
         self.assertIsNone(output["comparison_doc"])
         self.assertEqual([], output["errors"])
 
@@ -161,6 +166,24 @@ class TranslateSingleTests(unittest.TestCase):
         self.assertIn("[Abrir en Quirk](", output["comparison_doc"])
         self.assertIsNone(output["img"]["composer"])
 
+    def test_return_circuit_returns_native_objects(self):
+        response = translate_circuit(
+            {"input": {"url": QUIRK_URL, "return_circuit": True}}
+        )
+        circuits = response["output"]["circuits"]
+
+        self.assertEqual({"qiskit"}, set(circuits))
+        self.assertIsInstance(circuits["qiskit"], QuantumCircuit)
+        self.assertEqual(3, circuits["qiskit"].num_qubits)
+        # El resto de la respuesta sigue siendo utilizable.
+        self.assertTrue(response["output"]["qasm"]["code"].startswith("OPENQASM 3.0;"))
+
+    def test_return_circuit_rejected_in_batch_mode(self):
+        with self.assertRaises(ValueError):
+            translate_circuit(
+                {"input": {"circuits": [{"url": QUIRK_URL}], "return_circuit": True}}
+            )
+
     def test_invalid_payloads_raise_value_error(self):
         invalid_payloads = (
             {},
@@ -183,6 +206,7 @@ class TranslateSingleTests(unittest.TestCase):
             {"input": {"url": QUIRK_URL, "shots": 0}},
             {"input": {"url": QUIRK_URL, "zx": {"time": 2}}},
             {"input": {"url": QUIRK_URL, "images": "no-objeto"}},
+            {"input": {"url": QUIRK_URL, "return_circuit": "true"}},
             "payload-no-json",
         )
         for payload in invalid_payloads:

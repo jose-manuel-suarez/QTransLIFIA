@@ -366,6 +366,45 @@ def process_json_file(
     }
 
 
+def _json_safe(value):
+    """Convierte rutas, tuplas y estructuras anidadas en tipos serializables a JSON.
+
+    Parámetros:
+        - value: valor de cualquier tipo (dict, list, tuple, Path, str, ...).
+
+    Retorna:
+        - object: copia del valor con ``pathlib.Path`` como ``str`` y tuplas
+        como listas; los demás tipos se devuelven sin cambios.
+    """
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
+def _build_run_report(summary):
+    """Construye el reporte JSON-safe de una corrida (incluye los circuitos OpenQASM).
+
+    Parámetros:
+        - summary (dict): resumen devuelto por ``run_pipeline`` (claves
+          ``algorithms`` con el OpenQASM de cada circuito, ``errors``, etc.).
+
+    Retorna:
+        - dict: copia serializable del resumen; ``errors`` queda como lista de
+        ``{"stage", "message"}`` y todas las rutas como texto.
+    """
+    report = _json_safe(summary)
+    report.pop("json_report", None)
+    report.pop("json_report_path", None)
+    report["errors"] = [
+        {"stage": str(stage), "message": str(exc)} for stage, exc in summary["errors"]
+    ]
+    return report
+
+
 def run_pipeline(
     input_mode=DEFAULT_INPUT_MODE,
     input_file=DEFAULT_INPUT_FILE,
@@ -395,8 +434,18 @@ def run_pipeline(
     generate_composer_images=None,
     generate_zx=None,
     generate_zx_images=None,
+    json_out=None,
+    print_status=True,
 ):
-    """Ejecuta el flujo completo Quirk -> OpenQASM -> migración (por corrida)."""
+    """Ejecuta el flujo completo Quirk -> OpenQASM -> migración (por corrida).
+
+    ``json_out`` ('-' | ruta | None) construye además un reporte JSON-safe
+    (claves ``algorithms`` con el OpenQASM de cada circuito y ``errors`` como
+    ``{"stage", "message"}``): con una ruta lo escribe en disco y con '-'
+    solo lo deja en ``summary['json_report']`` para que la CLI lo imprima.
+    ``print_status`` controla los prints de estado (directorio de la corrida,
+    resumen); la CLI lo desactiva al imprimir JSON en stdout.
+    """
     if input_mode not in {"batch", "algorithm"}:
         raise ValueError("input_mode debe ser 'batch' o 'algorithm'")
     if qasm_version not in {"2.0", "3.0"}:
@@ -497,7 +546,8 @@ def run_pipeline(
             f"Archivos seleccionados: {', '.join(path.name for path in input_files)}",
         )
 
-    print(f"DIRECTORIO DE LA CORRIDA: {run_dir}")
+    if print_status:
+        print(f"DIRECTORIO DE LA CORRIDA: {run_dir}")
     _prepare_run_directory(run_dir, verbose)
     _log(
         verbose,
@@ -529,7 +579,8 @@ def run_pipeline(
             )
         except Exception as exc:
             errors.append((str(input_path), exc))
-            print(f"Error procesando {input_path.name}: {exc}")
+            if print_status:
+                print(f"Error procesando {input_path.name}: {exc}")
             if input_mode == "algorithm":
                 break
 
@@ -621,6 +672,36 @@ def run_pipeline(
         )
         errors.extend(composer_errors)
 
+    qasm_image_by_name = {path.stem: path for path in qasm_images}
+    composer_image_by_name = {path.stem: path for path in composer_images}
+    comparison_doc_by_name = {path.stem: path for path in comparison_docs}
+    migrated_scripts_by_name = {}
+    for script_path in provider_scripts:
+        migrated_scripts_by_name.setdefault(script_path.stem, []).append(script_path)
+    algorithm_reports = []
+    for record in algorithm_records:
+        record_name = record["name"]
+        quirk_capture = quirk_images_dir / f"{record_name}.png"
+        algorithm_reports.append(
+            {
+                "name": record_name,
+                "display_name": record["display_name"],
+                "input_file": record["input_file"].name,
+                "url": record["url"],
+                "offset": record["offset"],
+                "qasm": {
+                    "version": qasm_version,
+                    "path": record["qasm_path"],
+                    "code": record["qasm_source"],
+                },
+                "quirk_capture": quirk_capture if quirk_capture.is_file() else None,
+                "qasm_image": qasm_image_by_name.get(record_name),
+                "comparison_doc": comparison_doc_by_name.get(record_name),
+                "composer_image": composer_image_by_name.get(record_name),
+                "migrated_scripts": sorted(migrated_scripts_by_name.get(record_name, ())),
+            }
+        )
+
     summary = {
         "input_mode": input_mode,
         "qasm_version": qasm_version,
@@ -650,16 +731,30 @@ def run_pipeline(
             "migrated": migrated_dir,
             "composer_images": composer_images_dir,
         },
+        "algorithms": algorithm_reports,
         "errors": errors,
     }
-    print(
-        f"Resumen: {summary['files_processed']} JSON, {summary['algorithms_processed']} algoritmos, "
-        f"{summary['qasm_generated']} QASM, {summary['captures_succeeded']} capturas Quirk, "
-        f"{summary['qasm_images_generated']} diagramas QASM, "
-        f"{summary['composer_images_generated']} imágenes Composer, "
-        f"{summary['provider_scripts_generated']} scripts provider y {len(errors)} errores."
-    )
+    if print_status:
+        print(
+            f"Resumen: {summary['files_processed']} JSON, {summary['algorithms_processed']} algoritmos, "
+            f"{summary['qasm_generated']} QASM, {summary['captures_succeeded']} capturas Quirk, "
+            f"{summary['qasm_images_generated']} diagramas QASM, "
+            f"{summary['composer_images_generated']} imágenes Composer, "
+            f"{summary['provider_scripts_generated']} scripts provider y {len(errors)} errores."
+        )
     _log(verbose, "Salida", f"Scripts migrados en {migrated_dir}.")
+    if json_out is not None:
+        report = _build_run_report(summary)
+        summary["json_report"] = report
+        if json_out != "-":
+            json_path = Path(json_out).expanduser()
+            json_path.parent.mkdir(parents=True, exist_ok=True)
+            json_path.write_text(
+                json.dumps(report, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            summary["json_report_path"] = json_path
+            _log(verbose, "JSON", f"Reporte JSON escrito en {json_path}.")
     return summary
 
 
@@ -679,6 +774,7 @@ _TRANSLATE_INPUT_KEYS = frozenset({
     "zx",
     "images",
     "comparison",
+    "return_circuit",
 })
 _TRANSLATE_CIRCUIT_KEYS = frozenset({"name", "url", "json", "offset"})
 _TRANSLATE_ZX_KEYS = frozenset({"enabled", "time", "timeout"})
@@ -816,11 +912,13 @@ def _normalize_translate_input(input_payload):
         - dict: entrada normalizada; sirve como eco en la respuesta y como
           configuración de ejecución. Siempre contiene ``offset``,
           ``qasm_version``, ``provider`` (lista), ``shots``,
-          ``preserve_custom_gates``, ``zx``, ``images``, ``comparison`` y
-          exactamente uno de ``url`` (circuito único) o ``circuits`` (lote).
+          ``preserve_custom_gates``, ``return_circuit``, ``zx``, ``images``,
+          ``comparison`` y exactamente uno de ``url`` (circuito único) o
+          ``circuits`` (lote).
 
     Lanza:
-        - ValueError: claves desconocidas, falta de circuito, tipos o rangos inválidos.
+        - ValueError: claves desconocidas, falta de circuito, tipos o rangos
+          inválidos; o ``return_circuit`` en modo lote.
     """
     if not isinstance(input_payload, dict):
         raise ValueError('El payload debe tener la clave "input" con un objeto.')
@@ -846,7 +944,16 @@ def _normalize_translate_input(input_payload):
             "input.preserve_custom_gates",
         ),
         "comparison": _validated_bool(input_payload.get("comparison", False), "input.comparison"),
+        "return_circuit": _validated_bool(
+            input_payload.get("return_circuit", False), "input.return_circuit"
+        ),
     }
+    if settings["return_circuit"] and has_batch:
+        raise ValueError(
+            'input.return_circuit solo se admite con "input.url"/"input.json" '
+            "(circuito único); la API de objetos translate_circuits() ya "
+            "devuelve los circuitos cargados por proveedor."
+        )
     if settings["qasm_version"] not in {"2.0", "3.0"}:
         raise ValueError(
             f"input.qasm_version debe ser '2.0' o '3.0': {settings['qasm_version']!r}"
@@ -922,8 +1029,10 @@ def _translate_circuit_entry(name, url, offset, settings):
 
     Ejecuta la traducción a OpenQASM, el conteo de gates, la migración a los
     proveedores pedidos y, si están habilitados, la validación ZX, las
-    imágenes en base64 y el documento de comparación. Los fallos de las
-    etapas opcionales se acumulan en ``errors`` sin interrumpir el resto.
+    imágenes en base64, el documento de comparación y, con
+    ``return_circuit``, la carga del circuito nativo de cada proveedor. Los
+    fallos de las etapas opcionales se acumulan en ``errors`` sin
+    interrumpir el resto.
 
     Parámetros:
         - name (str | None): nombre del circuito (None en modo single).
@@ -932,7 +1041,9 @@ def _translate_circuit_entry(name, url, offset, settings):
         - settings (dict): entrada normalizada (ver ``_normalize_translate_input``).
 
     Retorna:
-        - dict: objeto de salida JSON-serializable del circuito.
+        - dict: objeto de salida del circuito; JSON-serializable salvo los
+        objetos vivos de ``circuits`` cuando ``settings['return_circuit']``
+        es true.
 
     Lanza:
         - excepciones de ``quirk_to_qasm``/``provider_python_source`` si la
@@ -971,6 +1082,22 @@ def _translate_circuit_entry(name, url, offset, settings):
             shots=settings["shots"],
             preserve_custom_gates=settings["preserve_custom_gates"],
         )
+
+    circuits = None
+    if settings["return_circuit"]:
+        circuits = {}
+        for provider in settings["provider"]:
+            try:
+                circuits[provider] = provider_utils.load_provider_circuit(
+                    qasm_code,
+                    provider,
+                    qasm_version=qasm_version,
+                    shots=settings["shots"],
+                    preserve_custom_gates=settings["preserve_custom_gates"],
+                )
+            except Exception as exc:  # noqa: BLE001 — la carga no interrumpe el resto
+                circuits[provider] = None
+                errors.append({"stage": f"circuits.{provider}", "message": str(exc)})
 
     zx_settings = settings["zx"]
     zx_calculus_result = (
@@ -1019,6 +1146,7 @@ def _translate_circuit_entry(name, url, offset, settings):
     output.update({
         "qasm": qasm_block,
         "migrated_code": migrated_code,
+        "circuits": circuits,
         "zx_calculus_result": zx_calculus_result,
         "circuit_info": circuit_info,
         "custom_gates": custom_gates,
@@ -1056,8 +1184,14 @@ def translate_circuit(payload):
               false, capture_timeout: 15}); las imágenes van en base64 en
               ``output.img`` (no se escribe nada en disco).
             - comparison (bool, default false): documento Markdown inline.
+            - return_circuit (bool, default false): **solo con circuito único**
+              (prohibido con ``circuits``; para lotes existe
+              ``translate_circuits``). Añade ``output.circuits`` con el
+              circuito nativo de cada proveedor ya cargado vía su parser
+              (objetos Python vivos, NO serializables a JSON).
 
-    Respuesta (dict serializable a JSON):
+    Respuesta (dict; serializable a JSON salvo ``output.circuits`` cuando
+    ``return_circuit`` es true):
         - input: eco de la entrada normalizada (con defaults resueltos y URLs
           efectivas).
         - output: objeto de salida si es circuito único, o **lista** de
@@ -1075,6 +1209,13 @@ def translate_circuit(payload):
             - migrated_code (dict): código Python por proveedor, con clave
               ``<subcarpeta_proveedor>_code`` (p. ej. ``ibm_qiskit_code``,
               ``aws_braket_code``, ``xanadu_pennylane_code``).
+            - circuits (dict | None): si ``return_circuit=true``, ``{proveedor:
+              objeto nativo}`` — qiskit → ``QuantumCircuit``, braket →
+              ``Circuit``, pennylane → ``QNode`` — obtenido con
+              ``load_provider_circuit`` sobre ``qasm.code`` (parser nativo con
+              respaldo por script). ``null`` si no se pidió; si la carga de un
+              proveedor falla, su valor es ``null`` y el detalle va a
+              ``errors`` con stage ``circuits.<proveedor>``.
             - zx_calculus_result (str | None): 'equivalente' |
               'no-equivalente' | 'no-comprobado'; None si zx.enabled=false.
             - circuit_info (dict): n_qubits, n_cols, gates.
@@ -1252,6 +1393,15 @@ def build_argument_parser():
         help=f"Directorio raíz de las corridas (default: {DEFAULT_OUTPUT_DIR}).",
     )
     parser.add_argument(
+        "--json-out",
+        default=None,
+        help=(
+            "Escribe el reporte de la corrida como JSON en la ruta indicada "
+            "(incluye el código OpenQASM de cada circuito en algorithms[].qasm.code); "
+            "con '-' imprime únicamente el JSON en stdout, silenciando la traza."
+        ),
+    )
+    parser.add_argument(
         "--run-label",
         default=DEFAULT_RUN_LABEL,
         help="Etiqueta de la corrida; por defecto DD_MM_YYYY__HH_MM (fecha y hora con minutos).",
@@ -1417,11 +1567,15 @@ def main(argv=None):
             generate_composer_images=args.generate_composer_images,
             generate_zx=args.generate_zx,
             generate_zx_images=args.generate_zx_images,
-            verbose=args.verbose,
+            verbose=False if args.json_out == "-" else args.verbose,
+            json_out=args.json_out,
+            print_status=args.json_out != "-",
         )
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"Error: {exc}")
         return 1
+    if args.json_out == "-":
+        print(json.dumps(summary["json_report"], indent=2, ensure_ascii=False))
     return 1 if summary["errors"] else 0
 
 

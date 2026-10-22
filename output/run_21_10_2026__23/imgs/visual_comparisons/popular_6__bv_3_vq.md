@@ -1,6 +1,0 @@
-# Comparación: popular_6__bv_3_vq
-
-<table>
-<tr><th>Circuito Quirk</th><th>Circuito OpenQASM</th></tr>
-<tr><td><a href="../circuits_quirk/popular_6__bv_3_vq.png"><img src="../circuits_quirk/popular_6__bv_3_vq.png" alt="popular_6__bv_3_vq Quirk" width="100%"></a></td><td><a href="../circuits_qasm/popular_6__bv_3_vq.png"><img src="../circuits_qasm/popular_6__bv_3_vq.png" alt="popular_6__bv_3_vq OpenQASM" width="100%"></a></td></tr>
-</table>

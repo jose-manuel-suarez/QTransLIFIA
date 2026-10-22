@@ -221,10 +221,8 @@ def load_provider_circuit(qasm_source, provider, qasm_version='3.0', shots=1000,
         - provider (str): nombre o alias del proveedor.
         - qasm_version (str): '2.0' o '3.0'; si es None se detecta de la cabecera.
         - shots (int): disparos (solo PennyLane).
-        - preserve_custom_gates (bool): conserva las puertas custom como funciones
-          locales en el respaldo por script migrado.
-        - native (bool): si False, siempre se materializa el circuito ejecutando
-          el script migrado (sin usar el parser nativo del proveedor).
+        - preserve_custom_gates (bool): conserva las puertas custom como funciones locales en el respaldo por script migrado.
+        - native (bool): si False, siempre se materializa el circuito ejecutando el script migrado (sin usar el parser nativo del proveedor).
 
     Retorna:
         - qiskit -> ``qiskit.QuantumCircuit``; braket -> ``braket.circuits.Circuit``;

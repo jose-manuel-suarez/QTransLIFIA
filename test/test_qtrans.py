@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from qtrans import run_pipeline
+from qtrans import main, run_pipeline
 from qtrans.utils.qutils import (
     provider_python_source,
     quirk_to_qasm,
@@ -347,6 +347,92 @@ class QTransPipelineTests(unittest.TestCase):
         self.assertEqual(set(seen), set(wanted))
         for name, matrix in wanted.items():
             np.testing.assert_allclose(seen[name], matrix, atol=1e-7)
+
+
+class JsonReportTests(unittest.TestCase):
+    """--json-out vuelca un reporte con el circuito OpenQASM de cada algoritmo."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.input_dir = self.root / 'input'
+        self.output_dir = self.root / 'output'
+        self.input_dir.mkdir()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def write_algorithms(self, filename, name):
+        path = self.input_dir / filename
+        path.write_text(
+            json.dumps({name: {'url': QUIRK_URL, 'offset': 0, 'desc': 'test'}}),
+            encoding='utf-8',
+        )
+        return path
+
+    def test_json_out_writes_report_with_circuit(self):
+        self.write_algorithms('algorithms.json', '1. Bell')
+        json_path = self.root / 'report.json'
+
+        summary = run_pipeline(
+            input_mode='algorithm',
+            input_file='algorithms.json',
+            input_dir=self.input_dir,
+            output_dir=self.output_dir,
+            run_label='TEST',
+            input_files=(),
+            qasm_version='3.0',
+            target_providers=('qiskit',),
+            json_out=str(json_path),
+            **DISABLED_STAGES,
+        )
+
+        self.assertEqual(summary['json_report_path'], json_path)
+        report = json.loads(json_path.read_text(encoding='utf-8'))
+        self.assertEqual(report['errors'], [])
+        self.assertEqual(report['algorithms_processed'], 1)
+        self.assertEqual(len(report['algorithms']), 1)
+        algorithm = report['algorithms'][0]
+        self.assertEqual(algorithm['name'], '1__Bell')
+        self.assertEqual(algorithm['qasm']['version'], '3.0')
+        self.assertIn('OPENQASM 3.0;', algorithm['qasm']['code'])
+        self.assertIn('h q[0];', algorithm['qasm']['code'])
+        self.assertEqual(
+            Path(algorithm['qasm']['path']),
+            self.output_dir.resolve()
+            / 'run_TEST'
+            / 'algorithms_qasm'
+            / '1__Bell_v3.0.txt',
+        )
+        # El reporte debe serializarse a JSON sin objetos no serializables.
+        json.dumps(report)
+
+    def test_main_json_out_dash_prints_only_json(self):
+        self.write_algorithms('algorithms.json', '1. Bell')
+
+        buffer = io.StringIO()
+        with patch('sys.stdout', buffer):
+            exit_code = main([
+                '--input-mode', 'algorithm',
+                '--input-file', 'algorithms.json',
+                '--input-dir', str(self.input_dir),
+                '--output-dir', str(self.output_dir),
+                '--run-label', 'TEST',
+                '--json-out', '-',
+                '--no-capture',
+                '--no-qasm-images',
+                '--no-comparison',
+                '--no-composer-images',
+                '--no-zx',
+                '--no-zx-images',
+                # Neutraliza QTRANS_INPUT_FILES del .env (nargs="*" → lista vacía).
+                '--input-files',
+            ])
+
+        self.assertEqual(exit_code, 0)
+        report = json.loads(buffer.getvalue())
+        self.assertEqual(report['algorithms_processed'], 1)
+        self.assertIn('OPENQASM 3.0;', report['algorithms'][0]['qasm']['code'])
 
 
 class RunDirectoryTests(unittest.TestCase):

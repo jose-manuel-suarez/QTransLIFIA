@@ -1,6 +1,0 @@
-# Comparación: popular_34__shor_mod15_mqt
-
-<table>
-<tr><th>Circuito Quirk</th><th>Circuito OpenQASM</th></tr>
-<tr><td><a href="../circuits_quirk/popular_34__shor_mod15_mqt.png"><img src="../circuits_quirk/popular_34__shor_mod15_mqt.png" alt="popular_34__shor_mod15_mqt Quirk" width="100%"></a></td><td><a href="../circuits_qasm/popular_34__shor_mod15_mqt.png"><img src="../circuits_qasm/popular_34__shor_mod15_mqt.png" alt="popular_34__shor_mod15_mqt OpenQASM" width="100%"></a></td></tr>
-</table>
