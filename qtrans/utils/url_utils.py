@@ -233,7 +233,7 @@ def normalize_quirk_url(url):
     return text
 
 
-def encode_quirk_url(url):
+def encode_quirk_url(url, legible=False):
     """Percent-encodea el ``circuit=`` de una URL de Quirk para usarla como ``href``.
 
     Antes de codificar se canoniza la QFT inversa (``QFT<n>†`` → ``QFT†<n>``),
@@ -241,11 +241,20 @@ def encode_quirk_url(url):
     "parse error".  Si el JSON del circuito no es interpretable (por ejemplo,
     una URL pegada con comillas o backslashes de más) se normaliza primero.
 
+    Con ``legible=True`` se imita a Quirk (``src/ui/url.js``): el JSON se deja
+    crudo y sólo se escapa si contiene ``%`` o ``&``, los dos casos que rompen
+    el fragmento (se parte por ``&`` y se decodifica con ``decodeURIComponent``).
+    Sirve para mostrar o pegar la URL en el navegador, donde ``{``/``"`` se leen
+    mucho mejor que ``%7B``/``%22``.  El default escapa todo porque el JSON trae
+    comillas dobles que cerrarían un atributo ``href`` HTML.
+
     Parámetros:
         - url (str): URL de Quirk con ``circuit=<JSON>`` (puede venir sin codificar).
+        - legible (bool): deja el JSON sin escapar cuando es seguro hacerlo.
 
     Retorna:
-        - str: URL con el JSON percent-encodeado; la URL original si el parseo falla.
+        - str: URL con el JSON percent-encodeado (o crudo si ``legible``);
+          la URL original si el parseo falla.
     """
     try:
         circuit_json = unquote(url).split('circuit=')[1]
@@ -257,6 +266,8 @@ def encode_quirk_url(url):
         canonical_json = _canonicalize_circuit_json(circuit_json)
         if canonical_json is not None:
             circuit_json = canonical_json
+        if legible and '%' not in circuit_json and '&' not in circuit_json:
+            return url.split('circuit=')[0] + 'circuit=' + circuit_json
         encoded = quote(circuit_json, safe='')
         return url.split('circuit=')[0] + 'circuit=' + encoded
     except Exception:
