@@ -7,7 +7,7 @@ lee los JSON de entrada, captura los circuitos Quirk, traduce a OpenQASM (versi�
 
 Todas las salidas se agrupan por corrida en ``<output>/run_DD_MM_YYYY__HH``, donde ``<output>`` es el directorio de salida configurado y la etiqueta de la corrida se genera a partir de la fecha y hora actual.
 
-Como librería instalable con pip, expone la función core ``translate_circuit(payload)``: recibe un objeto JSON (dict o cadena) con el grupo ``input`` (circuito como ``url``/``json`` o lote ``circuits``, más ``offset``, ``qasm_version``, ``provider`` y las etapas opcionales) y devuelve ``{"input": ..., "output": ...}``; cada circuito de ``output`` incluye ``qasm`` (``code``, ``version``, ``lines`` y ``gates`` con ``custom``/``native``), ``migrated_code`` (por proveedor), ``zx_calculus_result``, ``circuit_info``, ``custom_gates`` (catálogo exhaustivo de las compuertas custom declaradas, con ``used_in_circuit``), ``img`` (PNG en base64), ``comparison_doc`` y ``errors`` (más ``name`` si es un lote).
+Como librería instalable con pip, expone la función core ``translate_circuit(payload)``: recibe un objeto JSON (dict o cadena) con el grupo ``input`` (circuito como ``url``/``json`` o lote ``circuits``, más ``offset``, ``qasm_version``, ``provider`` y las etapas opcionales) y devuelve ``{"input": ..., "output": ...}``; cada circuito de ``output`` incluye ``qasm`` (``code``, ``version``, ``lines`` y ``gates`` con ``custom``/``native``), ``migrated_code`` (del proveedor configurado), ``zx_calculus_result``, ``circuit_info``, ``custom_gates`` (catálogo exhaustivo de las compuertas custom declaradas, con ``used_in_circuit``), ``img`` (PNG en base64), ``comparison_doc`` y ``errors`` (más ``name`` si es un lote).
 
 Este módulo es el **orquestador**: resuelve la configuración (variables ``QTRANS_*`` de
 ``.env``), la línea de comandos y el flujo por corrida, y delega cada etapa en los
@@ -44,6 +44,7 @@ from .utils import (
 from .utils.provider_utils import (
     PROVIDER_DIRECTORY,
     SUPPORTED_PROVIDERS,
+    normalize_provider,
     parse_providers,
     providers_from_env,
 )
@@ -899,11 +900,36 @@ def _validated_int(value, label, minimum):
     return value
 
 
+def _validated_provider(value):
+    """Valida que ``input.provider`` sea un único proveedor y lo normaliza.
+
+    Parámetros:
+        - value: valor recibido en ``input.provider``.
+
+    Retorna:
+        - str: 'qiskit', 'braket' o 'pennylane'.
+
+    Lanza:
+        - ValueError: si no es una cadena con un único proveedor válido.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(
+            "input.provider debe ser un único proveedor (cadena): "
+            f"{', '.join(SUPPORTED_PROVIDERS)} (alias: ibm, aws, xanadu)."
+        )
+    if "," in value:
+        raise ValueError(
+            "input.provider admite un único proveedor; "
+            f"recibido {value!r}."
+        )
+    return normalize_provider(value)
+
+
 def _normalize_translate_input(input_payload):
     """Valida y normaliza el grupo ``input`` de un payload de ``translate_circuit``.
 
     Resuelve los valores por defecto (QASM_VERSION/shots/etc. desde el entorno),
-    normaliza los proveedores y construye la URL Quirk efectiva de cada circuito.
+    normaliza el proveedor y construye la URL Quirk efectiva de cada circuito.
 
     Parámetros:
         - input_payload (dict): objeto ``input`` del payload.
@@ -911,14 +937,14 @@ def _normalize_translate_input(input_payload):
     Retorna:
         - dict: entrada normalizada; sirve como eco en la respuesta y como
           configuración de ejecución. Siempre contiene ``offset``,
-          ``qasm_version``, ``provider`` (lista), ``shots``,
+          ``qasm_version``, ``provider`` (str), ``shots``,
           ``preserve_custom_gates``, ``return_circuit``, ``zx``, ``images``,
           ``comparison`` y exactamente uno de ``url`` (circuito único) o
           ``circuits`` (lote).
 
     Lanza:
         - ValueError: claves desconocidas, falta de circuito, tipos o rangos
-          inválidos; o ``return_circuit`` en modo lote.
+          inválidos, o más de un proveedor.
     """
     if not isinstance(input_payload, dict):
         raise ValueError('El payload debe tener la clave "input" con un objeto.')
@@ -937,7 +963,7 @@ def _normalize_translate_input(input_payload):
         "qasm_version": str(
             input_payload.get("qasm_version", DEFAULT_QASM_VERSION)
         ).strip(),
-        "provider": list(parse_providers(input_payload.get("provider", "qiskit"))),
+        "provider": _validated_provider(input_payload.get("provider", "qiskit")),
         "shots": _validated_int(input_payload.get("shots", DEFAULT_SHOTS), "input.shots", 1),
         "preserve_custom_gates": _validated_bool(
             input_payload.get("preserve_custom_gates", DEFAULT_PRESERVE_CUSTOM_GATES),
@@ -948,12 +974,6 @@ def _normalize_translate_input(input_payload):
             input_payload.get("return_circuit", False), "input.return_circuit"
         ),
     }
-    if settings["return_circuit"] and has_batch:
-        raise ValueError(
-            'input.return_circuit solo se admite con "input.url"/"input.json" '
-            "(circuito único); la API de objetos translate_circuits() ya "
-            "devuelve los circuitos cargados por proveedor."
-        )
     if settings["qasm_version"] not in {"2.0", "3.0"}:
         raise ValueError(
             f"input.qasm_version debe ser '2.0' o '3.0': {settings['qasm_version']!r}"
@@ -1028,9 +1048,9 @@ def _translate_circuit_entry(name, url, offset, settings):
     """Traduce un circuito Quirk y arma su objeto de salida completo.
 
     Ejecuta la traducción a OpenQASM, el conteo de gates, la migración a los
-    proveedores pedidos y, si están habilitados, la validación ZX, las
+    proveedor elegido y, si están habilitados, la validación ZX, las
     imágenes en base64, el documento de comparación y, con
-    ``return_circuit``, la carga del circuito nativo de cada proveedor. Los
+    ``return_circuit``, la carga del circuito nativo del proveedor. Los
     fallos de las etapas opcionales se acumulan en ``errors`` sin
     interrumpir el resto.
 
@@ -1073,31 +1093,31 @@ def _translate_circuit_entry(name, url, offset, settings):
     }
     custom_gates = quirk_utils.custom_gates_catalog(url)
 
-    migrated_code = {}
-    for provider in settings["provider"]:
-        migrated_code[f"{PROVIDER_DIRECTORY[provider]}_code"] = provider_utils.provider_python_source(
+    provider = settings["provider"]
+    migrated_code = {
+        f"{PROVIDER_DIRECTORY[provider]}_code": provider_utils.provider_python_source(
             qasm_code,
             provider,
             qasm_version=qasm_version,
             shots=settings["shots"],
             preserve_custom_gates=settings["preserve_custom_gates"],
         )
+    }
 
     circuits = None
     if settings["return_circuit"]:
         circuits = {}
-        for provider in settings["provider"]:
-            try:
-                circuits[provider] = provider_utils.load_provider_circuit(
-                    qasm_code,
-                    provider,
-                    qasm_version=qasm_version,
-                    shots=settings["shots"],
-                    preserve_custom_gates=settings["preserve_custom_gates"],
-                )
-            except Exception as exc:  # noqa: BLE001 — la carga no interrumpe el resto
-                circuits[provider] = None
-                errors.append({"stage": f"circuits.{provider}", "message": str(exc)})
+        try:
+            circuits[provider] = provider_utils.load_provider_circuit(
+                qasm_code,
+                provider,
+                qasm_version=qasm_version,
+                shots=settings["shots"],
+                preserve_custom_gates=settings["preserve_custom_gates"],
+            )
+        except Exception as exc:  # noqa: BLE001 — la carga no interrumpe el resto
+            circuits[provider] = None
+            errors.append({"stage": f"circuits.{provider}", "message": str(exc)})
 
     zx_settings = settings["zx"]
     zx_calculus_result = (
@@ -1175,8 +1195,10 @@ def translate_circuit(payload):
             - offset (int >= 0, default 0): desplazamiento de q[i] (global;
               cada entrada de ``circuits`` puede sobreescribirlo).
             - qasm_version (str, default QTRANS_QASM_VERSION o '3.0'): '2.0'|'3.0'.
-            - provider (str | list, default 'qiskit'): alias canónicos
-              ('qiskit'/'ibm', 'braket'/'aws', 'pennylane'/'xanadu').
+            - provider (str, default 'qiskit'): **un único** proveedor,
+              canónico o alias ('qiskit'/'ibm', 'braket'/'aws',
+              'pennylane'/'xanadu'). No admite listas ni varios separados por
+              comas.
             - shots (int >= 1, default QTRANS_SHOTS o 1000).
             - preserve_custom_gates (bool, default QTRANS_PRESERVE_CUSTOM_GATES).
             - zx (object, default {enabled: true, time: 0.5, timeout: 120}).
@@ -1184,18 +1206,18 @@ def translate_circuit(payload):
               false, capture_timeout: 15}); las imágenes van en base64 en
               ``output.img`` (no se escribe nada en disco).
             - comparison (bool, default false): documento Markdown inline.
-            - return_circuit (bool, default false): **solo con circuito único**
-              (prohibido con ``circuits``; para lotes existe
-              ``translate_circuits``). Añade ``output.circuits`` con el
-              circuito nativo de cada proveedor ya cargado vía su parser
-              (objetos Python vivos, NO serializables a JSON).
+            - return_circuit (bool, default false): añade ``output.circuits``
+              con el circuito nativo del proveedor ya cargado vía su parser
+              (objeto Python vivo, NO serializable a JSON). Se admite tanto en
+              circuito único como en lote: en lote, cada objeto de ``output``
+              trae su propio ``circuits``.
 
-    Respuesta (dict; serializable a JSON salvo ``output.circuits`` cuando
-    ``return_circuit`` es true):
+    Respuesta (dict; serializable a JSON salvo los objetos de ``circuits``
+    cuando ``return_circuit`` es true):
         - input: eco de la entrada normalizada (con defaults resueltos y URLs
           efectivas).
         - output: objeto de salida si es circuito único, o **lista** de
-          objetos si se usó ``circuits``. Cada objeto contiene:
+          objetos (uno por URL) si se usó ``circuits``. Cada objeto contiene:
             - name (str): nombre del circuito; **solo** en modo lote (los
               objetos de un circuito único no incluyen esta clave).
             - qasm (dict): bloque del código generado:
@@ -1206,16 +1228,16 @@ def translate_circuit(payload):
                   (operaciones) y ``names`` (nombres únicos, ordenados). Se
                   cuentan sobre el QASM 3.0 previo a la reducción de basis,
                   de modo que el conteo es estable aunque se pida la versión 2.0.
-            - migrated_code (dict): código Python por proveedor, con clave
-              ``<subcarpeta_proveedor>_code`` (p. ej. ``ibm_qiskit_code``,
+            - migrated_code (dict): código Python del proveedor, con una sola
+              clave ``<subcarpeta_proveedor>_code`` (p. ej. ``ibm_qiskit_code``,
               ``aws_braket_code``, ``xanadu_pennylane_code``).
-            - circuits (dict | None): si ``return_circuit=true``, ``{proveedor:
-              objeto nativo}`` — qiskit → ``QuantumCircuit``, braket →
-              ``Circuit``, pennylane → ``QNode`` — obtenido con
+            - circuits (dict | None): si ``return_circuit=true``,
+              ``{proveedor: objeto nativo}`` — qiskit → ``QuantumCircuit``,
+              braket → ``Circuit``, pennylane → ``QNode`` — obtenido con
               ``load_provider_circuit`` sobre ``qasm.code`` (parser nativo con
-              respaldo por script). ``null`` si no se pidió; si la carga de un
-              proveedor falla, su valor es ``null`` y el detalle va a
-              ``errors`` con stage ``circuits.<proveedor>``.
+              respaldo por script). ``null`` si no se pidió; si la carga falla,
+              el valor es ``null`` y el detalle va a ``errors`` con stage
+              ``circuits.<proveedor>``.
             - zx_calculus_result (str | None): 'equivalente' |
               'no-equivalente' | 'no-comprobado'; None si zx.enabled=false.
             - circuit_info (dict): n_qubits, n_cols, gates.
@@ -1271,7 +1293,7 @@ def translate_circuits(payload):
 
     Es la contrapartida de ``translate_circuit`` para uso programático: en vez de
     devolver el OpenQASM y el código Python migrado, devuelve el **circuito
-    nativo de cada proveedor**, listo para ejecutarse.
+    nativo del proveedor configurado**, listo para ejecutarse.
 
     El flujo es: Quirk → OpenQASM (2.0 o 3.0) → ``loads`` del proveedor →
     circuito. Cada proveedor usa su propio parser cuando existe:
@@ -1292,7 +1314,6 @@ def translate_circuits(payload):
           el nombre del circuito es el del JSON de entrada (en modo lote) o
           ``circuit_1`` (circuito único). Los valores son objetos vivos, no
           serializables a JSON.
-
     Parámetros:
         - payload (dict | str): objeto JSON de entrada (dict o cadena).
 
@@ -1326,20 +1347,20 @@ def translate_circuits(payload):
     else:
         entries = [("circuit_1", settings["url"], settings["offset"])]
 
-    circuits = {provider: {} for provider in settings["provider"]}
+    provider = settings["provider"]
+    circuits = {provider: {}}
     for name, url, offset in entries:
         qasm3_source = quirk_utils.quirk_to_qasm(url, offset=offset, qasm_version="3.0")
         qasm_code = (
             qasm3_source if qasm_version == "3.0" else qasm3_to_qasm2(qasm3_source)
         )
-        for provider in settings["provider"]:
-            circuits[provider][name] = provider_utils.load_provider_circuit(
-                qasm_code,
-                provider,
-                qasm_version=qasm_version,
-                shots=settings["shots"],
-                preserve_custom_gates=settings["preserve_custom_gates"],
-            )
+        circuits[provider][name] = provider_utils.load_provider_circuit(
+            qasm_code,
+            provider,
+            qasm_version=qasm_version,
+            shots=settings["shots"],
+            preserve_custom_gates=settings["preserve_custom_gates"],
+        )
 
     return {"input": settings, "circuits": circuits}
 

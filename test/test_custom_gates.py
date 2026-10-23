@@ -67,7 +67,7 @@ def _translate(preserve):
     response = translate_circuit({
         'input': {
             'url': _algorithm_url(),
-            'provider': ['qiskit', 'braket', 'pennylane'],
+            'provider': 'qiskit',
             'preserve_custom_gates': preserve,
             'zx': {'enabled': False},
             'images': {'quirk': False, 'qasm': False, 'composer': False},

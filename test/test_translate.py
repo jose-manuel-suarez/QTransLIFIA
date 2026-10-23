@@ -67,7 +67,7 @@ class TranslateSingleTests(unittest.TestCase):
              "native": {"count": 2, "names": ["h", "x"]}},
             output["qasm"]["gates"],
         )
-        self.assertEqual(["qiskit"], response["input"]["provider"])
+        self.assertEqual("qiskit", response["input"]["provider"])
         self.assertEqual({"ibm_qiskit_code"}, set(output["migrated_code"]))
         self.assertIn("qiskit", output["migrated_code"]["ibm_qiskit_code"])
         self.assertIn(
@@ -110,13 +110,13 @@ class TranslateSingleTests(unittest.TestCase):
             response["output"]["qasm"]["gates"],
         )
 
-    def test_qasm_2_multi_provider(self):
+    def test_qasm_2_single_provider(self):
         response = translate_circuit(
             {
                 "input": {
                     "url": QUIRK_URL,
                     "qasm_version": "2.0",
-                    "provider": ["qiskit", "aws"],
+                    "provider": "aws",
                 }
             }
         )
@@ -124,8 +124,9 @@ class TranslateSingleTests(unittest.TestCase):
 
         self.assertTrue(qasm["code"].startswith("OPENQASM 2.0;"))
         self.assertEqual("2.0", qasm["version"])
+        self.assertEqual("braket", response["input"]["provider"])
         self.assertEqual(
-            {"ibm_qiskit_code", "aws_braket_code"},
+            {"aws_braket_code"},
             set(response["output"]["migrated_code"]),
         )
         for code in response["output"]["migrated_code"].values():
@@ -178,11 +179,27 @@ class TranslateSingleTests(unittest.TestCase):
         # El resto de la respuesta sigue siendo utilizable.
         self.assertTrue(response["output"]["qasm"]["code"].startswith("OPENQASM 3.0;"))
 
-    def test_return_circuit_rejected_in_batch_mode(self):
-        with self.assertRaises(ValueError):
-            translate_circuit(
-                {"input": {"circuits": [{"url": QUIRK_URL}], "return_circuit": True}}
-            )
+    def test_batch_return_circuit_returns_object_per_url(self):
+        response = translate_circuit(
+            {
+                "input": {
+                    "circuits": [
+                        {"name": "A", "url": QUIRK_URL},
+                        {"name": "B", "url": QUIRK_URL},
+                    ],
+                    "provider": "qiskit",
+                    "return_circuit": True,
+                    "zx": {"enabled": False},
+                }
+            }
+        )
+        output = response["output"]
+
+        self.assertEqual(2, len(output))
+        self.assertEqual(["A", "B"], [item["name"] for item in output])
+        for item in output:
+            self.assertEqual({"qiskit"}, set(item["circuits"]))
+            self.assertIsInstance(item["circuits"]["qiskit"], QuantumCircuit)
 
     def test_invalid_payloads_raise_value_error(self):
         invalid_payloads = (
@@ -202,6 +219,9 @@ class TranslateSingleTests(unittest.TestCase):
             {"input": {"json": "no-es-json"}},
             {"input": {"url": QUIRK_URL, "qasm_version": "4.0"}},
             {"input": {"url": QUIRK_URL, "provider": "quantinuum"}},
+            {"input": {"url": QUIRK_URL, "provider": ["qiskit"]}},
+            {"input": {"url": QUIRK_URL, "provider": "qiskit,braket"}},
+            {"input": {"url": QUIRK_URL, "provider": ""}},
             {"input": {"url": QUIRK_URL, "offset": -1}},
             {"input": {"url": QUIRK_URL, "shots": 0}},
             {"input": {"url": QUIRK_URL, "zx": {"time": 2}}},
@@ -245,7 +265,7 @@ class TranslateBatchTests(unittest.TestCase):
                         {"name": "B", "json": CUSTOM_CIRCUIT},
                     ],
                     "qasm_version": "2.0",
-                    "provider": ["qiskit", "pennylane"],
+                    "provider": "pennylane",
                     "zx": {"enabled": False},
                 }
             }
@@ -254,7 +274,7 @@ class TranslateBatchTests(unittest.TestCase):
         for item in response["output"]:
             self.assertTrue(item["qasm"]["code"].startswith("OPENQASM 2.0;"))
             self.assertEqual(
-                {"ibm_qiskit_code", "xanadu_pennylane_code"},
+                {"xanadu_pennylane_code"},
                 set(item["migrated_code"]),
             )
             self.assertIsNone(item["zx_calculus_result"])
