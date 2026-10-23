@@ -13,7 +13,7 @@ explícitamente con ``--zx`` e ``--images``.
 Ejemplos (Windows, desde la raíz del proyecto)::
 
     .venv/Scripts/python.exe tools/migrate_circuit.py --file input/popular_algorithms.json --index 39
-    .venv/Scripts/python.exe tools/migrate_circuit.py --file input/popular_algorithms.json --name "39. complex_customs" --providers qiskit,braket,pennylane --out output/migrated
+    .venv/Scripts/python.exe tools/migrate_circuit.py --file input/custom_gates_algorithms.json --name "1. complex_customs" --providers qiskit,braket,pennylane --out output/migrated
 """
 
 import argparse
@@ -98,7 +98,7 @@ def _build_parser():
     )
     parser.add_argument(
         "--name", default=None,
-        help="Nombre exacto de la entrada del registro (p. ej. '39. complex_customs').",
+        help="Nombre exacto de la entrada del registro (p. ej. '1. complex_customs').",
     )
     parser.add_argument(
         "--providers", default="qiskit,braket,pennylane",

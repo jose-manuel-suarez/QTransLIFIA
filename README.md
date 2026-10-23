@@ -157,7 +157,7 @@ QTRANS_INPUT_FILE=test_quirk.json
 QTRANS_INPUT_FILES=
 QTRANS_INPUT_DIR=input
 QTRANS_OUTPUT_DIR=output
-QTRANS_RUN_LABEL=DD_MM_YYYY__HH_MM
+QTRANS_RUN_LABEL=DD_MM_YYYY__HH
 QTRANS_CAPTURE_IMAGES=true
 QTRANS_GENERATE_QASM_IMAGES=true
 QTRANS_GENERATE_COMPARISON=true
@@ -180,7 +180,7 @@ QTRANS_PRESERVE_CUSTOM_GATES=true
 | `QTRANS_INPUT_FILES` | Lista separada por comas de JSON (relativos a `QTRANS_INPUT_DIR`) que restringe el modo `batch` a esos archivos; también por CLI con `--input-files`. | _(vacío)_ |
 | `QTRANS_INPUT_DIR` | Directorio de JSON de entrada. | `input` |
 | `QTRANS_OUTPUT_DIR` | Raíz de las corridas (dentro se crea `run_<estampa>`). | `output` |
-| `QTRANS_RUN_LABEL` | Etiqueta explícita de la corrida. Vacío = automático `DD_MM_YYYY__HH_MM`. | _(vacío)_ |
+| `QTRANS_RUN_LABEL` | Etiqueta explícita de la corrida. Vacío = automático `DD_MM_YYYY__HH` (resolución por hora). | _(vacío)_ |
 | `QTRANS_CAPTURE_IMAGES` | Activa capturas PNG de Quirk. Booleano (`true/false`, `yes/no`, `on/off`, `1/0`). | `true` |
 | `QTRANS_GENERATE_QASM_IMAGES` | Activa diagramas PNG de los circuitos OpenQASM. Booleano. | `true` |
 | `QTRANS_GENERATE_COMPARISON` | Activa informes Markdown de comparación Quirk/QASM. Booleano. | `true` |
@@ -268,7 +268,7 @@ python -m qtrans --help
 | `--input-files` | Uno o más archivos JSON (relativos a `--input-dir`) que restringen el modo `batch`; cada valor puede separarse por espacios o comas (p. ej. `--input-files a.json b.json` o `--input-files a.json,b.json`). |
 | `--input-dir` | Directorio de JSON de entrada (default: `input`). |
 | `--output-dir` | Raíz de las corridas; dentro se crea `run_<estampa>` (default: `output`). |
-| `--run-label` | Etiqueta de la corrida (default: `DD_MM_YYYY__HH_MM`, fecha y hora con minutos). |
+| `--run-label` | Etiqueta de la corrida (default: `DD_MM_YYYY__HH`, fecha y hora sin minutos). |
 | `--qasm-version {2.0,3.0}` | Versión de OpenQASM generada (default: `3.0`). |
 | `--providers` | Ecosistemas objetivo separados por comas: `qiskit`, `braket`, `pennylane`. |
 | `--preserve-custom-gates` / `--no-preserve-custom-gates` | Conserva / expande en línea las compuertas custom y nativas (p. ej. `QFT`) en los scripts migrados (default: `QTRANS_PRESERVE_CUSTOM_GATES`). Con `preserve` se definen **todas** las compuertas custom declaradas en el original (las que se usan y las que no), cada una como función local. |

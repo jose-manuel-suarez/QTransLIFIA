@@ -51,7 +51,7 @@ coverage.xml
 
 # Generated circuit files and outputs (QTransLIFIA)
 # Salidas por corrida (run_DD_MM_YYYY__HH): no se versionan para evitar acumular miles de archivos generados.
-#/output/ # comentado para que mantenga la carpeta de salida para la ultima corrida, por trazabilidad.
+/output/
 /notebooks/output/
 
 .pytest_cache/

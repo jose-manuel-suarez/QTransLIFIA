@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Verificación del tratamiento exhaustivo de las compuertas custom.
 
-El circuito ``39. complex_customs`` de ``input/popular_algorithms.json`` declara
+El circuito ``1. complex_customs`` de ``input/custom_gates_algorithms.json`` (antes
+``39. complex_customs`` de ``popular_algorithms.json``) declara
 ocho compuertas custom en la URL de Quirk (todas con campo ``matrix``) pero solo
 utiliza cinco en el circuito: ``~rfnt`` (``pi``), ``~bkbo`` (``prueba``) y
 ``~f0b8`` (``complex_rotation``) quedan declaradas y sin usar.
@@ -30,8 +31,8 @@ from qtrans import translate_circuit
 from qtrans.utils.quirk_utils import custom_gates_catalog
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-ALGORITHMS_FILE = PROJECT_ROOT / 'input' / 'popular_algorithms.json'
-ALGORITHM_NAME = '39. complex_customs'
+ALGORITHMS_FILE = PROJECT_ROOT / 'input' / 'custom_gates_algorithms.json'
+ALGORITHM_NAME = '1. complex_customs'
 
 # Las ocho compuertas declaradas en la URL y las cinco usadas en el circuito.
 DECLARED_IDS = [

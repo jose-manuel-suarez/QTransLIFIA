@@ -2,7 +2,8 @@
 """Validación numérica: matriz de la URL de Quirk vs. unitaria del OpenQASM.
 
 ``test_matrix_customs.py`` valida en detalle las ocho matrices del circuito
-``39. complex_customs``; este módulo hace la **barrida exhaustiva**: recorre
+``1. complex_customs`` (antes ``39. complex_customs``); este módulo hace la
+**barrida exhaustiva**: recorre
 TODAS las baterías de ``input/*.json``, localiza cada compuerta custom
 declarada con campo ``matrix`` y comprueba que la unitaria de la declaración
 ``gate`` emitida en OpenQASM 3.0 reproduce la matriz de la URL.
@@ -42,6 +43,7 @@ from qtrans.utils.quirk_utils import (
     _resolve_gate_names,
     quirk_to_qasm,
 )
+from qtrans.utils.url_utils import parse_quirk_url
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INPUT_DIR = PROJECT_ROOT / 'input'
@@ -58,7 +60,7 @@ EQUALITY_TOLERANCE = 1e-6
 MINIMUM_FILES_SCANNED = 6
 EXPECTED_CANONICAL_MATRIX_GATES = {
     'main_algorithms.json': 2,
-    'popular_algorithms.json': 52,
+    'popular_algorithms.json': 44,
 }
 
 _DECLARATION_RE = re.compile(r'^gate\s+([^\n{]*)\{(.*?)^\}', re.M | re.S)
@@ -67,13 +69,16 @@ _DECLARATION_RE = re.compile(r'^gate\s+([^\n{]*)\{(.*?)^\}', re.M | re.S)
 def _circuit_json(entry):
     """Devuelve el JSON del circuito de la URL de Quirk.
 
+    Usa ``parse_quirk_url`` (el mismo parser de producción) para aceptar
+    URLs con percent-encoding, p. ej. ``√½`` como ``%E2%88%9A%C2%BD``.
+
     Parámetros:
         - entry (dict): entrada del algoritmo con su clave ``url``.
 
     Retorna:
         - dict: el circuito con sus claves ``cols`` y ``gates``.
     """
-    return json.loads(entry['url'].split('circuit=', 1)[1])
+    return parse_quirk_url(entry['url'])
 
 
 def _matrix_gates(circuit):

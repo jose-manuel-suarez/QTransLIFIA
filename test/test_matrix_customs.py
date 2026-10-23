@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Verificación de las compuertas custom con campo ``matrix`` de Quirk.
 
-El circuito ``39. complex_customs`` de ``input/popular_algorithms.json`` es el
+El circuito ``1. complex_customs`` de ``input/custom_gates_algorithms.json`` (antes
+``39. complex_customs`` de ``popular_algorithms.json``) es el
 banco de pruebas del campo ``matrix``: ocho compuertas (dos diagonales de fase
 ``cu1``, una 4x4 y cinco 2x2 genéricas) declaradas en la URL de Quirk con su
 matriz numérica.
@@ -39,8 +40,8 @@ from qtrans.utils.quirk_utils import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-ALGORITHMS_FILE = PROJECT_ROOT / 'input' / 'popular_algorithms.json'
-ALGORITHM_NAME = '39. complex_customs'
+ALGORITHMS_FILE = PROJECT_ROOT / 'input' / 'custom_gates_algorithms.json'
+ALGORITHM_NAME = '1. complex_customs'
 
 # Tolerancias: la matriz de la URL está redondeada (~7 dígitos) y la proyección
 # a unitaria no puede recuperar esa información perdida.

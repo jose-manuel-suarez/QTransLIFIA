@@ -1404,7 +1404,7 @@ def build_argument_parser():
     parser.add_argument(
         "--run-label",
         default=DEFAULT_RUN_LABEL,
-        help="Etiqueta de la corrida; por defecto DD_MM_YYYY__HH_MM (fecha y hora con minutos).",
+        help="Etiqueta de la corrida; por defecto DD_MM_YYYY__HH (fecha y hora sin minutos).",
     )
     parser.add_argument(
         "--qasm-version",
