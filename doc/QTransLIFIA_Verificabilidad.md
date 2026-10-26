@@ -179,6 +179,16 @@ Conviene distinguir con precisión **qué garantiza QTransLIFIA y qué queda del
 
 - **Consecuencia para la verificación**: la equivalencia funcional OpenQASM ↔ backend solo es contrastable **dentro del entorno del proveedor**, y su resultado depende tanto de la fidelidad de la traducción (ya verificada en origen) como de las particularidades del SDK y del *backend*. Al mantener la frontera clara, cualquier discrepancia observada en la ejecución puede atribuirse a la traducción —descartada en las etapas iniciales— o al proveedor, sin ambigüedad sobre dónde reside la responsabilidad.
 
+### 6.5 Aceptación de la Distribución Publicada (Módulo Aislado)
+
+Las comprobaciones anteriores se ejecutan contra el árbol de fuentes. Queda una frontera que ninguna de ellas cubre: el **artefacto empaquetado** que recibe un usuario. Un wheel puede omitir un módulo, declarar mal sus dependencias o estampar una versión incorrecta y, aun así, pasar toda la suite sobre las fuentes. El subproyecto `qtrans_demo/` cubre ese hueco como **consumidor externo de caja negra**.
+
+- **Aislamiento real.** Instala `qtranslifia==0.2.0` desde PyPI en su propio `qtrans_demo/demo_venv`, junto con `qiskit-aer` y `python-dotenv`. `main.py` exige que `sys.prefix` sea exactamente ese entorno (`qtrans_demo/main.py:26`) y que `qtrans.__file__` esté dentro de él (`qtrans_demo/main.py:37`); si se usa el `.venv` del repositorio o se importa el paquete desde las fuentes locales, aborta. Esa doble guarda convierte la corrida en una prueba del artefacto instalado, no del código en edición.
+- **Recorrido del contrato.** Lee `qtrans_demo/input/custom_gates_algorithms.json` (2 circuitos con compuertas definidas por matriz), llama a `translate_circuit` en modo lote con `return_circuit=True`, QASM 3.0, Qiskit, 1024 shots y `preserve_custom_gates=true`; luego simula el `QuantumCircuit` devuelto con Qiskit Aer y guarda OpenQASM, script migrado y conteos en `qtrans_demo/output/`.
+- **Resultado de referencia.** 2/2 circuitos traducidos y simulados, sin errores de etapa, con 1024 shots por circuito. La corrida imprime la ruta efectiva de `qtrans` dentro de `demo_venv`, de modo que la procedencia del artefacto queda auditada.
+
+Esta batería convierte la frontera de la sección 6.4 en una comprobación empírica: la **traducción** (responsabilidad de la librería) y el **loads + ejecución** (responsabilidad del entorno del proveedor) se ejercitan juntos, pero en un entorno limpio y separado del repositorio. No sustituye a las baterías A–G: cubre solo Qiskit, dos circuitos y un simulador local —no un QPU—, y no ejerce la CLI, las imágenes ni los otros proveedores. Su actualización forma parte de cada release: se cambia el pin de `requirements.txt` y se repite la corrida.
+
 ## 7. Mecanismos que Facilitan la Verificación Automatizada
 
 ### 7.1 Determinismo como Requisito Crítico
@@ -211,6 +221,7 @@ Aunque la verificación funcional completa puede requerir herramientas externas,
 - **Verificación sintáctica**: Validar el OpenQASM generado con parsers OpenQASM existentes (simuladores, validadores) para asegurar conformidad con el estándar.
 - **Verificación cruzada**: Ejecutar el mismo circuito traducido en al menos dos simuladores distintos que soporten OpenQASM y comparar resultados para detectar posibles errores de traducción.
 - **Verificación por casos canónicos**: Mantener un conjunto de circuitos Quirk representativos (puertas nativas, multi-qubit, *custom gates* simples/anidados) con sus correspondientes OpenQASM esperados para *regression testing*.
+- **Aceptación de la distribución**: antes de publicar, actualizar el pin de `qtrans_demo/requirements.txt` y ejecutar el módulo aislado (`qtrans_demo/demo_venv/Scripts/python.exe qtrans_demo/main.py`) para confirmar que el wheel instalado desde PyPI traduce, carga y simula en un entorno limpio, sin depender del árbol de fuentes.
 
 ## 9. Conclusión
 

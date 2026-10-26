@@ -247,7 +247,7 @@ resume y anticipa cómo se materializa cada uno.
 Abstracción & Traducción semántica con preservación de compuertas personalizadas; separación entre análisis y generación; ocultamiento de la complejidad del formato de Quirk. \\
 Expresividad & Conservación funcional de las compuertas definibles en Quirk (por circuito y por matriz), respetando el punto de partida de diseño. \\
 Verificabilidad & Equivalencia estructural y funcional entre el circuito de Quirk y el OpenQASM generado, apoyada en metadatos y determinismo. \\
-\emph{Testing} & Siete baterías desplegadas: análisis estático, suite unitaria, fidelidad numérica de matrices, equivalencia ZX, equivalencia entre backends, corrida extremo a extremo y comprobaciones manuales. \\
+\emph{Testing} & Ocho baterías desplegadas: análisis estático, suite unitaria, fidelidad numérica de matrices, equivalencia ZX, equivalencia entre backends, corrida extremo a extremo, comprobaciones manuales y aceptación de la distribución publicada. \\
 Escalabilidad & Crecimiento vertical (complejidad del circuito) y horizontal (múltiples ecosistemas) sobre OpenQASM como interfaz estable. \\
 Extensibilidad & Incorporación de nuevas compuertas, versiones de OpenQASM y consumidores sin rediseñar el núcleo. \\
 \bottomrule
@@ -372,7 +372,7 @@ piezas, la semántica aporta la garantía formal de equivalencia y la visual ofr
 inmediata que acelera la detección de defectos.
 
 Sobre esas tres familias se despliega el arsenal de pruebas del proyecto, organizado en
-\emph{siete baterías} con un alcance, un procedimiento de ejecución y una garantía
+\emph{ocho baterías} con un alcance, un procedimiento de ejecución y una garantía
 explícita cada una. La Tabla~\ref{tab:baterias} las resume. La disciplina de fondo es que
 cada batería \emph{congela un contrato}: debe poder fallar ---es decir, ser capaz de
 detectar un defecto real--- y su documentación se actualiza en la misma entrega en que se
@@ -392,8 +392,8 @@ modifica el comportamiento congelado.
 \midrule
 A. Análisis estático & Integridad referencial entre módulos y ausencia de imports muertos &
 Script de análisis & Ninguna referencia rota ni dependencia colgando \\
-B. Suite unitaria & Contrato funcional del traductor, de la API y del pipeline: 114 pruebas
-en nueve archivos & Línea de órdenes & Detección de regresiones sobre el comportamiento
+B. Suite unitaria & Contrato funcional del traductor, de la API y del pipeline: 131 pruebas
+en once archivos & Línea de órdenes & Detección de regresiones sobre el comportamiento
 congelado \\
 C. Fidelidad numérica & Compuertas personalizadas con campo \emph{matrix}: matriz de origen
 frente a la descomposición emitida & Script de verificación & Residuo $\leq 10^{-6}$
@@ -406,6 +406,9 @@ F. Corrida extremo a extremo & Integración completa y artefactos de la corrida 
 Línea de órdenes & Artefactos completos y cero errores por etapa \\
 G. Comprobaciones manuales & Exploración y documentación de la interfaz de uso &
 Scripts y cuadernos & Evidencia cualitativa y ejemplos \\
+H. Aceptación de la distribución & Consumo externo del artefacto publicado en PyPI:
+traducción, carga y simulación en un entorno aislado & Script del subproyecto &
+El \emph{wheel} instalado reproduce el contrato sin el código fuente local \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -419,7 +422,7 @@ python tools/verify_backend_equivalence.py
 python -m qtrans --input-mode batch --input-file ""
 \end{verbatim}
 
-Las baterías A, B, C, E y F son automatizables, repetibles y constituyen el criterio de
+Las baterías A, B, C, E, F y H son automatizables, repetibles y constituyen el criterio de
 aceptación del proyecto; la G acompaña el flujo de trabajo del usuario. Tres precisiones
 sobre su alcance son pertinentes. La batería C existe porque las compuertas definidas por
 matriz son el punto donde la traducción puede perder información ---el traductor no copia la
@@ -436,6 +439,18 @@ del corpus: las post-selecciones nativas de Quirk no son unitarias, de modo que 
 equivalencia unitaria no está definida para ellas y quedan fuera de la comparación, con un
 veredicto explícito ---no comprobado--- en la API de biblioteca y con el incidente registrado
 en la etapa ZX del pipeline, en lugar de un falso negativo.
+
+La batería H cierra el ciclo sobre el artefacto que recibe el usuario. El subproyecto
+aislado \code{qtrans\_demo} instala \code{qtranslifia==0.2.0} desde PyPI en su propio
+entorno virtual, comprueba que \code{qtrans} se importe desde allí y ejecuta dos circuitos
+con compuertas definidas por matriz a través de \code{translate\_circuit}; después simula
+los circuitos Qiskit resultantes con 1024 disparos. Las guardas sobre \code{sys.prefix} y
+\code{qtrans.\_\_file\_\_} impiden que la corrida use el código fuente del repositorio. El
+resultado de referencia es 2/2 circuitos traducidos y simulados, sin errores de etapa. Su
+alcance es deliberadamente acotado ---un proveedor, dos circuitos y un simulador local---,
+pero cubre el empaquetado, la importación, la resolución de dependencias y la frontera
+traducción--carga--ejecución en un entorno limpio. La corrida se invoca con el intérprete
+del entorno del demo y el script del subproyecto, desde la raíz del repositorio.
 
 
 \subsection{Escalabilidad}
@@ -548,12 +563,13 @@ contra una salida fija es estable a lo largo del tiempo.
 La batería de pruebas del repositorio ejercita los modos de entrada individual y por lotes,
 circuitos canónicos (estados de Bell, compuertas de Toffoli, compuertas personalizadas
 simples y anidadas), el desplazamiento de índices y la opción de preservación o expansión de
-compuertas. Concretamente, la suite reúne \textbf{114 pruebas en nueve archivos}: pipeline y
+compuertas. Concretamente, la suite reúne \textbf{131 pruebas en once archivos}: pipeline y
 línea de órdenes, contrato de la API de biblioteca (tanto en su forma serializable como en la
 forma que devuelve objetos nativos de cada ecosistema), convención de orden de qubits
-verificada en los tres destinos, fidelidad de las compuertas definidas por matriz,
-sondas de control de eje \emph{X}/\emph{Y} y post-selecciones, canonicidad de la
-transformada de Fourier y normalización de URLs de Quirk.
+verificada en los tres destinos, fidelidad de las compuertas definidas por matriz ---incluida
+una barrida exhaustiva del corpus que compara la unitaria emitida con la matriz de origen,
+fase global incluida---, sondas de control de eje \emph{X}/\emph{Y} y post-selecciones,
+canonicidad de la transformada de Fourier y normalización de URLs de Quirk.
 
 La verificación semántica por cálculo ZX se ejecuta sobre las colecciones de algoritmos de
 prueba, que abarcan algoritmos principales, variantes populares y diseños específicos de la
@@ -562,8 +578,9 @@ imágenes, la comparación visual, los grafos ZX y la migración a proveedores--
 extremo a extremo tanto desde la línea de órdenes como desde el cuaderno, sin intervención
 manual: sobre el corpus principal produce 39 archivos OpenQASM, 39 capturas del circuito
 original, 39 diagramas, 39 comparaciones lado a lado y 39 scripts migrados, sin errores por
-etapa. La única falla conocida y preexistente es una aserción sobre la idempotencia de la
-canonicalización de URLs, ajena al flujo de traducción.
+etapa. La suite se ejecuta completa sin fallos (131/131); la aserción de idempotencia de la
+canonicalización de URLs valida ahora el circuito parseado y no el escapado Unicode del
+texto, que era el origen de la discrepancia.
 
 Sobre el corpus completo ---134 algoritmos en seis registros, con las tres etapas de
 verificación simultáneas--- la corrida produce 134 archivos OpenQASM, 134 capturas del
@@ -580,6 +597,13 @@ que la suite unitaria no podía ver: en la consola de Windows, los símbolos del
 error de la etapa ZX no son codificables y abortaban el informe de equivalencia; la
 impresión se hace ahora a prueba de codificación y la corrección queda congelada con
 pruebas de regresión.
+
+Como cierre del ciclo, la batería H ejecuta el artefacto publicado, no el árbol de fuentes:
+el subproyecto aislado instala \code{qtranslifia==0.2.0} desde PyPI en su propio entorno,
+verifica que \code{qtrans} proceda de ese entorno y traduce y simula dos circuitos con
+compuertas definidas por matriz (1024 disparos cada uno), sin errores de etapa. Es una
+comprobación de caja negra del empaquetado y de la frontera traducción--carga--ejecución,
+no un sustituto de las baterías anteriores.
 
 Los límites de la validación son explícitos: la equivalencia se establece salvo fase global;
 la verificación ZX puede resultar intratable en circuitos con muchas compuertas

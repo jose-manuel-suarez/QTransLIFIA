@@ -61,6 +61,7 @@ Las tres vías de ejecución —**API de librería** (`translate_circuit`), **CL
 │   ├── verify_matrix_gates.py            # Fidelidad numérica de las compuertas custom con 'matrix'
 │   ├── verify_backend_equivalence.py     # Equivalencia entre el parser nativo y el script migrado
 │   └── migrate_circuit.py                # Migración aislada de un circuito (JSON en consola)
+├── qtrans_demo/                          # Subproyecto aislado: consume qtranslifia desde demo_venv
 ├── doc/                                  # Documentación QSE y paper (qtrans.tex)
 ├── pyproject.toml                        # Empaquetado (pip install)
 ├── requirements.txt                      # Librerías requeridas
@@ -515,21 +516,133 @@ El servidor escucha en `http://localhost:8081`. Endpoints POST disponibles:
 
 La colección de Postman está en `postman/Quirk_Translator_IBM_AWS.postman_collection_original.json`.
 
+## Publicación de una nueva versión en PyPI (mantenedores)
+
+Procedimiento resumido para publicar una release de `qtranslifia`. Reemplazá `<version>` por la versión nueva (por ejemplo `0.2.1`) y ejecutá los comandos desde la raíz del repositorio con el `.venv` activo.
+
+1. **Preparar las herramientas de release.** `build` genera los artefactos y `twine` los valida y publica.
+
+   ```bash
+   python -m pip install --upgrade build twine
+   ```
+
+2. **Verificar el estado del repositorio y la última versión publicada.**
+
+   ```bash
+   python -m pip index versions qtranslifia
+   git status --short
+   ```
+
+   Si `pip index` muestra una versión vieja por caché, consultá `https://pypi.org/pypi/qtranslifia/json` o esperá unos minutos.
+
+3. **Actualizar la versión en los dos archivos que la declaran.** `pyproject.toml` alimenta los metadatos de PyPI y `qtrans/__init__.py` la expone en runtime; deben coincidir.
+
+   ```bash
+   sed -i 's/^version = ".*"/version = "<version>"/' pyproject.toml
+   sed -i 's/^__version__ = ".*"/__version__ = "<version>"/' qtrans/__init__.py
+   grep -n -E '^version|^__version__' pyproject.toml qtrans/__init__.py
+   ```
+
+   En macOS, `sed -i` requiere un argumento vacío: `sed -i '' 's/.../.../' archivo`.
+
+4. **Limpiar artefactos de la versión anterior.** Evita subir por error un `.whl`/`.tar.gz` viejo.
+
+   ```bash
+   rm -rf build dist qtranslifia.egg-info
+   ```
+
+5. **Ejecutar las verificaciones antes de empaquetar.** La suite y el análisis estático deben quedar sin fallos.
+
+   ```bash
+   python -m unittest discover -s test -p "test_*.py"
+   python tools/check_static.py qtrans test tools
+   ```
+
+   Verificaciones adicionales recomendadas:
+
+   ```bash
+   python tools/verify_matrix_gates.py
+   python tools/verify_backend_equivalence.py
+   ```
+
+6. **Construir el sdist y el wheel.** Deben aparecer `qtranslifia-<version>.tar.gz` y `qtranslifia-<version>-py3-none-any.whl`.
+
+   ```bash
+   python -m build
+   ls -lh dist
+   ```
+
+7. **Validar metadatos y contenido.**
+
+   ```bash
+   twine check --strict dist/*
+   ```
+
+8. **Probar la instalación desde el wheel en un entorno limpio.** Confirma que el paquete instalado reporta la versión correcta y que el comando `qtrans` funciona.
+
+   ```bash
+   rm -rf /tmp/qtrans-release-test
+   python -m venv /tmp/qtrans-release-test
+   # Windows (Git Bash): source /tmp/qtrans-release-test/Scripts/activate
+   # Linux/macOS:
+   source /tmp/qtrans-release-test/bin/activate
+   python -m pip install dist/qtranslifia-<version>-py3-none-any.whl
+   python -c "import qtrans; print(qtrans.__version__)"
+   qtrans --help
+   deactivate
+   ```
+
+9. **Publicar primero en TestPyPI (opcional, recomendado).** TestPyPI tiene cuenta y token propios (`https://test.pypi.org`); sirve para ensayar el upload sin consumir la versión en PyPI real.
+
+   ```bash
+   twine upload --repository testpypi --username __token__ dist/*
+   ```
+
+   Para probar la instalación desde TestPyPI, usá PyPI real como índice adicional para las dependencias:
+
+   ```bash
+   python -m pip install \
+     --index-url https://test.pypi.org/simple/ \
+     --extra-index-url https://pypi.org/simple/ \
+     qtranslifia==<version>
+   ```
+
+10. **Publicar en PyPI real.** `twine` pide el token de forma interactiva (entrada oculta); no lo escribas en el comando ni lo exportes como variable. El username debe ser `__token__` y el token debe tener scope del proyecto `qtranslifia`.
+
+    ```bash
+    twine upload --repository pypi --username __token__ dist/*
+    ```
+
+    Una versión publicada **no se puede reutilizar** en PyPI, ni siquiera después de borrarla. Si algo está mal, hay que publicar una versión nueva.
+
+11. **Verificar la publicación y registrar la release en Git.** El tag debe ser anotado y apuntar al commit que generó los artefactos. Si la release se integra a `main`, hacé el merge antes de crear el tag.
+
+    ```bash
+    python -m pip index versions qtranslifia
+    git add pyproject.toml qtrans/__init__.py
+    # agregá también los archivos de código/test que formen parte de la release
+    git commit -m "Publicamos la versión <version>"
+    git tag -a v<version> -m "Versión <version> publicada en PyPI"
+    git push origin <rama>
+    git push origin v<version>
+    ```
+
 ## Pruebas funcionales y de integración
 
-El proyecto despliega **siete baterías de comprobación**; el detalle de cada una (ámbito,
+El proyecto despliega **ocho baterías de comprobación**; el detalle de cada una (ámbito,
 procedimiento, garantía y límites) está en
 [**doc/QTransLIFIA_Testing.md**](doc/QTransLIFIA_Testing.md).
 
 | Batería | Procedimiento | Garantía |
 | --- | --- | --- |
 | A. Análisis estático | `python tools/check_static.py qtrans test tools` | Integridad referencial del paquete y ausencia de imports muertos |
-| B. Suite unitaria (121 pruebas) | `python -m unittest discover -s test -p "test_*.py" -v` | Contrato funcional del traductor, de la API y del pipeline |
+| B. Suite unitaria (131 pruebas) | `python -m unittest discover -s test -p "test_*.py" -v` | Contrato funcional del traductor, de la API y del pipeline |
 | C. Fidelidad numérica de matrices | `python tools/verify_matrix_gates.py` | Residuo ≤ `1e-6` entre la matriz de origen y la descomposición emitida |
 | D. Equivalencia ZX | `QTRANS_GENERATE_ZX=true python -m qtrans ...` | Veredicto de equivalencia unitaria por circuito |
 | E. Equivalencia entre backends | `python tools/verify_backend_equivalence.py` | La ruta nativa del parser y la ruta del script migrado coinciden |
 | F. Corrida extremo a extremo | `python -m qtrans --input-mode batch --input-file ""` | Artefactos completos y cero errores por etapa |
 | G. Comprobaciones manuales | `python test/test_qasm.py`, cuadernos | Evidencia cualitativa y ejemplos de uso |
+| H. Aceptación de la distribución | `qtrans_demo/demo_venv/Scripts/python.exe qtrans_demo/main.py` | El paquete instalado desde PyPI traduce y simula en un entorno aislado |
 
 ```bash
 python -m unittest discover -s test -p "test_*.py" -v

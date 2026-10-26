@@ -77,15 +77,16 @@ Para circuitos de pocos qubits (estados Bell, Toffoli, «la demostración por la
 | Batería | Ubicación | Ejecución | Garantía principal |
 | --- | --- | --- | --- |
 | A. Análisis estático | `tools/check_static.py` | `python tools/check_static.py qtrans test` | Integridad referencial y ausencia de imports muertos |
-| B. Suite unitaria | `test/test_*.py` (121 pruebas) | `python -m unittest discover -s test -p "test_*.py"` | Contrato funcional del traductor, de la API y del pipeline |
+| B. Suite unitaria | `test/test_*.py` (131 pruebas) | `python -m unittest discover -s test -p "test_*.py"` | Contrato funcional del traductor, de la API y del pipeline |
 | C. Verificación numérica de matrices | `tools/verify_matrix_gates.py` | `python tools/verify_matrix_gates.py` | Fidelidad de las *custom gates* con campo `matrix` |
 | D. Equivalencia ZX | `qtrans/utils/zx_utils.py` + `input/*.json` | Etapa ZX del pipeline (`QTRANS_GENERATE_ZX=true`) | Equivalencia unitaria Quirk ↔ OpenQASM |
 | E. Equivalencia cruzada entre backends | `tools/verify_backend_equivalence.py` | `python tools/verify_backend_equivalence.py` | La ruta nativa y la ruta migrada describen el mismo circuito |
 | E2. Migración aislada de un circuito | `tools/migrate_circuit.py` | `python tools/migrate_circuit.py --file input/popular_algorithms.json --index 39` | El JSON de la API (OpenQASM + un script por proveedor) se materializa y se imprime en consola |
 | F. Corrida end-to-end | CLI `python -m qtrans` | `python -m qtrans --input-mode batch --input-file ""` | Integración completa y artefactos de corrida |
 | G. Comprobaciones manuales | `test/test_qasm.py`, `test/test_translate_lib.py`, `notebooks/` | Ejecución directa del script | Exploración y documentación de cara al usuario |
+| H. Aceptación de la distribución | `qtrans_demo/` (subproyecto aislado) | `qtrans_demo/demo_venv/Scripts/python.exe qtrans_demo/main.py` | El artefacto instalado desde PyPI traduce y simula en un entorno limpio |
 
-Las baterías A–F son **automatizables y repetibles** y构成uyen el criterio de aceptación del proyecto; la G es de apoyo y documentación.
+Las baterías A–F y H son **ejecutables y repetibles** y constituyen el criterio de aceptación del proyecto; la G es de apoyo y documentación.
 
 ### 4.1 Batería A — Análisis estático del código
 
@@ -103,16 +104,17 @@ python tools/check_static.py qtrans test tools
 
 ### 4.2 Batería B — Suite unitaria de integración
 
-El repositorio incluye **121 pruebas** distribuidas en diez archivos, organizados por el contrato que cada uno congela:
+El repositorio incluye **131 pruebas** distribuidas en once archivos, organizados por el contrato que cada uno congela:
 
 | Archivo | Pruebas | Contrato congelado |
 | --- | --- | --- |
-| `test/test_qtrans.py` | 26 | Pipeline y CLI: modos `algorithm`/`batch`, artefactos por corrida, imágenes, scripts migrados, errores por etapa y robustez de la salida por consola (`safe_print`) |
+| `test/test_qtrans.py` | 28 | Pipeline y CLI: modos `algorithm`/`batch`, artefactos por corrida, imágenes, scripts migrados, errores por etapa y robustez de la salida por consola (`safe_print`) |
 | `test/test_providers.py` | 22 | Registro y alias de proveedores, carga nativa de cada ecosistema, normalización del OpenQASM para Braket, `preserve_custom_gates` |
-| `test/test_translate.py` | 12 | Contrato JSON de `translate_circuit`: claves obligatorias, tipos, rangos, `ValueError` ante payloads inválidos, modo lote |
+| `test/test_translate.py` | 14 | Contrato JSON de `translate_circuit`: claves obligatorias, tipos, rangos, `ValueError` ante payloads inválidos, modo lote |
 | `test/test_translate_circuits.py` | 6 | API de objetos `translate_circuits`: forma `{proveedor: {nombre: circuito}}` y tipos nativos (`QuantumCircuit`, `Circuit`, `QNode`) |
 | `test/test_endianness.py` | 14 | Convención *little-endian* de Quirk ↔ OpenQASM ↔ los tres ecosistemas destino |
 | `test/test_matrix_customs.py` | 7 | Compuertas personalizadas con campo `matrix`: equivalencia numérica con la matriz de origen y con el código generado |
+| `test/test_matrix_equivalence.py` | 6 | Barrida exhaustiva del corpus: la unitaria de cada declaración `gate` con `matrix` coincide con la matriz de la URL, fase global incluida |
 | `test/test_xy_probes.py` | 9 | X/Y Probes (controles de eje X/Y) y post-selecciones nativas de Quirk, incluida su traza ZX |
 | `test/test_qft_canonical.py` | 9 | Canonicidad de `QFT†n`, sus variantes y la regresión sobre `input/qft_algorithms.json` |
 | `test/test_url_utils.py` | 9 | Normalización y canonicalización de URLs de Quirk pegadas a mano y codificación percent-encoded |
@@ -120,7 +122,7 @@ El repositorio incluye **121 pruebas** distribuidas en diez archivos, organizado
 
 ```bash
 python -m unittest discover -s test -p "test_*.py"
-# Ran 121 tests ... FAILED (failures=1)   ← ver §7 (fallo preexistente y conocido)
+# Ran 131 tests ... OK
 ```
 
 **Corpora de entrada.** Las pruebas y las baterías C–F se apoyan en registros de algoritmos que actúan como *fixtures* estables: `input/popular_algorithms.json` (39 algoritmos reales: Shor, Bernstein-Vazirani, Grover, Deutsch-Jozsa, Simon, QFT, QPE, post-selecciones y compuertas personalizadas), `input/xy_probes_gates_algorithms.json` (24 sondas de X/Y Probes y post-selecciones, todas deterministas), `input/qft_algorithms.json` (12 casos de QFT), `input/main_algorithms.json` (15 algoritmos), `input/natives_post_select_algorithms.json` (16 casos) e `input/scalar_gates_algorithms.json` (28 casos).
@@ -227,26 +229,49 @@ Comprobaciones que no encajan en una aserción automática pero que son parte de
 - `notebooks/QTrans.ipynb` y `notebooks/QTrans_utils.ipynb`: pipeline principal y utilidades auxiliares (URLs de Quirk, generación de enlaces clicables, validación *round-trip*).
 - `test/test_curl.sh`, `test/test_curl.bat`, `test/test_endpoints.ps1`, `test/test_qasm_endpoints.ps1`: sondeos de los puntos de acceso de los proveedores (disponibilidad de SDK y conectividad).
 
+### 4.8 Batería H — Aceptación de la distribución publicada (módulo aislado)
+
+**Qué problema resuelve.** Las baterías A–G se ejecutan contra el árbol de fuentes. Un paquete puede pasar todas ellas y, sin embargo, fallar al instalarse desde el wheel publicado: un módulo fuera de `packages.find`, una dependencia no declarada, una versión mal estampada o un import que solo resuelve por el `cwd` del repositorio. `qtrans_demo/` cierra ese hueco: es un **consumidor externo de caja negra** que instala `qtranslifia` desde PyPI en su propio entorno y ejercita el contrato público sin acceso al código fuente.
+
+**Aislamiento.** El subproyecto tiene su propio `qtrans_demo/demo_venv` y fija la versión en `qtrans_demo/requirements.txt` (`qtranslifia==0.2.0`). `main.py` impone dos guardas antes de traducir: `sys.prefix` debe ser exactamente `qtrans_demo/demo_venv` (`qtrans_demo/main.py:26`) y `qtrans.__file__` debe estar dentro de ese entorno (`qtrans_demo/main.py:37`). Si se ejecuta con el `.venv` del repositorio o si el paquete se importa desde las fuentes locales, el script aborta con un mensaje accionable. `demo_venv/` y `output/` están ignorados por Git.
+
+**Flujo.** Lee `qtrans_demo/input/custom_gates_algorithms.json` (2 circuitos con compuertas definidas por matriz), llama a `translate_circuit` en modo lote con `return_circuit=True`, QASM 3.0, proveedor Qiskit, 1024 shots, `preserve_custom_gates=true` y sin ZX ni imágenes. Después simula el `QuantumCircuit` devuelto con Qiskit Aer (con respaldo a `StatevectorSampler`) y guarda el OpenQASM, el script migrado de Qiskit y los conteos en `qtrans_demo/output/<nombre>/`.
+
+```bash
+# Desde la raíz del repositorio; el entorno del demo ya debe existir.
+qtrans_demo/demo_venv/Scripts/python.exe qtrans_demo/main.py
+# qtrans: ...\qtrans_demo\demo_venv\Lib\site-packages\qtrans\__init__.py (0.2.0)
+# Circuitos: 2
+# total: 1024 shots   (por cada circuito)
+```
+
+Para recrear el entorno: `cd qtrans_demo && python -m venv demo_venv && source demo_venv/Scripts/activate && python -m pip install -r requirements.txt && python main.py` (en Linux/macOS, `source demo_venv/bin/activate`).
+
+**Resultado de referencia.** 2/2 circuitos traducidos y simulados, sin errores de etapa; las salidas quedan en `qtrans_demo/output/1._complex_customs/` y `qtrans_demo/output/2._rotational_customs/`, cada una con su `_v3.0.txt`, su `_ibm_qiskit_code.py` y su `_counts.json` de 1024 shots.
+
+**Qué garantiza y qué no.** Garantiza que el artefacto **instalado desde PyPI** se importa en un entorno limpio, resuelve sus dependencias, traduce compuertas personalizadas con matriz a OpenQASM 3.0, las carga con el parser nativo de Qiskit y las ejecuta en un simulador local. No sustituye a las baterías A–G: cubre un solo proveedor, un corpus de dos circuitos y un simulador, no un QPU, y no ejerce la CLI ni la generación de imágenes. Al publicar una versión nueva hay que actualizar el pin de `requirements.txt` y repetir la corrida.
+
 ## 5. Qué Garantiza Cada Batería (y Qué No)
 
-| Propiedad verificable | A (estático) | B (unitaria) | C (matrices) | D (ZX) | E (backends) | F (E2E) |
-| --- | :-: | :-: | :-: | :-: | :-: | :-: |
-| Integridad referencial del paquete | ✔ | parcial | | | | |
-| Contrato de la API y del CLI | | ✔ | | | | parcial |
-| Fidelidad numérica de `matrix` | | parcial | ✔ | ✔ | | |
-| Equivalencia unitaria Quirk ↔ OpenQASM | | | parcial | ✔ | | |
-| Consistencia parser nativo ↔ script migrado | | parcial | | | ✔ | |
-| Generación completa de artefactos | | | | | | ✔ |
-| Equivalencia frente al *backend* real (QPU/simulador) | | | | | parcial | |
+| Propiedad verificable | A (estático) | B (unitaria) | C (matrices) | D (ZX) | E (backends) | F (E2E) | H (distribución) |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| Integridad referencial del paquete | ✔ | parcial | | | | | parcial |
+| Contrato de la API y del CLI | | ✔ | | | | parcial | parcial |
+| Fidelidad numérica de `matrix` | | parcial | ✔ | ✔ | | | parcial |
+| Equivalencia unitaria Quirk ↔ OpenQASM | | | parcial | ✔ | | | |
+| Consistencia parser nativo ↔ script migrado | | parcial | | | ✔ | | |
+| Generación completa de artefactos | | | | | | ✔ | parcial |
+| Equivalencia frente al *backend* real (QPU/simulador) | | | | | parcial | | parcial |
+| Distribución instalable e importable desde PyPI | | | | | | | ✔ |
 
-**Límites declarados.** Ninguna batería cubre el comportamiento de un *hardware* real (el simulador local de Braket es un simulador, no un dispositivo), ni la corrección del modelo de Quirk como interfaz de usuario, ni la equivalencia de las post-selecciones (no son unitarias y quedan fuera de la comparación ZX por construcción). La ausencia de hallazgos en las baterías A–F significa que **el contrato congelado se respeta**, no que el circuito sea útil para un algoritmo concreto: esa valoración es del usuario.
+**Límites declarados.** Ninguna batería cubre el comportamiento de un *hardware* real (el simulador local de Braket es un simulador, no un dispositivo), ni la corrección del modelo de Quirk como interfaz de usuario, ni la equivalencia de las post-selecciones (no son unitarias y quedan fuera de la comparación ZX por construcción). La batería H verifica la distribución instalada, pero solo con Qiskit y sobre dos circuitos. La ausencia de hallazgos en las baterías A–H significa que **el contrato congelado se respeta**, no que el circuito sea útil para un algoritmo concreto: esa valoración es del usuario.
 
 ## 6. Procedimiento de Mantenimiento
 
 Orden recomendado antes de dar por cerrada una modificación (cualquiera que toque `qtrans/`, el contrato de la API o el flujo de traducción):
 
 1. **Análisis estático**: `python tools/check_static.py qtrans test tools` (sin referencias rotas ni imports muertos).
-2. **Suite unitaria**: `python -m unittest discover -s test -p "test_*.py"` (121 pruebas; el único fallo permitido es el conocido de §7).
+2. **Suite unitaria**: `python -m unittest discover -s test -p "test_*.py"` (131 pruebas; sin fallos).
 3. **Fidelidad numérica**: `python tools/verify_matrix_gates.py` (residuo ≤ `1e-6`; se espera `≈5e-8`).
 4. **Equivalencia entre backends**: `python tools/verify_backend_equivalence.py` (39/39 en Qiskit y Braket).
 5. **Corrida end-to-end**: `python -m qtrans --input-mode batch --input-file ""` y revisión del resumen (0 errores de traducción; los errores de la etapa ZX son los de compuertas no comparables descritos en §4.4).
@@ -254,12 +279,14 @@ Orden recomendado antes de dar por cerrada una modificación (cualquiera que toq
 
 Al añadir una functionality nueva se mantiene la disciplina de **congelar el contrato**: cada batería nueva debe poder fallar —es decir, debe ser capaz de detectar un defecto real— y su documentación (este archivo) debe actualizarse en la misma entrega.
 
-## 7. Fallo Conocido
+## 7. Regresiones Corregidas
 
-`test.test_qft_canonical.CanonicalQuirkUrlTests.test_canonicalization_is_idempotent` falla de forma **preexistente**: la URL escapa el dagger (`†`) en forma de escape Unicode mientras el test espera el literal `QFT†3`. No es una regresión del flujo de traducción (las otras ocho pruebas de canonicidad y la regresión sobre `input/qft_algorithms.json` pasan) y su corrección requiere alinear la expectativa del test con la serialización percent-encoded de Quirk.
+La suite se ejecuta completa sin fallos. Quedan documentados aquí los dos defectos que estuvieron abiertos, porque ambos explican decisiones actuales de las pruebas:
+
+- **Canonicidad de `QFT†n`.** `test.test_qft_canonical.CanonicalQuirkUrlTests.test_canonicalization_is_idempotent` comparaba el texto crudo de la URL con el literal `QFT†3`, pero `canonicalize_quirk_url` serializa con `ensure_ascii=True` y el dagger aparece como `\u2020`. El test ahora valida el **circuito parseado** (`parse_quirk_url(once)["cols"][0]`), que es la representación que importa, en lugar de un detalle de escapado. Las otras ocho pruebas de canonicidad y la regresión sobre `input/qft_algorithms.json` ya pasaban; el flujo de traducción nunca estuvo afectado.
 
 **Defecto corregido por la batería F.** La primera corrida E2E con la etapa ZX activa abortó tras el algoritmo 15: el mensaje de error «Compuerta Quirk no soportada: |+⟩⟨+|» contiene caracteres (`⟨`, `⟩`) que la consola de Windows (`cp1252`) no puede codificar, y el `UnicodeEncodeError` resultante cancelaba la etapa ZX **y con ella el informe de equivalencia completo**. La corrección consiste en imprimir siempre con `pipeline_utils.safe_print` (sustituye lo no codificable en lugar de propagar el error) y en forzar UTF-8 con `errors="replace"` en la salida de la CLI (`core._configure_console_encoding`); la batería B congela el comportamiento con tres pruebas de regresión en `test/test_qtrans.py`. Es el ejemplo canónico de por qué la corrida E2E es una batería y no un trámite: el defecto era invisible en la suite unitaria porque solo se manifiesta en la consola real de Windows y solo con circuitos que contienen post-selecciones.
 
 ## 8. Conclusión
 
-La comprobación del flujo de QTransLIFIA se apoya en la **complementariedad** de tres familias de estrategias —verificación **estática** por características del circuito, equivalencia **semántica** mediante cálculo ZX y comprobación **visual** rápida para circuitos sencillos— y sobre ellas en un arsenal de **siete baterías** que cubren desde la integridad sintáctica del código (A) hasta la integración completa (F). La complementariedad es el punto: la estática garantiza que «no se pierden piezas», la numérica (C) que las piezas conservadas son la misma matriz, la ZX (D) que la acción unitaria es la misma, la cruzada (E) que cualquier forma de materializar el circuito coincide, y la visual (3.3) ofrece la lectura inmediata que acelera la detección de defectos en las etapas iniciales. Documentar y mantener estas baterías es, en la práctica, lo que permite detectar los errores en el punto más temprano y económico del flujo: garantizar que el circuito efectivamente ejecutado sea el que el usuario diseñó.
+La comprobación del flujo de QTransLIFIA se apoya en la **complementariedad** de tres familias de estrategias —verificación **estática** por características del circuito, equivalencia **semántica** mediante cálculo ZX y comprobación **visual** rápida para circuitos sencillos— y sobre ellas en un arsenal de **ocho baterías** que cubren desde la integridad sintáctica del código (A) hasta la integración completa (F) y la aceptación del artefacto publicado (H). La complementariedad es el punto: la estática garantiza que «no se pierden piezas», la numérica (C) que las piezas conservadas son la misma matriz, la ZX (D) que la acción unitaria es la misma, la cruzada (E) que cualquier forma de materializar el circuito coincide, y la visual (3.3) ofrece la lectura inmediata que acelera la detección de defectos en las etapas iniciales. Documentar y mantener estas baterías es, en la práctica, lo que permite detectar los errores en el punto más temprano y económico del flujo: garantizar que el circuito efectivamente ejecutado sea el que el usuario diseñó.
