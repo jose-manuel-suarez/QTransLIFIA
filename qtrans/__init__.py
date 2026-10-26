@@ -11,4 +11,4 @@ API pública:
 from .core import main, run_pipeline, translate_circuit, translate_circuits
 
 __all__ = ["translate_circuit", "translate_circuits", "run_pipeline", "main"]
-__version__ = "0.1.0"
+__version__ = "0.2.0"

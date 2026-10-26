@@ -16,7 +16,7 @@ módulo cubre:
 import json
 import unittest
 from pathlib import Path
-from urllib.parse import quote, unquote
+from urllib.parse import quote
 
 from qtrans.utils.qutils import quirk_to_qasm
 from qtrans.utils.url_utils import (
@@ -64,7 +64,7 @@ class CanonicalQuirkUrlTests(unittest.TestCase):
         url = raw_url({'cols': [[f'QFT3{DAGGER}', 'QFT4']]})
         once = canonicalize_quirk_url(url)
         self.assertEqual(once, canonicalize_quirk_url(once))
-        self.assertIn(f'QFT{DAGGER}3', unquote(once))
+        self.assertIn(f'QFT{DAGGER}3', parse_quirk_url(once)['cols'][0])
 
     def test_canonicalizes_percent_encoded_urls(self):
         encoded = quote(json.dumps({'cols': [[f'QFT2{DAGGER}']]}), safe='')
