@@ -1,3 +1,5 @@
 qtranslifia==0.2.0
 qiskit-aer
+amazon-braket-sdk
+pennylane
 python-dotenv>=1.0.0
