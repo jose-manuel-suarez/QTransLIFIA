@@ -20,7 +20,8 @@ En Linux/macOS, activá con `source demo_venv/bin/activate`.
 - Lee `input/custom_gates_algorithms.json`.
 - Traduce los circuitos con `qtrans.translate_circuit`.
 - Carga el circuito nativo del proveedor configurado y lo simula con 1024 shots.
-- Guarda QASM, scripts migrados y conteos en `output/run_DD_MM_YYYY__HH/<proveedor>/<algoritmo>/`.
+- Genera dos diagramas PNG por circuito: uno desde el QASM (conserva gates custom) y otro del circuito nativo del proveedor; además guarda el payload de entrada y la salida completa de la traducción (`input.json`/`output.json`).
+- Guarda QASM, scripts migrados, conteos y diagramas en `output/run_DD_MM_YYYY__HH/<proveedor>/<algoritmo>/`.
 
 La configuración se toma de `.env`. `main.py` verifica que se ejecute con `demo_venv` y que `qtrans` se importe desde ese entorno, nunca desde el repositorio.
 
@@ -81,11 +82,15 @@ Dentro de la corrida, las salidas se separan **por proveedor** y luego **por alg
 ```
 output/
 └── run_28_10_2026__11/                 # corrida: DD_MM_YYYY__HH
+    ├── input.json                      # payload enviado a translate_circuit
+    ├── output.json                     # retorno completo de translate_circuit
     ├── qiskit/                         # proveedor
     │   ├── 1._complex_customs/
     │   │   ├── 1._complex_customs_v3.0.txt
     │   │   ├── 1._complex_customs_ibm_qiskit_code.py
-    │   │   └── 1._complex_customs_counts_qiskit.json
+    │   │   ├── 1._complex_customs_counts_qiskit.json
+    │   │   ├── 1._complex_customs_circuit_qasm.png
+    │   │   └── 1._complex_customs_circuit_qiskit.png
     │   └── 2._rotational_customs/
     │       └── ...
     ├── braket/                         # proveedor
@@ -106,13 +111,15 @@ output/
 
 ## Salidas de resultados
 
-Para cada algoritmo se guardan tres archivos:
+Para cada algoritmo se guardan cinco archivos:
 
 | Archivo                                | Contenido                                    |
 | -------------------------------------- | -------------------------------------------- |
 | `<algoritmo>_v<version>.txt`           | El OpenQASM traducido (`2.0` o `3.0`).       |
 | `<algoritmo>_<proveedor>_code.py`      | El script migrado al ecosistema destino.     |
 | `<algoritmo>_counts_<proveedor>.json`  | Los conteos de la simulación (shots).        |
+| `<algoritmo>_circuit_qasm.png`         | Diagrama del QASM (conserva gates custom).   |
+| `<algoritmo>_circuit_<proveedor>.png`  | Diagrama del circuito nativo del proveedor.  |
 
 Además, la corrida imprime por consola el circuito OpenQASM y, por cada algoritmo, la distribución de medición ordenada por frecuencia:
 
@@ -147,4 +154,4 @@ Si una etapa opcional falla (por ejemplo, el circuito nativo no se pudo cargar o
 | `QTRANS_SHOTS`                 | `1024`                               | Disparos de la simulación.                   |
 | `QTRANS_SEED`                  | `1234`                               | Semilla del simulador.                       |
 | `QTRANS_PRESERVE_CUSTOM_GATES` | `true`                               | Conserva compuertas custom como funciones.   |
-| `QTRANS_GENERATE_ZX`           | `false`                              | Activa el cálculo ZX (no usado por el demo). |
+| `QTRANS_GENERATE_ZX`           | `true`                               | Activa el cálculo ZX en `translate_circuit`. |

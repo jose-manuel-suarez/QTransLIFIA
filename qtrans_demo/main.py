@@ -261,13 +261,132 @@ def print_counts(counts, shots):
     print(f"  total: {sum(counts.values())} shots")
 
 
-def save_outputs(name, output, counts):
-    """Guarda QASM, scripts migrados y conteos en ``output/run_*/<proveedor>/``.
+def _text_diagram_figure(text):
+    """Convierte un diagrama de texto en una figura de matplotlib.
+
+    Parámetros:
+        - text (str): diagrama en texto plano o Unicode.
+
+    Retorna:
+        - matplotlib.figure.Figure: figura con el diagrama renderizado.
+    """
+    import matplotlib.pyplot as plt
+
+    lines = text.splitlines() or [""]
+    width = max(6.0, max(len(line) for line in lines) * 0.09)
+    height = max(2.0, len(lines) * 0.25)
+    figure = plt.figure(figsize=(width, height))
+    axes = figure.add_axes([0, 0, 1, 1])
+    axes.axis("off")
+    axes.text(0.01, 0.99, text, family="monospace", fontsize=8, va="top", ha="left")
+    return figure
+
+
+def save_circuit_image(circuit, provider, target, safe):
+    """Guarda un diagrama PNG del circuito nativo en ``target``.
+
+    Parámetros:
+        - circuit: objeto nativo (``QuantumCircuit``, ``Circuit`` o ``QNode``).
+        - provider (str): proveedor del circuito (``qiskit``/``braket``/``pennylane``).
+        - target (Path): directorio de salida del algoritmo.
+        - safe (str): nombre saneado del algoritmo.
+
+    Retorna:
+        - Path | None: ruta del PNG escrito o ``None`` si no se pudo dibujar.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    image_path = target / f"{safe}_circuit_{provider}.png"
+    try:
+        if provider == "qiskit":
+            figure = circuit.draw(output="mpl")
+        elif provider == "pennylane":
+            import pennylane as qml
+
+            figure, _ = qml.draw_mpl(circuit)()
+        elif provider == "braket":
+            figure = _text_diagram_figure(circuit.diagram())
+        else:
+            print(f"[warn] Sin dibujador para {provider}.")
+            return None
+        figure.savefig(image_path, dpi=150, bbox_inches="tight")
+        plt.close(figure)
+    except Exception as exc:
+        print(f"[warn] No se pudo generar la imagen del circuito: {exc}")
+        return None
+    return image_path
+
+
+def save_payload(payload, result):
+    """Guarda el payload de entrada y la salida de ``translate_circuit``.
+
+    Los objetos nativos de ``output["circuits"]`` no son serializables a JSON,
+    así que se representan con ``repr`` para poder escribir el archivo.
+
+    Parámetros:
+        - payload (dict): entrada enviada a ``translate_circuit``.
+        - result (dict): valor devuelto por ``translate_circuit``.
+
+    Retorna:
+        - tuple[Path, Path]: rutas de ``input.json`` y ``output.json``.
+    """
+    RUN_DIR.mkdir(parents=True, exist_ok=True)
+    input_path = RUN_DIR / "input.json"
+    output_path = RUN_DIR / "output.json"
+    input_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    output_path.write_text(
+        json.dumps(result, indent=2, ensure_ascii=False, default=repr) + "\n",
+        encoding="utf-8",
+    )
+    return input_path, output_path
+
+
+def save_qasm_image(qasm_code, target, safe):
+    """Genera un PNG del circuito OpenQASM usando Qiskit.
+
+    A diferencia de Braket y PennyLane, el parser nativo de Qiskit conserva los
+    nombres de las compuertas custom declaradas con ``gate``.
+
+    Parámetros:
+        - qasm_code (str): código OpenQASM traducido.
+        - target (Path): directorio de salida del algoritmo.
+        - safe (str): nombre saneado del algoritmo.
+
+    Retorna:
+        - Path | None: ruta del PNG escrito o ``None`` si no se pudo dibujar.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from qtrans.utils.qiskit_utils import load_qasm_circuit
+
+    image_path = target / f"{safe}_circuit_qasm.png"
+    try:
+        circuit = load_qasm_circuit(qasm_code)
+        figure = circuit.draw(output="mpl")
+        figure.savefig(image_path, dpi=150, bbox_inches="tight")
+        plt.close(figure)
+    except Exception as exc:
+        print(f"[warn] No se pudo generar la imagen del QASM: {exc}")
+        return None
+    return image_path
+
+
+def save_outputs(name, output, counts, circuit=None):
+    """Guarda QASM, scripts migrados, conteos y diagrama en ``output/run_*/<proveedor>/``.
 
     Parámetros:
         - name (str): nombre del algoritmo.
         - output (dict): salida de ``translate_circuit`` para ese circuito.
         - counts (dict | None): conteos de la simulación.
+        - circuit: circuito nativo para generar el PNG (opcional).
 
     Retorna:
         - Path: directorio donde se escribieron los archivos.
@@ -281,6 +400,15 @@ def save_outputs(name, output, counts):
 
     for script_name, code in (output.get("migrated_code") or {}).items():
         (target / f"{safe}_{script_name}.py").write_text(code, encoding="utf-8")
+
+    qasm_image = save_qasm_image(output["qasm"]["code"], target, safe)
+    if qasm_image is not None:
+        print(f"Diagrama QASM guardado en: {qasm_image}")
+
+    if circuit is not None:
+        image_path = save_circuit_image(circuit, PROVIDER, target, safe)
+        if image_path is not None:
+            print(f"Diagrama del proveedor guardado en: {image_path}")
 
     if counts is not None:
         (target / f"{safe}_counts_{PROVIDER}.json").write_text(
@@ -304,10 +432,15 @@ def main():
     print(f"preserve_custom_gates: {PRESERVE_CUSTOM_GATES}")
     print(f"Run dir: {RUN_DIR}")
 
+    payload = build_payload(records)
     try:
-        result = qtrans.translate_circuit(build_payload(records))
+        result = qtrans.translate_circuit(payload)
     except Exception as exc:
         raise SystemExit(f"translate_circuit falló: {exc}") from exc
+
+    input_path, output_path = save_payload(payload, result)
+    print(f"Payload de entrada guardado en: {input_path}")
+    print(f"Resultado guardado en: {output_path}")
 
     outputs = result.get("output")
     if isinstance(outputs, dict):
@@ -322,6 +455,14 @@ def main():
 
         for stage_error in output.get("errors") or []:
             print(f"[error de etapa] {stage_error['stage']}: {stage_error['message']}")
+
+        zx_calculus = output.get("zx_calculus")
+        if isinstance(zx_calculus, dict):
+            print(f"[ZX] {zx_calculus.get('result')}")
+            for zx_error in zx_calculus.get("errors") or []:
+                print(f"[error ZX] {zx_error['stage']}: {zx_error['message']}")
+        elif "zx_calculus_result" in output:
+            print(f"[ZX] {output.get('zx_calculus_result')}")
 
         circuits = output.get("circuits") or {}
         circuit = circuits.get(PROVIDER)
@@ -339,14 +480,14 @@ def main():
                 counts = simulate_pennylane(circuit, SHOTS, SEED)
             else:
                 print(f"[warn] Sin simulador para {PROVIDER}.")
-                save_outputs(name, output, None)
+                save_outputs(name, output, None, circuit)
                 continue
         except Exception as exc:
             print(f"[error simulación {PROVIDER}] {exc}")
-            save_outputs(name, output, None)
+            save_outputs(name, output, None, circuit)
             continue
 
-        target = save_outputs(name, output, counts)
+        target = save_outputs(name, output, counts, circuit)
         print(f"\nResultados guardados en: {target}")
         print(f"\n-------- simulación {PROVIDER} ({SHOTS} shots) --------")
         print_counts(counts, SHOTS)
