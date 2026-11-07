@@ -26,25 +26,27 @@ try:
 except (AttributeError, OSError):
     pass
 
-if Path(sys.prefix).resolve() != VENV_DIR:
-    raise SystemExit(
-        "Este demo debe ejecutarse con su propio entorno.\n"
-        f"  esperado: {VENV_DIR}\n"
-        f"  actual:   {Path(sys.prefix).resolve()}\n"
-        "Activá el entorno con: source qtrans_demo/demo_venv/Scripts/activate"
-    )
+# Guarda temporalmente desactivada para debuggear el código local.
+# if Path(sys.prefix).resolve() != VENV_DIR:
+#     raise SystemExit(
+#         "Este demo debe ejecutarse con su propio entorno.\n"
+#         f"  esperado: {VENV_DIR}\n"
+#         f"  actual:   {Path(sys.prefix).resolve()}\n"
+#         "Activá el entorno con: source qtrans_demo/demo_venv/Scripts/activate"
+#     )
 
 import qtrans  # noqa: E402
 from qtrans.utils import pipeline_utils  # noqa: E402
 
-QTRANS_PATH = Path(qtrans.__file__).resolve()
-if VENV_DIR not in QTRANS_PATH.parents:
-    raise SystemExit(
-        "qtrans no se importó desde el .venv del demo.\n"
-        f"  importado: {QTRANS_PATH}\n"
-        f"  esperado dentro de: {VENV_DIR}\n"
-        "Quitá el repositorio del PYTHONPATH y reinstalá requirements.txt."
-    )
+# Guarda temporalmente desactivada para debuggear el código local.
+# QTRANS_PATH = Path(qtrans.__file__).resolve()
+# if VENV_DIR not in QTRANS_PATH.parents:
+#     raise SystemExit(
+#         "qtrans no se importó desde el .venv del demo.\n"
+#         f"  importado: {QTRANS_PATH}\n"
+#         f"  esperado dentro de: {VENV_DIR}\n"
+#         "Quitá el repositorio del PYTHONPATH y reinstalá requirements.txt."
+#     )
 
 
 def _env(name, default):
@@ -426,7 +428,7 @@ def main():
     records = json.loads(INPUT_FILE.read_text(encoding="utf-8"))
 
     print(f"Python: {sys.executable}")
-    print(f"qtrans: {QTRANS_PATH} ({qtrans.__version__})")
+    print(f"qtrans: {Path(qtrans.__file__).resolve()} ({qtrans.__version__})")
     print(f"Entrada: {INPUT_FILE}")
     print(f"Proveedor: {PROVIDER} | QASM: {QASM_VERSION} | Shots: {SHOTS}")
     print(f"preserve_custom_gates: {PRESERVE_CUSTOM_GATES}")
@@ -458,7 +460,9 @@ def main():
 
         zx_calculus = output.get("zx_calculus")
         if isinstance(zx_calculus, dict):
-            print(f"[ZX] {zx_calculus.get('result')}")
+            method = zx_calculus.get("method")
+            suffix = f" ({method})" if method else ""
+            print(f"[ZX] {zx_calculus.get('result')}{suffix}")
             for zx_error in zx_calculus.get("errors") or []:
                 print(f"[error ZX] {zx_error['stage']}: {zx_error['message']}")
         elif "zx_calculus_result" in output:
