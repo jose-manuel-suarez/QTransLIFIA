@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qtranslifia"
-version = "0.2.0"
-description = "Traducción de circuitos Quirk a OpenQASM y migración a Qiskit, AWS Braket y PennyLane."
+version = "0.3.0"
+description = "Traducción de circuitos Quirk a OpenQASM y opcionalmente, migración a Qiskit, AWS Braket y PennyLane."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "Apache-2.0"
@@ -52,7 +52,8 @@ dev = [
 qtrans = "qtrans:main"
 
 [tool.setuptools.packages.find]
-include = ["qtrans*"]
+include = ["qtrans", "qtrans.*"]
+exclude = ["qtrans_demo*"]
 
 [tool.setuptools]
 include-package-data = true
