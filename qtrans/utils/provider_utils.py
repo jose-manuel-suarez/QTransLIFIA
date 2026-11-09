@@ -12,10 +12,8 @@ arrastrar los SDK pesados al importar el paquete y para evitar ciclos.
 
 import os
 import warnings
-from pathlib import Path
 
 from .qasm_utils import detect_qasm_version, qasm_custom_gate_operations
-from .pipeline_utils import log_stage
 
 
 # ---------------------------------------------------------------------------
@@ -35,6 +33,92 @@ PROVIDER_DIRECTORY = {
     'qiskit': 'ibm_qiskit',
     'braket': 'aws_braket',
     'pennylane': 'xanadu_pennylane',
+}
+
+
+from abc import ABC, abstractmethod
+
+
+class Provider(ABC):
+    """Proveedor base para la generación de código Python migrado y carga de circuito."""
+
+    @abstractmethod
+    def generate_code(self, qasm_source, qasm_version, shots, preserve_custom_gates):
+        """Devuelve el código Python ejecutable para este proveedor."""
+        pass
+
+    @abstractmethod
+    def load_circuit(self, qasm_source, qasm_version, shots, preserve_custom_gates, native):
+        """Materializa y devuelve el circuito nativo del proveedor."""
+        pass
+
+
+class QiskitProvider(Provider):
+    """Proveedor IBM Qiskit."""
+
+    def generate_code(self, qasm_source, qasm_version, shots, preserve_custom_gates):
+        from .qiskit_utils import _load_qiskit_native, _qiskit_python_source
+        circuit = _load_qiskit_native(qasm_source, qasm_version, fallback=False)
+        custom_gate_definitions = qasm_custom_gate_operations(qasm_source) if preserve_custom_gates else None
+        return _qiskit_python_source(
+            circuit,
+            preserve_custom_gates=preserve_custom_gates,
+            custom_gate_definitions=custom_gate_definitions,
+        )
+
+    def load_circuit(self, qasm_source, qasm_version, shots, preserve_custom_gates, native):
+        from .qiskit_utils import _load_qiskit_native
+        return _load_qiskit_native(qasm_source, qasm_version)
+
+
+class BraketProvider(Provider):
+    """Proveedor AWS Braket."""
+
+    def generate_code(self, qasm_source, qasm_version, shots, preserve_custom_gates):
+        from .braket_utils import _braket_python_source
+        from .qasm_utils import qasm_custom_gate_operations
+        circuit = _load_qiskit_native(qasm_source, qasm_version, fallback=False)  # reuse loader
+        custom_gate_definitions = qasm_custom_gate_operations(qasm_source) if preserve_custom_gates else None
+        return _braket_python_source(
+            circuit,
+            preserve_custom_gates=preserve_custom_gates,
+            custom_gate_definitions=custom_gate_definitions,
+        )
+
+    def load_circuit(self, qasm_source, qasm_version, shots, preserve_custom_gates, native):
+        from .braket_utils import _load_braket_native
+        return _load_braket_native(qasm_source)
+
+
+class PennyLaneProvider(Provider):
+    """Proveedor Xanadu PennyLane."""
+
+    def generate_code(self, qasm_source, qasm_version, shots, preserve_custom_gates):
+        from .pennylane_utils import _pennylane_python_source
+        from .qasm_utils import qasm_custom_gate_operations
+        circuit = _load_qiskit_native(qasm_source, qasm_version, fallback=False)
+        custom_gate_definitions = qasm_custom_gate_operations(qasm_source) if preserve_custom_gates else None
+        return _pennylane_python_source(
+            circuit,
+            shots=shots,
+            preserve_custom_gates=preserve_custom_gates,
+            custom_gate_definitions=custom_gate_definitions,
+        )
+
+    def load_circuit(self, qasm_source, qasm_version, shots, preserve_custom_gates, native):
+        # PennyLane siempre usa el script migrado.
+        from .provider_utils import provider_python_source
+        return provider_python_source(
+            qasm_source, 'pennylane', qasm_version=qasm_version,
+            shots=shots, preserve_custom_gates=preserve_custom_gates,
+        )
+
+
+# Instancia global por nombre (usada por el dispatch).
+_PROVIDER_INSTANCES = {
+    'qiskit': QiskitProvider(),
+    'braket': BraketProvider(),
+    'pennylane': PennyLaneProvider(),
 }
 
 
@@ -318,47 +402,3 @@ def cargar_circuito_qasm(qasm_str: str, provider: str, qasm_version: str = None,
         preserve_custom_gates=preserve_custom_gates,
         native=native,
     )
-
-
-def generate_provider_files(records, providers, migrated_dir, qasm_version, shots, verbose,
-                            preserve_custom_gates=False):
-    """Genera los scripts Python migrados de cada circuito para cada proveedor.
-
-    Parámetros:
-        - records (list[dict]): registros de los circuitos (claves ``name`` y
-          ``qasm_source``).
-        - providers (list[str] | tuple[str, ...]): proveedores canónicos.
-        - migrated_dir (str | Path): carpeta raíz de ``migrated_circuits``.
-        - qasm_version (str): '2.0' o '3.0'.
-        - shots (int): disparos (solo PennyLane).
-        - verbose (bool): muestra el log de cada etapa.
-        - preserve_custom_gates (bool): conserva las compuertas custom como
-          funciones locales en el script migrado.
-
-    Retorna:
-        - tuple[list[pathlib.Path], list[tuple[str, Exception]]]: archivos
-          generados y los errores (``(etiqueta, excepción)``).
-    """
-    generated = []
-    errors = []
-    for provider in providers:
-        provider_dir = Path(migrated_dir) / PROVIDER_DIRECTORY.get(provider, provider)
-        provider_dir.mkdir(parents=True, exist_ok=True)
-        for record in records:
-            output_path = provider_dir / f"{record['name']}.py"
-            try:
-                source = provider_python_source(
-                    record["qasm_source"],
-                    provider,
-                    qasm_version=qasm_version,
-                    shots=shots,
-                    preserve_custom_gates=preserve_custom_gates,
-                )
-                compile(source, str(output_path), "exec")
-                output_path.write_text(source, encoding="utf-8")
-                generated.append(output_path)
-                log_stage(verbose, provider, f"Generado {output_path.relative_to(migrated_dir)}.")
-            except Exception as exc:
-                errors.append((f"{provider}/{record['name']}", exc))
-                print(f"Error generando {provider}/{record['name']}: {exc}")
-    return generated, errors

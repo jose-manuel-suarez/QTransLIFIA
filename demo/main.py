@@ -36,7 +36,6 @@ except (AttributeError, OSError):
 #     )
 
 import qtrans  # noqa: E402
-from qtrans.utils import pipeline_utils  # noqa: E402
 
 # Guarda temporalmente desactivada para debuggear el código local.
 # QTRANS_PATH = Path(qtrans.__file__).resolve()
@@ -103,8 +102,7 @@ if PROVIDER not in {"qiskit", "braket", "pennylane"}:
     )
 
 # Salida agrupada por corrida: output/run_DD_MM_YYYY__HH/<proveedor>/
-RUN_LABEL = pipeline_utils.format_run_label("DD_MM_YYYY__HH", datetime.now())
-RUN_DIR = OUTPUT_DIR / f"run_{RUN_LABEL}"
+RUN_DIR = OUTPUT_DIR / f"run_{datetime.now():%d_%m_%Y__%H}"
 
 
 def _safe_name(name):
@@ -133,13 +131,8 @@ def build_payload(records):
             "shots": SHOTS,
             "preserve_custom_gates": PRESERVE_CUSTOM_GATES,
             "zx": {"enabled": ZX_ENABLED, "time": 0.5, "timeout": 120},
-            "images": {
-                "quirk": False,
-                "qasm": False,
-                "composer": False,
-                "capture_timeout": 15,
-            },
             "comparison": False,
+            "generate_provider_code": True,
             "return_circuit": True,
         },
     }

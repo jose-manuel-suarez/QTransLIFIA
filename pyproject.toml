@@ -24,17 +24,10 @@ dependencies = [
     "qiskit",
     "qiskit-qasm3-import",
     "matplotlib",
-    "pylatexenc",
-    "pandas",
     "selenium",
 ]
 
 [project.optional-dependencies]
-http = [
-    "Flask==2.0.1",
-    "Flask-Cors==3.0.10",
-    "Werkzeug==2.3.4",
-]
 providers = [
     "amazon-braket-sdk",
     "pennylane",
@@ -43,13 +36,11 @@ notebook = [
     "jupyter",
     "ipykernel",
     "qiskit-aer",
+    "pandas",
 ]
 dev = [
     "qiskit-aer",
 ]
-
-[project.scripts]
-qtrans = "qtrans:main"
 
 [tool.setuptools.packages.find]
 include = ["qtrans", "qtrans.*"]

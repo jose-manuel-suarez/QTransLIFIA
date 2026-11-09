@@ -21,7 +21,6 @@ Este módulo comprueba:
 
 import io
 import json
-import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
@@ -30,8 +29,8 @@ from qiskit import qasm3
 from qiskit.primitives import StatevectorSampler
 
 from qtrans.core import translate_circuit
-from qtrans.utils import qutils
-from qtrans.utils.qutils import quirk_to_qasm
+from qtrans.utils import quirk_utils
+from qtrans.utils.quirk_utils import quirk_to_qasm
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ALGORITHMS_FILE = PROJECT_ROOT / 'input' / 'xy_probes_gates_algorithms.json'
@@ -135,13 +134,13 @@ class ProbeTranslationTests(unittest.TestCase):
     def test_translation_emits_no_unsupported_gate_warning(self):
         for name, data in _algorithms().items():
             with self.subTest(probe=name):
-                before = set(qutils._REPORTED_UNSUPPORTED_GATES)
+                before = set(quirk_utils._REPORTED_UNSUPPORTED_GATES)
                 stderr = io.StringIO()
                 with redirect_stderr(stderr):
                     quirk_to_qasm(data['url'])
                 self.assertEqual(
                     before,
-                    set(qutils._REPORTED_UNSUPPORTED_GATES),
+                    set(quirk_utils._REPORTED_UNSUPPORTED_GATES),
                     'La traducción reportó compuertas no traducibles',
                 )
                 self.assertEqual('', stderr.getvalue())
@@ -225,34 +224,47 @@ class ProbeComparisonTableTests(unittest.TestCase):
                 )
         return records
 
-    def test_report_lists_every_circuit_with_legend(self):
+    def _comparison(self, record, timeout=60):
         from qtrans.utils import zx_utils
 
-        records = self._records()
-        with tempfile.TemporaryDirectory() as temp:
-            result = zx_utils.run_zx_workflow(
-                records, Path(temp), 0.5, False, False, 60
+        status = 'NO COMPARABLES'
+        motivo = ''
+        try:
+            base_graph, _method = zx_utils.quirk_to_zx_graph_with_method(
+                record['url'], record['offset'], time=0.5
             )
-            comparisons = result['comparisons']
-            report = Path(result['comparison_path']).read_text(encoding='utf-8')
+            qasm_graph = zx_utils.qasm_to_zx_graph(
+                record['qasm_source'], zx_utils._zx_matrix_gate_names(record['url'])
+            )
+            _comparison_method, result = zx_utils.zx_compare_once(base_graph, qasm_graph, timeout)
+            status = (
+                'NO COMPARABLES'
+                if result.startswith('NO COMPARABLES')
+                else ('EQUIVALENTES' if result.startswith('EQUIVALENTES') else 'NO EQUIVALENTES')
+            )
+            motivo = result if status == 'NO COMPARABLES' else ''
+        except Exception as exc:  # noqa: BLE001 — post-selecciones no son unitarias
+            status = 'NO COMPARABLES'
+            motivo = f'Compuerta Quirk no soportada: {exc}'
+        return {
+            'Nombre algoritmo': record['name'],
+            'Resultado': status,
+            'Motivo': motivo,
+        }
 
-        self.assertEqual(len(records), len(comparisons))
+    def test_report_lists_every_circuit_with_legend(self):
+        comparisons = [self._comparison(record) for record in self._records()]
+
+        self.assertEqual(24, len(comparisons))
         statuses = [c['Resultado'] for c in comparisons]
-        self.assertEqual(12, sum(1 for s in statuses if s.startswith('EQUIVALENTES')))
-        self.assertEqual(12, sum(1 for s in statuses if s.startswith('NO COMPARABLES')))
+        self.assertEqual(12, sum(1 for s in statuses if s == 'EQUIVALENTES'))
+        self.assertEqual(12, sum(1 for s in statuses if s == 'NO COMPARABLES'))
 
         for comparison in comparisons:
-            if comparison['Resultado'].startswith('NO COMPARABLES'):
+            if comparison['Resultado'] == 'NO COMPARABLES':
                 self.assertIn('no soportada', comparison['Motivo'])
             else:
                 self.assertEqual('', comparison['Motivo'])
-
-        self.assertIn('## Leyenda', report)
-        self.assertIn('| EQUIVALENTES | 12 |', report)
-        self.assertIn('| NO COMPARABLES | 12 |', report)
-        self.assertIn('Motivos de no comparabilidad', report)
-        for comparison in comparisons:
-            self.assertIn(comparison['Nombre algoritmo'], report)
 
 
 if __name__ == '__main__':

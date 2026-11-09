@@ -1,4 +1,3 @@
-import base64
 import json
 import unittest
 
@@ -91,7 +90,6 @@ OUTPUT_KEYS = {
     "zx_calculus",
     "circuit_info",
     "custom_gates",
-    "img",
     "comparison_doc",
     "errors",
 }
@@ -103,9 +101,9 @@ INPUT_KEYS = {
     "shots",
     "preserve_custom_gates",
     "zx",
-    "images",
     "comparison",
     "return_circuit",
+    "generate_provider_code",
 }
 QASM_KEYS = {"code", "version", "lines", "gates"}
 
@@ -146,7 +144,6 @@ class TranslateSingleTests(unittest.TestCase):
         )
         self.assertEqual(3, output["circuit_info"]["n_qubits"])
         self.assertEqual({"n_qubits", "n_cols", "gates"}, set(output["circuit_info"]))
-        self.assertEqual({"quirk": None, "qasm": None, "composer": None}, output["img"])
         self.assertIsNone(output["circuits"])
         self.assertIsNone(output["comparison_doc"])
         self.assertEqual([], output["errors"])
@@ -203,6 +200,13 @@ class TranslateSingleTests(unittest.TestCase):
             compile(code, "<test>", "exec")
         self.assertEqual(1, qasm["gates"]["custom"]["count"])
         self.assertEqual(2, qasm["gates"]["native"]["count"])
+
+    def test_generate_provider_code_false_returns_empty_migrated_code(self):
+        response = translate_circuit(
+            {"input": {"url": QUIRK_URL, "generate_provider_code": False}}
+        )
+
+        self.assertEqual({}, response["output"]["migrated_code"])
 
     def test_offset_shifts_qubit_indices(self):
         response = translate_circuit({"input": {"url": QUIRK_URL, "offset": 1}})
@@ -312,23 +316,19 @@ class TranslateSingleTests(unittest.TestCase):
         self.assertEqual("zx", zx_calculus["errors"][0]["stage"])
         self.assertIsNone(zx_calculus["method"])
 
-    def test_qasm_image_base64_and_comparison_doc(self):
+    def test_comparison_doc_only(self):
         response = translate_circuit(
             {
                 "input": {
                     "url": QUIRK_URL,
-                    "images": {"qasm": True},
                     "comparison": True,
                 }
             }
         )
         output = response["output"]
 
-        png = base64.b64decode(output["img"]["qasm"])
-        self.assertTrue(png.startswith(b"\x89PNG"))
         self.assertIn("OPENQASM", output["comparison_doc"])
         self.assertIn("[Abrir en Quirk](", output["comparison_doc"])
-        self.assertIsNone(output["img"]["composer"])
 
     def test_return_circuit_returns_native_objects(self):
         response = translate_circuit(
@@ -376,7 +376,7 @@ class TranslateSingleTests(unittest.TestCase):
             {"input": {"circuits": [{"url": QUIRK_URL, "extra": 1}]}},
             {"input": {"url": QUIRK_URL, "desconocido": 1}},
             {"input": {"url": QUIRK_URL, "zx": {"no_existe": 1}}},
-            {"input": {"url": QUIRK_URL, "images": {"no_existe": 1}}},
+            {"input": {"url": QUIRK_URL, "generate_provider_code": "true"}},
             {"input": {"url": "https://algassert.com/quirk"}},
             {"input": {"json": {"cols": "no-lista"}}},
             {"input": {"json": "no-es-json"}},
@@ -388,7 +388,7 @@ class TranslateSingleTests(unittest.TestCase):
             {"input": {"url": QUIRK_URL, "offset": -1}},
             {"input": {"url": QUIRK_URL, "shots": 0}},
             {"input": {"url": QUIRK_URL, "zx": {"time": 2}}},
-            {"input": {"url": QUIRK_URL, "images": "no-objeto"}},
+            {"input": {"url": QUIRK_URL, "generate_provider_code": 1.5}},
             {"input": {"url": QUIRK_URL, "return_circuit": "true"}},
             "payload-no-json",
         )
@@ -449,3 +449,4 @@ class TranslateBatchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

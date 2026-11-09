@@ -1,43 +1,37 @@
 """
 
-Quirk-to-OpenQASM pipeline de QTransLIFIA (librería + CLI).
+Librería de QTransLIFIA: traducción de circuitos Quirk a OpenQASM y a los
+ecosistemas objetivo (Qiskit, AWS Braket, PennyLane).
 
-Reproduce el flujo del cuaderno ``notebooks/QTrans.ipynb``:
-lee los JSON de entrada, captura los circuitos Quirk, traduce a OpenQASM (versión configurable, 2.0+), genera diagramas y comparaciones, construye y compara grafos ZX, genera los circuitos mediante 'loads' del QASM y migra cada circuito a los ecosistemas objetivo (Qiskit, AWS Braket, PennyLane) en codigo python, incluidas las imágenes de los circuitos migrados con el estilo de IBM Quantum Composer.
+El punto de entrada es ``translate_circuit(payload)``: recibe un payload JSON
+(dict o cadena) con el grupo ``input`` (circuito único como ``url``/``json`` o
+lote ``circuits``, más ``offset``, ``qasm_version``, ``provider`` y las etapas
+opcionales) y devuelve ``{"input": ..., "output": ...}`` sin escribir nada en
+disco. ``translate_circuits(payload)`` es la variante que devuelve los
+circuitos nativos ya cargados.
 
-Todas las salidas se agrupan por corrida en ``<output>/run_DD_MM_YYYY__HH``, donde ``<output>`` es el directorio de salida configurado y la etiqueta de la corrida se genera a partir de la fecha y hora actual.
+Los valores por defecto del payload se pueden parametrizar con variables
+``QTRANS_*`` en un archivo ``.env`` del directorio de trabajo actual. Cada
+etapa delega en los módulos de ``qtrans.utils``:
 
-Como librería instalable con pip, expone la función core ``translate_circuit(payload)``: recibe un objeto JSON (dict o cadena) con el grupo ``input`` (circuito como ``url``/``json`` o lote ``circuits``, más ``offset``, ``qasm_version``, ``provider`` y las etapas opcionales) y devuelve ``{"input": ..., "output": ...}``; cada circuito de ``output`` incluye ``qasm`` (``code``, ``version``, ``lines`` y ``gates`` con ``custom``/``native``), ``migrated_code`` (del proveedor configurado), ``zx_calculus_result``/``zx_calculus`` (resultado, errores y método de la etapa ZX), ``circuit_info``, ``custom_gates`` (catálogo exhaustivo de las compuertas custom declaradas, con ``used_in_circuit``), ``img`` (PNG en base64), ``comparison_doc`` y ``errors`` (más ``name`` si es un lote).
-
-Este módulo es el **orquestador**: resuelve la configuración (variables ``QTRANS_*`` de
-``.env``), la línea de comandos y el flujo por corrida, y delega cada etapa en los
-módulos de ``qtrans.utils``:
-
-- ``utils.pipeline_utils``: utilidades genéricas (log, etiqueta de corrida, nombres).
 - ``utils.qasm_utils``: tablas de ``stdgates.inc``, ángulos, versiones y resumen de compuertas.
 - ``utils.quirk_utils``: traducción Quirk → OpenQASM, captura de Quirk y comparación visual.
-- ``utils.provider_utils``: registro de proveedores y generación de los scripts migrados.
+- ``utils.provider_utils``: registro de proveedores y código Python migrado.
 - ``utils.qiskit_utils`` / ``utils.braket_utils`` / ``utils.pennylane_utils``: cada ecosistema.
 - ``utils.zx_utils``: grafos ZX (PyZX) y su comparación.
 
 """
 
 # Importación de las librerías estándar y configuración del entorno
-import argparse
 import json
 import os
-import shutil
-import sys
-from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from .utils import (
-    pipeline_utils,
     provider_utils,
     qasm_utils,
-    qiskit_utils,
     quirk_utils,
     zx_utils,
 )
@@ -45,7 +39,6 @@ from .utils.provider_utils import (
     PROVIDER_DIRECTORY,
     SUPPORTED_PROVIDERS,
     normalize_provider,
-    parse_providers,
     providers_from_env,
 )
 from .utils.qasm_utils import qasm3_to_qasm2
@@ -54,44 +47,22 @@ from .utils.zx_utils import (
     quirk_to_zx_graph_with_method,
 )
 
-# Reexports de compatibilidad: el ``core.py`` original importaba estos nombres
-# desde ``utils.qutils`` y los exponía a nivel de módulo. Se mantienen aquí
-# para no romper código externo del tipo ``from qtrans.core import quirk_to_qasm``.
-from .utils.provider_utils import provider_python_source  # noqa: F401
-from .utils.qiskit_utils import load_qasm_circuit, render_qasm_image  # noqa: F401
-from .utils.quirk_utils import (  # noqa: F401
-    capture_quirk_circuit,
-    quirk_circuit_info,
-    quirk_to_qasm,
-)
-from .utils.url_utils import encode_quirk_url  # noqa: F401
-from .utils.zx_utils import compare_zx_graphs, reduce_and_draw_zx_svg  # noqa: F401
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-load_dotenv(PROJECT_ROOT / ".env")
+# La configuración de entrada se lee del ``.env`` del directorio de trabajo
+# actual (no del árbol del paquete), para que el usuario pueda parametrizar la
+# librería desde su propio proyecto; si el archivo no existe no hace nada.
+load_dotenv(Path.cwd() / ".env")
 
 
 # ---------------------------------------------------------------------------
 # Configuración (variables QTRANS_* en .env)
 # ---------------------------------------------------------------------------
-def _configured_path(variable_name, default):
-    configured_value = os.getenv(variable_name)
-    if configured_value:
-        path = Path(configured_value).expanduser()
-        if not path.is_absolute():
-            # Un separador inicial ("/output") denota una ruta relativa a la raíz del proyecto.
-            path = PROJECT_ROOT / str(path).lstrip("/\\")
-        return path.resolve()
-    return Path(default).expanduser().resolve()
-
-
 def _configured_bool(variable_name, default):
     configured_value = os.getenv(variable_name)
     if configured_value is None:
         return default
     normalized_value = configured_value.strip().casefold()
     if normalized_value in {"1", "true", "yes", "on", "si"}: return True
-    if normalized_value in {"0", "false", "no", "off", "no"}: return False
+    if normalized_value in {"0", "false", "no", "off"}: return False
     raise ValueError(f"{variable_name} debe ser un booleano (true/false): {configured_value!r}")
 
 
@@ -118,660 +89,15 @@ def _configured_qasm_version():
     return version
 
 
-def _parse_input_files(value):
-    """Convierte una lista separada por comas de JSON en tupla de nombres."""
-    if value is None:
-        return None
-    names = [part.strip() for part in str(value).split(",")]
-    names = [name for name in names if name]
-    return tuple(names) or None
-
 # Obtención de variables constantes relacionadas a la configuración
-DEFAULT_INPUT_MODE = (os.getenv("QTRANS_INPUT_MODE") or "batch").strip().casefold()
-if DEFAULT_INPUT_MODE not in {"batch", "algorithm"}:
-    raise ValueError("QTRANS_INPUT_MODE debe ser 'batch' o 'algorithm'")
-DEFAULT_INPUT_FILE = os.getenv("QTRANS_INPUT_FILE") or None
-DEFAULT_INPUT_FILES = _parse_input_files(os.getenv("QTRANS_INPUT_FILES"))
-DEFAULT_INPUT_DIR = _configured_path("QTRANS_INPUT_DIR", PROJECT_ROOT / "input")
-DEFAULT_OUTPUT_DIR = _configured_path("QTRANS_OUTPUT_DIR", PROJECT_ROOT / "output")
-DEFAULT_RUN_LABEL = (os.getenv("QTRANS_RUN_LABEL") or "").strip() or None
-
-# Subdirectorios (relativos a la corrida) que replican la estructura del cuaderno.
-RUN_QASM_SUBDIR = "algorithms_qasm"
-RUN_IMGS_SUBDIR = "imgs"
-RUN_QUIRK_IMAGES_SUBDIR = "imgs/circuits_quirk"
-RUN_QASM_IMAGES_SUBDIR = "imgs/circuits_qasm"
-RUN_COMPARE_SUBDIR = "imgs/visual_comparisons"
-RUN_ZX_SUBDIR = "ZXCalculus"
-RUN_MIGRATED_SUBDIR = "migrated_circuits"
-RUN_COMPOSER_IMAGES_SUBDIR = "migrated_circuits/ibm_qiskit/imgs"
-RUN_MARKER_FILE = ".qtrans_run"
-
-DEFAULT_CAPTURE_IMAGES = _configured_bool("QTRANS_CAPTURE_IMAGES", True)
-DEFAULT_GENERATE_QASM_IMAGES = _configured_bool("QTRANS_GENERATE_QASM_IMAGES", True)
-DEFAULT_GENERATE_COMPARISON = _configured_bool("QTRANS_GENERATE_COMPARISON", True)
-DEFAULT_GENERATE_COMPOSER_IMAGES = _configured_bool("QTRANS_GENERATE_COMPOSER_IMAGES", True)
-DEFAULT_GENERATE_ZX = _configured_bool("QTRANS_GENERATE_ZX", True)
-DEFAULT_GENERATE_ZX_IMAGES = _configured_bool("QTRANS_GENERATE_ZX_IMAGES", True)
-DEFAULT_VERBOSE = _configured_bool("QTRANS_VERBOSE", True)
 DEFAULT_QASM_VERSION = _configured_qasm_version()
 DEFAULT_ZX_TIME = _configured_float("QTRANS_ZX_TIME", 0.5, minimum=0.0, maximum=1.0)
 DEFAULT_ZX_TIMEOUT = _configured_int("QTRANS_ZX_TIMEOUT", 120)
+DEFAULT_ZX_ENABLED = _configured_bool("QTRANS_GENERATE_ZX", True)
 DEFAULT_SHOTS = _configured_int("QTRANS_SHOTS", 1000)
 DEFAULT_CAPTURE_TIMEOUT = _configured_int("QTRANS_CAPTURE_TIMEOUT", 15)
 DEFAULT_TARGET_PROVIDERS = providers_from_env()
 DEFAULT_PRESERVE_CUSTOM_GATES = _configured_bool("QTRANS_PRESERVE_CUSTOM_GATES", True)
-
-
-# ---------------------------------------------------------------------------
-# Utilidades internas (delegadas en utils.pipeline_utils)
-# ---------------------------------------------------------------------------
-def _format_run_label(label, now=None):
-    """Resuelve los tokens DD/MM/YYYY/HH/MM/SS de una etiqueta con datos reales.
-
-    ``MM`` se interpreta como mes tras DD/YYYY y como minutos tras HH.
-    """
-    return pipeline_utils.format_run_label(label, now)
-
-
-def _run_label(run_label=None):
-    """Resuelve la etiqueta de la corrida (carpeta ``run_<etiqueta>``).
-
-    La etiqueta por defecto tiene resolución de **fecha y hora**
-    (``DD_MM_YYYY__HH_MM``): dos ejecuciones dentro del mismo minuto reutilizan
-    la misma carpeta y sobrescriben sus archivos, de modo que ``output/`` no
-    acumula una carpeta por corrida.
-
-    Parámetros:
-        - run_label (str | None): etiqueta explícita con tokens
-          (``DD``, ``MM``, ``YYYY``, ``HH``, ``MM``, ``SS``).
-
-    Retorna:
-        - str: etiqueta resuelta.
-    """
-    label = (run_label or "").strip() if isinstance(run_label, str) else run_label
-    label = label or DEFAULT_RUN_LABEL
-    if not label:
-        return datetime.now().strftime("%d_%m_%Y__%H")
-    return _format_run_label(label)
-
-
-def _run_directory(output_dir, run_dir=None, run_label=None):
-    if run_dir is not None:
-        return Path(run_dir).expanduser().resolve()
-    output_dir = Path(output_dir).expanduser().resolve()
-    return output_dir / f"run_{_run_label(run_label)}"
-
-
-def _resolve_run_path(value, run_dir, default_subdir):
-    return pipeline_utils.resolve_run_path(value, run_dir, default_subdir)
-
-
-def _prepare_run_directory(run_dir, verbose):
-    """Deja la carpeta de la corrida lista para reutilizarse o crearse.
-
-    La carpeta lleva la estampa de fecha y **hora/minuto**: dos ejecuciones
-    dentro del mismo minuto comparten carpeta, de modo que los archivos se
-    sobrescriben en lugar de acumular una carpeta nueva por corrida. Cuando la
-    carpeta ya existía (corrida previa del mismo minuto) se borran sus
-    artefactos generados para que no se mezclen con los nuevos; si la carpeta
-    no fue creada por la herramienta, no se toca nada.
-
-    Parámetros:
-        - run_dir (str | Path): carpeta de la corrida.
-        - verbose (bool): si es True, informa de la limpieza.
-
-    Retorna:
-        - None
-    """
-    run_dir = Path(run_dir)
-    marker = run_dir / RUN_MARKER_FILE
-    if not run_dir.exists():
-        run_dir.mkdir(parents=True, exist_ok=True)
-        marker.write_text(
-            "Carpeta de corrida de QTransLIFIA (se reutiliza dentro de la misma hora).\n",
-            encoding="utf-8",
-        )
-        return
-    if not marker.is_file():
-        return
-    removed = []
-    for subdir in (RUN_QASM_SUBDIR, RUN_IMGS_SUBDIR, RUN_ZX_SUBDIR, RUN_MIGRATED_SUBDIR):
-        target = run_dir / subdir
-        if target.is_dir():
-            shutil.rmtree(target, ignore_errors=True)
-            removed.append(subdir)
-    if removed:
-        _log(
-            verbose,
-            "Corrida",
-            f"Misma hora: se regeneran {', '.join(removed)} en {run_dir.name}.",
-        )
-
-
-def _safe_algorithm_name(name):
-    return pipeline_utils.safe_algorithm_name(name)
-
-
-def _log(verbose, step, message):
-    pipeline_utils.log_stage(verbose, step, message)
-
-
-def _resolve_algorithm_file(input_file, input_dir):
-    file_path = Path(input_file).expanduser()
-    if not file_path.is_absolute():
-        local_path = Path.cwd() / file_path
-        input_path = Path(input_dir) / file_path
-        file_path = local_path if local_path.is_file() else input_path
-    file_path = file_path.resolve()
-    if file_path.suffix.lower() != ".json":
-        raise ValueError(f"El archivo de entrada debe tener extensión .json: {file_path}")
-    if not file_path.is_file():
-        raise FileNotFoundError(f"No se encontró el archivo de entrada: {file_path}")
-    return file_path
-
-
-def process_json_file(
-    input_file,
-    qasm_dir,
-    quirk_images_dir,
-    capture_images=True,
-    capture_function=None,
-    generated_names=None,
-    qasm_version=DEFAULT_QASM_VERSION,
-    verbose=False,
-    capture_timeout=DEFAULT_CAPTURE_TIMEOUT,
-):
-    """Procesa un JSON y genera los archivos OpenQASM (y capturas Quirk)."""
-    input_path = Path(input_file).resolve()
-    with input_path.open("r", encoding="utf-8") as source_file:
-        algorithms = json.load(source_file)
-    if not isinstance(algorithms, dict):
-        raise ValueError(f"El JSON debe contener un objeto de algoritmos: {input_path}")
-
-    qasm_dir = Path(qasm_dir)
-    quirk_images_dir = Path(quirk_images_dir)
-    qasm_dir.mkdir(parents=True, exist_ok=True)
-    if capture_images:
-        quirk_images_dir.mkdir(parents=True, exist_ok=True)
-
-    version_suffix = f"_v{qasm_version}"
-    filename_prefix = "popular_" if input_path.stem.casefold() == "popular_algorithms" else ""
-    if capture_function is None:
-        capture = lambda url, path: quirk_utils.capture_quirk_circuit(
-            url, path, timeout=capture_timeout
-        )
-    else:
-        capture = capture_function
-    qasm_paths = []
-    algorithm_records = []
-    captures_succeeded = 0
-    captures_failed = 0
-    generated_names = generated_names if generated_names is not None else set()
-
-    for algorithm_name, algorithm_data in algorithms.items():
-        if not isinstance(algorithm_data, dict) or not isinstance(algorithm_data.get("url"), str):
-            raise ValueError(f"El algoritmo {algorithm_name!r} debe contener una URL Quirk")
-
-        safe_name = _safe_algorithm_name(algorithm_name)
-        if not safe_name:
-            raise ValueError(f"Nombre de algoritmo vacío o inválido en {input_path}")
-        output_name = f"{filename_prefix}{safe_name}"
-        if output_name in generated_names:
-            raise ValueError(f"Nombre de salida duplicado entre archivos de entrada: {output_name}")
-        generated_names.add(output_name)
-
-        url = algorithm_data["url"]
-        qasm_code = quirk_utils.quirk_to_qasm(
-            url,
-            algorithm_data.get("offset", 0),
-            qasm_version=qasm_version,
-        )
-        qasm_path = qasm_dir / f"{output_name}{version_suffix}.txt"
-        qasm_path.write_text(qasm_code, encoding="utf-8")
-        qasm_paths.append(qasm_path)
-        _log(verbose, "Entrada", f"Procesando {algorithm_name} desde {input_path.name}.")
-        algorithm_records.append(
-            {
-                "name": output_name,
-                "display_name": algorithm_name,
-                "input_file": input_path,
-                "url": url,
-                "offset": algorithm_data.get("offset", 0),
-                "qasm_path": qasm_path,
-                "qasm_source": qasm_code,
-            }
-        )
-        _log(verbose, "OpenQASM", f"Generado {qasm_path.name} ({qasm_version}).")
-
-        if capture_images:
-            image_path = quirk_images_dir / f"{output_name}.png"
-            try:
-                captured = capture(url, image_path)
-            except Exception as exc:
-                _log(verbose, "Quirk PNG", f"Error capturando {output_name}: {exc}")
-                captured = False
-            if captured:
-                captures_succeeded += 1
-                _log(verbose, "Quirk PNG", f"Generado {image_path.name}.")
-            else:
-                captures_failed += 1
-
-    return {
-        "input_file": input_path,
-        "algorithms_processed": len(algorithms),
-        "qasm_paths": qasm_paths,
-        "algorithm_records": algorithm_records,
-        "captures_succeeded": captures_succeeded,
-        "captures_failed": captures_failed,
-    }
-
-
-def _json_safe(value):
-    """Convierte rutas, tuplas y estructuras anidadas en tipos serializables a JSON.
-
-    Parámetros:
-        - value: valor de cualquier tipo (dict, list, tuple, Path, str, ...).
-
-    Retorna:
-        - object: copia del valor con ``pathlib.Path`` como ``str`` y tuplas
-        como listas; los demás tipos se devuelven sin cambios.
-    """
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, dict):
-        return {key: _json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_safe(item) for item in value]
-    return value
-
-
-def _build_run_report(summary):
-    """Construye el reporte JSON-safe de una corrida (incluye los circuitos OpenQASM).
-
-    Parámetros:
-        - summary (dict): resumen devuelto por ``run_pipeline`` (claves
-          ``algorithms`` con el OpenQASM de cada circuito, ``errors``, etc.).
-
-    Retorna:
-        - dict: copia serializable del resumen; ``errors`` queda como lista de
-        ``{"stage", "message"}`` y todas las rutas como texto.
-    """
-    report = _json_safe(summary)
-    report.pop("json_report", None)
-    report.pop("json_report_path", None)
-    report["errors"] = [
-        {"stage": str(stage), "message": str(exc)} for stage, exc in summary["errors"]
-    ]
-    return report
-
-
-def run_pipeline(
-    input_mode=DEFAULT_INPUT_MODE,
-    input_file=DEFAULT_INPUT_FILE,
-    input_files=DEFAULT_INPUT_FILES,
-    input_dir=DEFAULT_INPUT_DIR,
-    output_dir=DEFAULT_OUTPUT_DIR,
-    run_label=None,
-    run_dir=None,
-    qasm_dir=None,
-    quirk_images_dir=None,
-    qasm_images_dir=None,
-    compare_dir=None,
-    zx_dir=None,
-    migrated_dir=None,
-    composer_images_dir=None,
-    capture_images=None,
-    qasm_version=DEFAULT_QASM_VERSION,
-    target_providers=None,
-    preserve_custom_gates=None,
-    verbose=None,
-    capture_timeout=DEFAULT_CAPTURE_TIMEOUT,
-    shots=DEFAULT_SHOTS,
-    zx_time=DEFAULT_ZX_TIME,
-    zx_timeout=DEFAULT_ZX_TIMEOUT,
-    generate_qasm_images=None,
-    generate_comparison=None,
-    generate_composer_images=None,
-    generate_zx=None,
-    generate_zx_images=None,
-    json_out=None,
-    print_status=True,
-):
-    """Ejecuta el flujo completo Quirk -> OpenQASM -> migración (por corrida).
-
-    ``json_out`` ('-' | ruta | None) construye además un reporte JSON-safe
-    (claves ``algorithms`` con el OpenQASM de cada circuito y ``errors`` como
-    ``{"stage", "message"}``): con una ruta lo escribe en disco y con '-'
-    solo lo deja en ``summary['json_report']`` para que la CLI lo imprima.
-    ``print_status`` controla los prints de estado (directorio de la corrida,
-    resumen); la CLI lo desactiva al imprimir JSON en stdout.
-    """
-    if input_mode not in {"batch", "algorithm"}:
-        raise ValueError("input_mode debe ser 'batch' o 'algorithm'")
-    if qasm_version not in {"2.0", "3.0"}:
-        raise ValueError("qasm_version debe ser '2.0' o '3.0'")
-    if capture_images is None:
-        capture_images = DEFAULT_CAPTURE_IMAGES
-    if generate_qasm_images is None:
-        generate_qasm_images = DEFAULT_GENERATE_QASM_IMAGES
-    if generate_comparison is None:
-        generate_comparison = DEFAULT_GENERATE_COMPARISON
-    if generate_composer_images is None:
-        generate_composer_images = DEFAULT_GENERATE_COMPOSER_IMAGES
-    if generate_zx is None:
-        generate_zx = DEFAULT_GENERATE_ZX
-    if generate_zx_images is None:
-        generate_zx_images = DEFAULT_GENERATE_ZX_IMAGES
-    if verbose is None:
-        verbose = DEFAULT_VERBOSE
-    if target_providers is None:
-        target_providers = DEFAULT_TARGET_PROVIDERS
-    target_providers = parse_providers(target_providers)
-    if preserve_custom_gates is None:
-        preserve_custom_gates = DEFAULT_PRESERVE_CUSTOM_GATES
-    if shots < 1:
-        raise ValueError("shots debe ser mayor que cero")
-    if capture_timeout < 1:
-        raise ValueError("capture_timeout debe ser mayor que cero")
-    if not 0 <= zx_time <= 1:
-        raise ValueError("zx_time debe estar entre 0 y 1")
-    if zx_timeout < 1:
-        raise ValueError("zx_timeout debe ser mayor que cero")
-    if isinstance(input_files, str):
-        input_files = _parse_input_files(input_files)
-    elif input_files is None:
-        input_files = DEFAULT_INPUT_FILES
-    else:
-        flattened = []
-        for item in input_files:
-            if isinstance(item, str) and "," in item:
-                flattened.extend(_parse_input_files(item) or ())
-            elif item is None or not str(item).strip():
-                continue
-            else:
-                flattened.append(item)
-        input_files = tuple(flattened)
-    if input_file is not None and not str(input_file).strip():
-        input_file = None
-
-    input_dir = Path(input_dir).expanduser().resolve()
-    output_dir = Path(output_dir).expanduser().resolve()
-    run_dir = _run_directory(output_dir, run_dir=run_dir, run_label=run_label)
-    qasm_dir = _resolve_run_path(qasm_dir, run_dir, RUN_QASM_SUBDIR)
-    quirk_images_dir = _resolve_run_path(quirk_images_dir, run_dir, RUN_QUIRK_IMAGES_SUBDIR)
-    qasm_images_dir = _resolve_run_path(qasm_images_dir, run_dir, RUN_QASM_IMAGES_SUBDIR)
-    compare_dir = _resolve_run_path(compare_dir, run_dir, RUN_COMPARE_SUBDIR)
-    zx_dir = _resolve_run_path(zx_dir, run_dir, RUN_ZX_SUBDIR)
-    migrated_dir = _resolve_run_path(migrated_dir, run_dir, RUN_MIGRATED_SUBDIR)
-    composer_images_dir = _resolve_run_path(
-        composer_images_dir, run_dir, RUN_COMPOSER_IMAGES_SUBDIR
-    )
-
-    if input_mode == "batch":
-        if input_file is not None:
-            raise ValueError(
-                "input_file solo se utiliza cuando input_mode='algorithm'; "
-                "déjalo vacío para que el modo batch procese todos los .json de input-dir"
-            )
-        if not input_dir.is_dir():
-            raise FileNotFoundError(f"No existe el directorio de entrada: {input_dir}")
-        if input_files:
-            selected_input_files = []
-            for raw_name in input_files:
-                candidate = Path(raw_name).expanduser()
-                candidate = candidate if candidate.is_absolute() else input_dir / candidate
-                candidate = candidate.resolve()
-                if candidate.suffix.lower() != ".json":
-                    raise ValueError(
-                        f"Los archivos de entrada deben tener extensión .json: {candidate}"
-                    )
-                if not candidate.is_file():
-                    raise FileNotFoundError(f"No se encontró el archivo de entrada: {candidate}")
-                selected_input_files.append(candidate)
-            input_files = sorted(set(selected_input_files))
-        else:
-            input_files = sorted(input_dir.glob("*.json"))
-    else:
-        if input_file is None:
-            raise ValueError("input_file es obligatorio cuando input_mode='algorithm'")
-        if input_files:
-            raise ValueError("input_files solo se utiliza cuando input_mode='batch'")
-        input_files = [_resolve_algorithm_file(input_file, input_dir)]
-    if not input_files:
-        raise FileNotFoundError(f"No se encontraron archivos .json en {input_dir}")
-    if input_mode == "batch" and input_files:
-        _log(
-            verbose,
-            "Configuración",
-            f"Archivos seleccionados: {', '.join(path.name for path in input_files)}",
-        )
-
-    if print_status:
-        print(f"DIRECTORIO DE LA CORRIDA: {run_dir}")
-    _prepare_run_directory(run_dir, verbose)
-    _log(
-        verbose,
-        "Configuración",
-        f"modo={input_mode}, QASM={qasm_version}, providers={', '.join(target_providers)}",
-    )
-    results = []
-    errors = []
-    algorithm_records = []
-    generated_names = set()
-    for input_path in input_files:
-        try:
-            result = process_json_file(
-                input_path,
-                qasm_dir=qasm_dir,
-                quirk_images_dir=quirk_images_dir,
-                capture_images=capture_images,
-                generated_names=generated_names,
-                qasm_version=qasm_version,
-                verbose=verbose,
-                capture_timeout=capture_timeout,
-            )
-            results.append(result)
-            algorithm_records.extend(result["algorithm_records"])
-            _log(
-                verbose,
-                "Entrada",
-                f"Procesado {input_path.name}: {result['algorithms_processed']} algoritmos.",
-            )
-        except Exception as exc:
-            errors.append((str(input_path), exc))
-            if print_status:
-                print(f"Error procesando {input_path.name}: {exc}")
-            if input_mode == "algorithm":
-                break
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    qasm_images = []
-    comparison_docs = []
-    composer_images = []
-    zx_result = {
-        "base_graphs": 0,
-        "qasm_graphs": 0,
-        "comparisons": [],
-        "comparison_path": None,
-        "images": [],
-        "errors": [],
-    }
-    provider_scripts = []
-
-    if algorithm_records and generate_qasm_images:
-        _log(
-            verbose,
-            "Visual QASM",
-            f"Iniciando diagramas OpenQASM para {len(algorithm_records)} algoritmos.",
-        )
-        qasm_images, stage_errors = qiskit_utils.generate_qasm_images(
-            algorithm_records, qasm_images_dir, qasm_version, verbose
-        )
-        errors.extend(stage_errors)
-
-    if algorithm_records and generate_comparison:
-        _log(
-            verbose,
-            "Comparación visual",
-            f"Iniciando comparaciones visuales de {len(algorithm_records)} algoritmos.",
-        )
-        try:
-            comparison_docs = quirk_utils.write_comparison_docs(
-                algorithm_records,
-                quirk_images_dir,
-                qasm_images_dir,
-                compare_dir,
-                verbose,
-            )
-        except Exception as exc:
-            errors.append(("Comparación visual", exc))
-            print(f"Error generando comparaciones visuales: {exc}")
-
-    if algorithm_records and generate_zx:
-        _log(
-            verbose,
-            "ZX",
-            f"Iniciando comprobación ZX de {len(algorithm_records)} algoritmos.",
-        )
-        try:
-            zx_result = zx_utils.run_zx_workflow(
-                algorithm_records, zx_dir, zx_time, generate_zx_images, verbose,
-                zx_timeout,
-            )
-            errors.extend(zx_result["errors"])
-        except Exception as exc:
-            errors.append(("Workflow ZX", exc))
-            print(f"Error en el workflow ZX: {exc}")
-
-    if algorithm_records:
-        _log(
-            verbose,
-            "Migración",
-            f"Iniciando migración de {len(algorithm_records)} algoritmos "
-            f"a {', '.join(target_providers)}.",
-        )
-        provider_scripts, provider_errors = provider_utils.generate_provider_files(
-            algorithm_records,
-            target_providers,
-            migrated_dir,
-            qasm_version,
-            shots,
-            verbose,
-            preserve_custom_gates=preserve_custom_gates,
-        )
-        errors.extend(provider_errors)
-
-    if algorithm_records and generate_composer_images and "qiskit" in target_providers:
-        _log(
-            verbose,
-            "Composer",
-            f"Iniciando imágenes Composer de {len(algorithm_records)} algoritmos.",
-        )
-        composer_images, composer_errors = qiskit_utils.generate_composer_images(
-            algorithm_records, composer_images_dir, qasm_version, verbose
-        )
-        errors.extend(composer_errors)
-
-    qasm_image_by_name = {path.stem: path for path in qasm_images}
-    composer_image_by_name = {path.stem: path for path in composer_images}
-    comparison_doc_by_name = {path.stem: path for path in comparison_docs}
-    migrated_scripts_by_name = {}
-    for script_path in provider_scripts:
-        migrated_scripts_by_name.setdefault(script_path.stem, []).append(script_path)
-    zx_by_name = {
-        comparison["Nombre algoritmo"]: comparison
-        for comparison in zx_result["comparisons"]
-    }
-    algorithm_reports = []
-    for record in algorithm_records:
-        record_name = record["name"]
-        quirk_capture = quirk_images_dir / f"{record_name}.png"
-        zx_entry = zx_by_name.get(record_name)
-        algorithm_reports.append(
-            {
-                "name": record_name,
-                "display_name": record["display_name"],
-                "input_file": record["input_file"].name,
-                "url": record["url"],
-                "offset": record["offset"],
-                "qasm": {
-                    "version": qasm_version,
-                    "path": record["qasm_path"],
-                    "code": record["qasm_source"],
-                },
-                "quirk_capture": quirk_capture if quirk_capture.is_file() else None,
-                "qasm_image": qasm_image_by_name.get(record_name),
-                "comparison_doc": comparison_doc_by_name.get(record_name),
-                "composer_image": composer_image_by_name.get(record_name),
-                "migrated_scripts": sorted(migrated_scripts_by_name.get(record_name, ())),
-                "zx": (
-                    {
-                        "result": zx_entry["Resultado"],
-                        "method": zx_entry.get("Grafo"),
-                        "comparison_method": zx_entry["Método"],
-                        "reason": zx_entry["Motivo"],
-                    }
-                    if zx_entry
-                    else None
-                ),
-            }
-        )
-
-    summary = {
-        "input_mode": input_mode,
-        "qasm_version": qasm_version,
-        "target_providers": target_providers,
-        "preserve_custom_gates": preserve_custom_gates,
-        "run_dir": run_dir,
-        "files_processed": len(results),
-        "algorithms_processed": sum(result["algorithms_processed"] for result in results),
-        "qasm_generated": sum(len(result["qasm_paths"]) for result in results),
-        "captures_succeeded": sum(result["captures_succeeded"] for result in results),
-        "captures_failed": sum(result["captures_failed"] for result in results),
-        "qasm_images_generated": len(qasm_images),
-        "comparison_docs_generated": len(comparison_docs),
-        "composer_images_generated": len(composer_images),
-        "zx_base_graphs_generated": zx_result["base_graphs"],
-        "zx_qasm_graphs_generated": zx_result["qasm_graphs"],
-        "zx_comparisons": zx_result["comparisons"],
-        "zx_images_generated": len(zx_result["images"]),
-        "provider_scripts_generated": len(provider_scripts),
-        "output_directories": {
-            "run": run_dir,
-            "qasm": qasm_dir,
-            "quirk_images": quirk_images_dir,
-            "qasm_images": qasm_images_dir,
-            "comparison": compare_dir,
-            "zx": zx_dir,
-            "migrated": migrated_dir,
-            "composer_images": composer_images_dir,
-        },
-        "algorithms": algorithm_reports,
-        "errors": errors,
-    }
-    if print_status:
-        print(
-            f"Resumen: {summary['files_processed']} JSON, {summary['algorithms_processed']} algoritmos, "
-            f"{summary['qasm_generated']} QASM, {summary['captures_succeeded']} capturas Quirk, "
-            f"{summary['qasm_images_generated']} diagramas QASM, "
-            f"{summary['composer_images_generated']} imágenes Composer, "
-            f"{summary['provider_scripts_generated']} scripts provider y {len(errors)} errores."
-        )
-    _log(verbose, "Salida", f"Scripts migrados en {migrated_dir}.")
-    if json_out is not None:
-        report = _build_run_report(summary)
-        summary["json_report"] = report
-        if json_out != "-":
-            json_path = Path(json_out).expanduser()
-            json_path.parent.mkdir(parents=True, exist_ok=True)
-            json_path.write_text(
-                json.dumps(report, indent=2, ensure_ascii=False) + "\n",
-                encoding="utf-8",
-            )
-            summary["json_report_path"] = json_path
-            _log(verbose, "JSON", f"Reporte JSON escrito en {json_path}.")
-    return summary
 
 
 # ---------------------------------------------------------------------------
@@ -788,13 +114,12 @@ _TRANSLATE_INPUT_KEYS = frozenset({
     "shots",
     "preserve_custom_gates",
     "zx",
-    "images",
     "comparison",
     "return_circuit",
+    "generate_provider_code",
 })
 _TRANSLATE_CIRCUIT_KEYS = frozenset({"name", "url", "json", "offset"})
 _TRANSLATE_ZX_KEYS = frozenset({"enabled", "time", "timeout"})
-_TRANSLATE_IMAGES_KEYS = frozenset({"quirk", "qasm", "composer", "capture_timeout"})
 
 
 def _unknown_keys(payload, allowed, label):
@@ -934,27 +259,25 @@ def _validated_int(value, label, minimum):
 
 
 def _validated_provider(value):
-    """Valida y normaliza el proveedor(es) para ``input.provider``.
+    """Valida y normaliza el proveedor para ``input.provider``.
 
-    Por defecto usa ``qiskit`` para mantener compatibilidad con los tests.
-    Si se pasa ``__env__`` explícitamente, se leen los proveedores de
-    ``QTRANS_TARGET_PROVIDERS``. Admite un proveedor único como cadena, o
-    una lista/tupla con múltiples proveedores (tomados del .env o pasados
-    explícitamente).
+    Por defecto usa el primer proveedor configurado en
+    ``QTRANS_TARGET_PROVIDERS`` (``.env``) o ``qiskit`` si no hay ninguno.
+    Si se pasa ``__env__`` explícitamente, se leen todos los proveedores de
+    ``QTRANS_TARGET_PROVIDERS``. La API solo admite un proveedor único.
 
     Parámetros:
         - value: valor recibido en ``input.provider``.
 
     Retorna:
-        - tuple[str] | str: si es único y viene como string original válido,
-          se mantiene como string para compatibilidad; si viene desde env o
-          es lista múltiple, se devuelve tupla. Internamente se normaliza.
+        - str | tuple[str]: nombre canónico único, o tupla si se pidió
+          ``__env__`` con varios proveedores.
 
     Lanza:
         - ValueError: si no hay proveedores válidos o si el valor es inválido.
     """
     if value is None:
-        return "qiskit"
+        return DEFAULT_TARGET_PROVIDERS[0] if DEFAULT_TARGET_PROVIDERS else "qiskit"
     if isinstance(value, str) and value.strip().lower() == "__env__":
         providers = DEFAULT_TARGET_PROVIDERS
         return providers if len(providers) != 1 else providers[0]
@@ -991,9 +314,9 @@ def _normalize_translate_input(input_payload):
         - dict: entrada normalizada; sirve como eco en la respuesta y como
           configuración de ejecución. Siempre contiene ``offset``,
           ``qasm_version``, ``provider`` (str), ``shots``,
-          ``preserve_custom_gates``, ``return_circuit``, ``zx``, ``images``,
-          ``comparison`` y exactamente uno de ``url`` (circuito único) o
-          ``circuits`` (lote).
+          ``preserve_custom_gates``, ``return_circuit``, ``zx``,
+          ``comparison`` y ``generate_provider_code`` y exactamente uno de
+          ``url`` (circuito único) o ``circuits`` (lote).
 
     Lanza:
         - ValueError: claves desconocidas, falta de circuito, tipos o rangos
@@ -1026,6 +349,9 @@ def _normalize_translate_input(input_payload):
         "return_circuit": _validated_bool(
             input_payload.get("return_circuit", False), "input.return_circuit"
         ),
+        "generate_provider_code": _validated_bool(
+            input_payload.get("generate_provider_code", True), "input.generate_provider_code"
+        ),
     }
     if settings["qasm_version"] not in {"2.0", "3.0"}:
         raise ValueError(
@@ -1042,29 +368,10 @@ def _normalize_translate_input(input_payload):
     if isinstance(zx_time, bool) or not isinstance(zx_time, (int, float)) or not 0 <= zx_time <= 1:
         raise ValueError(f"input.zx.time debe estar entre 0 y 1: {zx_time!r}")
     settings["zx"] = {
-        "enabled": _validated_bool(zx_payload.get("enabled", True), "input.zx.enabled"),
+        "enabled": _validated_bool(zx_payload.get("enabled", DEFAULT_ZX_ENABLED), "input.zx.enabled"),
         "time": float(zx_time),
         "timeout": _validated_int(
             zx_payload.get("timeout", DEFAULT_ZX_TIMEOUT), "input.zx.timeout", 1
-        ),
-    }
-
-    images_payload = input_payload.get("images")
-    if images_payload is None:
-        images_payload = {}
-    if not isinstance(images_payload, dict):
-        raise ValueError("input.images debe ser un objeto.")
-    _require_keys(images_payload, _TRANSLATE_IMAGES_KEYS, "input.images")
-    settings["images"] = {
-        "quirk": _validated_bool(images_payload.get("quirk", False), "input.images.quirk"),
-        "qasm": _validated_bool(images_payload.get("qasm", False), "input.images.qasm"),
-        "composer": _validated_bool(
-            images_payload.get("composer", False), "input.images.composer"
-        ),
-        "capture_timeout": _validated_int(
-            images_payload.get("capture_timeout", DEFAULT_CAPTURE_TIMEOUT),
-            "input.images.capture_timeout",
-            1,
         ),
     }
 
@@ -1097,34 +404,8 @@ def _normalize_translate_input(input_payload):
     return settings
 
 
-def _translate_circuit_entry(name, url, offset, settings):
-    """Traduce un circuito Quirk y arma su objeto de salida completo.
-
-    Ejecuta la traducción a OpenQASM, el conteo de gates, la migración a los
-    proveedor elegido y, si están habilitados, la validación ZX, las
-    imágenes en base64, el documento de comparación y, con
-    ``return_circuit``, la carga del circuito nativo del proveedor. Los
-    fallos de las etapas opcionales se acumulan en ``errors`` sin
-    interrumpir el resto.
-
-    Parámetros:
-        - name (str | None): nombre del circuito (None en modo single).
-        - url (str): URL de Quirk del circuito.
-        - offset (int): desplazamiento de los índices q[i].
-        - settings (dict): entrada normalizada (ver ``_normalize_translate_input``).
-
-    Retorna:
-        - dict: objeto de salida del circuito; JSON-serializable salvo los
-        objetos vivos de ``circuits`` cuando ``settings['return_circuit']``
-        es true.
-
-    Lanza:
-        - excepciones de ``quirk_to_qasm``/``provider_python_source`` si la
-          traducción o la migración fallan (errores de etapas opcionales NO
-          lanzan: van a ``errors``).
-    """
-    errors = []
-
+def _translate_to_qasm(url, offset, settings):
+    """Traduce Quirk a código OpenQASM y devuelve el bloque ``qasm`` + info."""
     qasm3_source = quirk_utils.quirk_to_qasm(url, offset=offset, qasm_version="3.0")
     gates_summary = qasm_utils.qasm_gate_summary(qasm3_source)
     qasm_version = settings["qasm_version"]
@@ -1145,7 +426,18 @@ def _translate_circuit_entry(name, url, offset, settings):
         "gates": info["gates"],
     }
     custom_gates = quirk_utils.custom_gates_catalog(url)
+    return qasm_block, circuit_info, custom_gates
 
+
+def _generate_provider_code(qasm_code, settings):
+    """Genera el diccionario ``migrated_code``.
+
+    Si ``settings['generate_provider_code']`` es ``True`` (por omisión)
+    se llama a ``provider_utils.provider_python_source`` para cada proveedor
+    configurado; de lo contrario se devuelve un dict vacío.
+    """
+    if not settings.get("generate_provider_code", True):
+        return {}
     providers = settings.get("provider") or DEFAULT_TARGET_PROVIDERS
     if isinstance(providers, str):
         providers = (providers,)
@@ -1154,67 +446,126 @@ def _translate_circuit_entry(name, url, offset, settings):
         migrated_code[f"{PROVIDER_DIRECTORY[provider]}_code"] = provider_utils.provider_python_source(
             qasm_code,
             provider,
-            qasm_version=qasm_version,
+            qasm_version=settings["qasm_version"],
             shots=settings["shots"],
             preserve_custom_gates=settings["preserve_custom_gates"],
         )
+    return migrated_code
 
-    circuits = None
-    if settings["return_circuit"]:
-        circuits = {}
-        for provider in providers:
-            try:
-                circuits[provider] = provider_utils.load_provider_circuit(
-                    qasm_code,
-                    provider,
-                    qasm_version=qasm_version,
-                    shots=settings["shots"],
-                    preserve_custom_gates=settings["preserve_custom_gates"],
-                )
-            except Exception as exc:  # noqa: BLE001 — la carga no interrumpe el resto
-                circuits[provider] = None
-                errors.append({"stage": f"circuits.{provider}", "message": str(exc)})
 
-    zx_settings = settings["zx"]
-    zx_calculus = (
-        _zx_calculus(
-            url, qasm_code, offset, zx_settings["time"], zx_settings["timeout"]
-        )
-        if zx_settings["enabled"]
-        else {"result": None, "errors": [], "method": None, "comparison_method": None}
-    )
+def _load_provider_circuits(qasm_code, settings, errors=None):
+    """Carga los circuitos nativos del proveedor (``return_circuit``).
 
-    images_settings = settings["images"]
-    img = {"quirk": None, "qasm": None, "composer": None}
-    if images_settings["quirk"]:
+    Parámetros:
+        - qasm_code (str): código OpenQASM traducido.
+        - settings (dict): entrada normalizada.
+        - errors (list | None): lista mutable a la que se appendarán
+          errores de carga por proveedor. Si es ``None``, la función no
+          registra errores (la captura la llamada ``_translate_circuit_entry``).
+
+    Retorna:
+        - dict | ``None``: diccionario ``{provider: circuito_nativo}`` o
+          ``None`` si ``return_circuit`` es ``False``. Si un circuito no se
+          pudo cargar, su entrada será ``None`` y se registrará un error en
+          ``errors`` (cuando se proporcione).
+
+    Nota:
+        Cuando ``errors`` no es ``None`` y un proveedor falla, la entrada
+        correspondiente en el diccionario de retorno será ``None`` y se
+        registrará un dict ``{"stage": "circuits.<nombre>", "message": <texto>}``
+        en la lista ``errors``. Esto permite al llamador diferenciar entre
+        un circuito que simplemente no tiene circuito nativo cargado y un
+        error real de carga.
+    """
+    if not settings["return_circuit"]:
+        return None
+    providers = settings.get("provider") or DEFAULT_TARGET_PROVIDERS
+    if isinstance(providers, str):
+        providers = (providers,)
+    circuits: dict[str, object] = {}
+    for prov in providers:
         try:
-            img["quirk"] = quirk_utils.image_quirk_base64(
-                url, images_settings["capture_timeout"]
+            circuits[prov] = provider_utils.load_provider_circuit(
+                qasm_code,
+                prov,
+                qasm_version=settings["qasm_version"],
+                shots=settings["shots"],
+                preserve_custom_gates=settings["preserve_custom_gates"],
+                native=True,
             )
-            if img["quirk"] is None:
+        except Exception as exc:  # noqa: BLE001 — la carga no interrumpe el resto
+            circuits[prov] = None
+            if errors is not None:
                 errors.append({
-                    "stage": "img.quirk",
-                    "message": "No se pudo capturar el circuito Quirk (Selenium).",
+                    "stage": f"circuits.{prov}",
+                    "message": str(exc),
                 })
-        except Exception as exc:  # noqa: BLE001 — etapa opcional no interrumpe el resultado
-            errors.append({"stage": "img.quirk", "message": str(exc)})
-    if images_settings["qasm"]:
-        try:
-            img["qasm"] = qiskit_utils.image_qasm_base64(qasm_code, qasm_version, "bw")
-        except Exception as exc:  # noqa: BLE001
-            errors.append({"stage": "img.qasm", "message": str(exc)})
-    if images_settings["composer"]:
-        try:
-            img["composer"] = qiskit_utils.image_composer_base64(qasm_code, qasm_version)
-        except Exception as exc:  # noqa: BLE001
-            errors.append({"stage": "img.composer", "message": str(exc)})
+    return circuits if circuits else None
+    return circuits if circuits else None
 
+
+def _run_zx(url, qasm_code, offset, zx_settings):
+    """Ejecuta la validación ZX si está activada; devuelve el dict correspondiente."""
+    if not zx_settings["enabled"]:
+        return {"result": None, "errors": [], "method": None, "comparison_method": None}
+    return _zx_calculus(url, qasm_code, offset, zx_settings["time"], zx_settings["timeout"])
+
+
+def _run_comparison(name, url, qasm_code, qasm_version, settings):
+    """Genera el documento Markdown de comparación si está activado."""
     comparison_doc = None
     if settings["comparison"]:
         try:
             comparison_doc = quirk_utils.comparison_markdown(name, url, qasm_code, qasm_version)
         except Exception as exc:  # noqa: BLE001
-            errors.append({"stage": "comparison", "message": str(exc)})
+            pass
+    return comparison_doc
+
+
+def _translate_circuit_entry(name, url, offset, settings):
+    """Traduce un circuito Quirk y arma su objeto de salida completo.
+
+    Ejecuta las etapas de forma modular (QASM → OpenQASM, código de proveedor,
+    validación ZX, comparación, carga de circuito).  Los fallos de las
+    etapas opcionales se acumulan en ``output['errors']`` sin interrumpir
+    el resto.  Esta firma es idéntica a la versión anterior para mantener
+    compatibilidad con los tests existentes.
+
+    Parámetros:
+        - name (str | None): nombre del circuito (None en modo single).
+        - url (str): URL de Quirk del circuito.
+        - offset (int): desplazamiento de los índices q[i].
+        - settings (dict): entrada normalizada (ver ``_normalize_translate_input``).
+
+    Retorna:
+        - dict: objeto de salida del circuito; JSON-serializable salvo los
+        objetos vivos de ``circuits`` cuando ``settings['return_circuit']``
+        es true.
+
+    Lanza:
+        - excepciones de ``quirk_to_qasm``/``provider_python_source`` si la
+          traducción o la migración fallan (errores de etapas opcionales NO
+          lanzan: van a ``output['errors']``).
+    """
+    errors = []
+
+    # 1️⃣ QASM + información del circuito
+    qasm_block, circuit_info, custom_gates = _translate_to_qasm(url, offset, settings)
+    qasm_code = qasm_block["code"]
+
+    # 2️⃣ Código de proveedor (controlado por flag)
+    migrated_code = _generate_provider_code(qasm_code, settings)
+
+    # 3️⃣ Cargar circuitos nativos (solo si return_circuit true)
+    circuits = None
+    if settings["return_circuit"]:
+        circuits = _load_provider_circuits(qasm_code, settings, errors=errors)
+
+    # 4️⃣ Validación ZX
+    zx_calculus = _run_zx(url, qasm_code, offset, settings["zx"])
+
+    # 5️⃣ Documento de comparación
+    comparison_doc = _run_comparison(name, url, qasm_code, qasm_block["version"], settings)
 
     output = {}
     if name is not None:
@@ -1226,7 +577,6 @@ def _translate_circuit_entry(name, url, offset, settings):
         "zx_calculus": zx_calculus,
         "circuit_info": circuit_info,
         "custom_gates": custom_gates,
-        "img": img,
         "comparison_doc": comparison_doc,
         "errors": errors,
     })
@@ -1237,8 +587,8 @@ def translate_circuit(payload):
     """Función core de la librería: traduce circuitos Quirk con un payload JSON.
 
     Ejecuta el flujo Quirk -> OpenQASM -> código de proveedor, con las etapas
-    opcionales (validación ZX, imágenes en base64, documento de comparación)
-    configurables desde el propio payload. Estructura espejo del proyecto:
+    opcionales (validación ZX, documento de comparación) configurables desde el
+    propio payload. Estructura espejo del proyecto:
     ``input`` agrupa las entradas (como la carpeta ``input/``) y ``output``
     las salidas (como la carpeta ``output/``).
 
@@ -1251,17 +601,17 @@ def translate_circuit(payload):
             - offset (int >= 0, default 0): desplazamiento de q[i] (global;
               cada entrada de ``circuits`` puede sobreescribirlo).
             - qasm_version (str, default QTRANS_QASM_VERSION o '3.0'): '2.0'|'3.0'.
-            - provider (str, default 'qiskit'): **un único** proveedor,
-              canónico o alias ('qiskit'/'ibm', 'braket'/'aws',
-              'pennylane'/'xanadu'). No admite listas ni varios separados por
-              comas.
+            - provider (str, default primer QTRANS_TARGET_PROVIDERS o 'qiskit'):
+              **un único** proveedor, canónico o alias ('qiskit'/'ibm',
+              'braket'/'aws', 'pennylane'/'xanadu'). No admite listas ni varios
+              separados por comas.
             - shots (int >= 1, default QTRANS_SHOTS o 1000).
             - preserve_custom_gates (bool, default QTRANS_PRESERVE_CUSTOM_GATES).
-            - zx (object, default {enabled: true, time: 0.5, timeout: 120}).
-            - images (object, default {quirk: false, qasm: false, composer:
-              false, capture_timeout: 15}); las imágenes van en base64 en
-              ``output.img`` (no se escribe nada en disco).
+            - zx (object, default {enabled: QTRANS_GENERATE_ZX, time: 0.5,
+              timeout: 120}).
             - comparison (bool, default false): documento Markdown inline.
+            - generate_provider_code (bool, default true): genera ``migrated_code``
+              para el proveedor configurado a partir del código OpenQASM.
             - return_circuit (bool, default false): añade ``output.circuits``
               con el circuito nativo del proveedor ya cargado vía su parser
               (objeto Python vivo, NO serializable a JSON). Se admite tanto en
@@ -1307,8 +657,6 @@ def translate_circuit(payload):
               **declaradas** en el circuito Quirk (las que se usan y las que no),
               con id, name, qasm_name, kind ('matrix'|'circuit'|'unknown'),
               n_qubits y used_in_circuit (bool).
-            - img (dict): {quirk, qasm, composer} en base64 (PNG) o None si
-              no se pidió o falló.
             - comparison_doc (str | None): Markdown inline o None.
             - errors (list): [{stage, message}] de etapas opcionales fallidas.
 
@@ -1350,380 +698,3 @@ def translate_circuit(payload):
     return {"input": settings, "output": output}
 
 
-def translate_circuits(payload):
-    """Función de librería: traduce circuitos Quirk y devuelve los circuitos ya cargados.
-
-    Es la contrapartida de ``translate_circuit`` para uso programático: en vez de
-    devolver el OpenQASM y el código Python migrado, devuelve el **circuito
-    nativo del proveedor configurado**, listo para ejecutarse.
-
-    El flujo es: Quirk → OpenQASM (2.0 o 3.0) → ``loads`` del proveedor →
-    circuito. Cada proveedor usa su propio parser cuando existe:
-
-    - qiskit → ``qiskit.QuantumCircuit`` (``qasm2.loads``/``qasm3.loads``);
-    - braket → ``braket.circuits.Circuit`` (``Circuit.from_ir``; el OpenQASM se
-      normaliza antes porque el parser de Braket no define ``p``/``cx``/``u1``);
-    - pennylane → ``pennylane.QNode`` (no hay parser nativo viable para el
-      OpenQASM que genera el proyecto, así que se materializa con su script
-      migrado).
-
-    Payload de entrada: el mismo de ``translate_circuit`` (ver su docstring).
-
-    Respuesta (dict):
-        - input: eco de la entrada normalizada (igual que ``translate_circuit``).
-        - circuits: diccionario ``{provider: {nombre_circuito: circuito}}``, donde
-          el proveedor es el nombre canónico ('qiskit', 'braket', 'pennylane') y
-          el nombre del circuito es el del JSON de entrada (en modo lote) o
-          ``circuit_1`` (circuito único). Los valores son objetos vivos, no
-          serializables a JSON.
-    Parámetros:
-        - payload (dict | str): objeto JSON de entrada (dict o cadena).
-
-    Retorna:
-        - dict: ``{"input": ..., "circuits": {provider: {nombre: objeto}}}``.
-
-    Lanza:
-        - ValueError: payload inválido (claves desconocidas, faltantes, mal
-          tipadas o fuera de rango).
-        - Propaga las excepciones de la traducción y de la carga del circuito.
-    """
-    if isinstance(payload, str):
-        try:
-            payload = json.loads(payload)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"El payload debe ser JSON válido: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError("El payload debe ser un dict o una cadena JSON.")
-    _require_keys(payload, _TRANSLATE_TOP_KEYS, "payload")
-    if "input" not in payload:
-        raise ValueError('El payload debe tener la clave "input".')
-
-    settings = _normalize_translate_input(payload["input"])
-    qasm_version = settings["qasm_version"]
-
-    if "circuits" in settings:
-        entries = [
-            (circuit["name"], circuit["url"], circuit["offset"])
-            for circuit in settings["circuits"]
-        ]
-    else:
-        entries = [("circuit_1", settings["url"], settings["offset"])]
-
-    providers = settings.get("provider") or DEFAULT_TARGET_PROVIDERS
-    if isinstance(providers, str):
-        providers = (providers,)
-    circuits = {provider: {} for provider in providers}
-    for name, url, offset in entries:
-        qasm3_source = quirk_utils.quirk_to_qasm(url, offset=offset, qasm_version="3.0")
-        qasm_code = (
-            qasm3_source if qasm_version == "3.0" else qasm3_to_qasm2(qasm3_source)
-        )
-        for provider in providers:
-            circuits[provider][name] = provider_utils.load_provider_circuit(
-                qasm_code,
-                provider,
-                qasm_version=qasm_version,
-                shots=settings["shots"],
-                preserve_custom_gates=settings["preserve_custom_gates"],
-            )
-
-    return {"input": settings, "circuits": circuits}
-
-
-def simulate_qiskit(circuit, shots=None, backend=None):
-    """Simula un circuito Qiskit con AerSimulator si está disponible."""
-    from qiskit_aer import AerSimulator
-
-    if shots is None:
-        shots = DEFAULT_SHOTS
-    sim = backend or AerSimulator()
-    job = sim.run(circuit, shots=shots)
-    result = job.result()
-    try:
-        return result.get_counts(circuit)
-    except Exception:
-        return result.get_counts()
-
-
-simulate_aws = simulate_braket = simulate_qiskit
-try:
-    from qiskit_aer import AerSimulator as _Aer  # noqa
-except Exception:  # pragma: no cover
-    pass
-
-
-def simulate_braket(circuit, shots=None, device=None):
-    """Simula un circuito Braket (local o dispositivo indicado)."""
-    try:
-        from braket.devices import LocalSimulator
-    except Exception as exc:  # pragma: no cover
-        raise ImportError("braket-sdk requerido para simular con Braket") from exc
-    if shots is None:
-        shots = DEFAULT_SHOTS
-    local = device or LocalSimulator()
-    result = local.run(circuit, shots=shots).result()
-    return result.measurement_counts
-
-
-def simulate_pennylane(circuit, shots=None, device_name="default.qubit"):
-    """Simula un QNode/PennyLane ejecutándolo para obtener recuentos."""
-    import pennylane as qml
-
-    if shots is None:
-        shots = DEFAULT_SHOTS
-    if hasattr(circuit, "shots"):
-        try:
-            circuit.shots = shots
-        except Exception:
-            pass
-    if callable(circuit):
-        try:
-            return qml.sample(circuit) if shots else qml.probs(circuit)
-        except Exception:
-            result = circuit()
-            return result
-    if hasattr(circuit, "execute"):
-        try:
-            return circuit.execute(shots=shots)
-        except Exception:
-            return circuit(shots=shots)
-    return circuit()
-
-
-def build_argument_parser():
-    parser = argparse.ArgumentParser(
-        description=(
-            "Traduce algoritmos Quirk a OpenQASM y genera capturas, comparaciones, "
-            "grafos ZX y scripts migrados. Agrupa la salida por corrida en "
-            "output/run_DD_MM_YYYY__HH."
-        )
-    )
-    parser.add_argument(
-        "--input-mode",
-        choices=("batch", "algorithm"),
-        default=DEFAULT_INPUT_MODE,
-        help=(
-            "batch procesa todos los JSON de input-dir (o solo los listados en "
-            "--input-files); algorithm procesa input-file."
-        ),
-    )
-    parser.add_argument(
-        "--input-file",
-        default=DEFAULT_INPUT_FILE,
-        help=(
-            "Nombre o ruta de un archivo JSON; obligatorio en modo algorithm y "
-            "debe quedar vacío en modo batch."
-        ),
-    )
-    parser.add_argument(
-        "--input-files",
-        nargs="*",
-        default=DEFAULT_INPUT_FILES,
-        help=(
-            "Uno o más archivos JSON (relativos a input-dir); cada valor puede "
-            "separarse por espacios o comas. Restringe el modo batch a esos "
-            "archivos; si se omite o viene vacío, el modo batch procesa todos "
-            "los .json de input-dir."
-        ),
-    )
-    parser.add_argument(
-        "--input-dir",
-        type=Path,
-        default=DEFAULT_INPUT_DIR,
-        help=f"Directorio de JSON de entrada (default: {DEFAULT_INPUT_DIR}).",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=DEFAULT_OUTPUT_DIR,
-        help=f"Directorio raíz de las corridas (default: {DEFAULT_OUTPUT_DIR}).",
-    )
-    parser.add_argument(
-        "--json-out",
-        default=None,
-        help=(
-            "Escribe el reporte de la corrida como JSON en la ruta indicada "
-            "(incluye el código OpenQASM de cada circuito en algorithms[].qasm.code); "
-            "con '-' imprime únicamente el JSON en stdout, silenciando la traza."
-        ),
-    )
-    parser.add_argument(
-        "--run-label",
-        default=DEFAULT_RUN_LABEL,
-        help="Etiqueta de la corrida; por defecto DD_MM_YYYY__HH_MM (fecha y hora con minutos).",
-    )
-    parser.add_argument(
-        "--qasm-version",
-        choices=("2.0", "3.0"),
-        default=DEFAULT_QASM_VERSION,
-        help=f"Versión de OpenQASM generada (default: {DEFAULT_QASM_VERSION}).",
-    )
-    parser.add_argument(
-        "--providers",
-        default=",".join(DEFAULT_TARGET_PROVIDERS),
-        help=(
-            "Lista separada por comas de ecosistemas objetivo: "
-            f"{', '.join(SUPPORTED_PROVIDERS)} (default: {','.join(DEFAULT_TARGET_PROVIDERS)})."
-        ),
-    )
-    parser.add_argument("--shots", type=int, default=DEFAULT_SHOTS, help="Shots para PennyLane.")
-    preserve_group = parser.add_mutually_exclusive_group()
-    preserve_group.add_argument(
-        "--preserve-custom-gates",
-        dest="preserve_custom_gates",
-        action="store_true",
-        help="Conserva las compuertas custom/nativas como funciones locales.",
-    )
-    preserve_group.add_argument(
-        "--no-preserve-custom-gates",
-        dest="preserve_custom_gates",
-        action="store_false",
-        help="Expande en línea las compuertas custom/nativas en los scripts migrados.",
-    )
-    parser.set_defaults(preserve_custom_gates=None)
-    parser.add_argument(
-        "--zx-time",
-        type=float,
-        default=DEFAULT_ZX_TIME,
-        help="Snapshot temporal Quirk para gates como Rxft, en el rango 0..1.",
-    )
-    parser.add_argument(
-        "--zx-timeout",
-        type=int,
-        default=DEFAULT_ZX_TIMEOUT,
-        help=(
-            "Límite en segundos por comparación/reducción ZX; al excederse se "
-            "marca 'NO DEMOSTRADO (timeout)' en lugar de colgar el pipeline."
-        ),
-    )
-    parser.add_argument(
-        "--capture-timeout",
-        type=int,
-        default=DEFAULT_CAPTURE_TIMEOUT,
-        help="Timeout del navegador Selenium, en segundos.",
-    )
-    capture_group = parser.add_mutually_exclusive_group()
-    capture_group.add_argument(
-        "--capture-images",
-        dest="capture_images",
-        action="store_true",
-        help="Genera capturas PNG de Quirk incluso si el .env las desactiva.",
-    )
-    capture_group.add_argument(
-        "--no-capture",
-        dest="capture_images",
-        action="store_false",
-        help="Omite las capturas PNG de Quirk.",
-    )
-    parser.set_defaults(capture_images=None)
-    parser.add_argument(
-        "--no-qasm-images",
-        dest="generate_qasm_images",
-        action="store_false",
-        default=None,
-        help="Omite los diagramas PNG de los circuitos OpenQASM.",
-    )
-    parser.add_argument(
-        "--no-comparison",
-        dest="generate_comparison",
-        action="store_false",
-        default=None,
-        help="Omite los informes Markdown de comparación visual.",
-    )
-    parser.add_argument(
-        "--no-composer-images",
-        dest="generate_composer_images",
-        action="store_false",
-        default=None,
-        help="Omite las imágenes de los circuitos migrados (estilo IBM Composer).",
-    )
-    parser.add_argument(
-        "--no-zx",
-        dest="generate_zx",
-        action="store_false",
-        default=None,
-        help="Omite la conversión y comparación de grafos ZX.",
-    )
-    parser.add_argument(
-        "--no-zx-images",
-        dest="generate_zx_images",
-        action="store_false",
-        default=None,
-        help="Omite los diagramas SVG de los grafos ZX.",
-    )
-    verbosity_group = parser.add_mutually_exclusive_group()
-    verbosity_group.add_argument(
-        "--verbose",
-        dest="verbose",
-        action="store_true",
-        help="Muestra el resultado de cada etapa del pipeline (activado por defecto).",
-    )
-    verbosity_group.add_argument(
-        "--quiet",
-        dest="verbose",
-        action="store_false",
-        help="Silencia las trazas por etapa del pipeline.",
-    )
-    parser.set_defaults(verbose=None)
-    return parser
-
-
-def _configure_console_encoding():
-    """Fuerza UTF-8 en la salida de consola y sustituye lo no codificable.
-
-    La consola de Windows usa ``cp1252``, que no representa todos los símbolos
-    de Quirk (``⟩``, ``⟨``, ``†``…). Con ``errors="replace"`` esos caracteres
-    se sustituyen en lugar de abortar la etapa que los imprime.
-
-    Retorna:
-        - None
-    """
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if reconfigure is None:
-            continue
-        try:
-            reconfigure(encoding="utf-8", errors="replace")
-        except (OSError, ValueError):  # pragma: no cover — depende de la consola
-            pass
-
-
-def main(argv=None):
-    _configure_console_encoding()
-    parser = build_argument_parser()
-    args = parser.parse_args(argv)
-    try:
-        summary = run_pipeline(
-            input_mode=args.input_mode,
-            input_file=args.input_file,
-            input_files=args.input_files,
-            input_dir=args.input_dir,
-            output_dir=args.output_dir,
-            run_label=args.run_label,
-            qasm_version=args.qasm_version,
-            target_providers=args.providers,
-            preserve_custom_gates=args.preserve_custom_gates,
-            capture_images=args.capture_images,
-            shots=args.shots,
-            zx_time=args.zx_time,
-            zx_timeout=args.zx_timeout,
-            capture_timeout=args.capture_timeout,
-            generate_qasm_images=args.generate_qasm_images,
-            generate_comparison=args.generate_comparison,
-            generate_composer_images=args.generate_composer_images,
-            generate_zx=args.generate_zx,
-            generate_zx_images=args.generate_zx_images,
-            verbose=False if args.json_out == "-" else args.verbose,
-            json_out=args.json_out,
-            print_status=args.json_out != "-",
-        )
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        print(f"Error: {exc}")
-        return 1
-    if args.json_out == "-":
-        print(json.dumps(summary["json_report"], indent=2, ensure_ascii=False))
-    return 1 if summary["errors"] else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

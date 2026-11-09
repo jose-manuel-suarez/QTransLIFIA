@@ -18,7 +18,7 @@ import unittest
 from pathlib import Path
 from urllib.parse import quote
 
-from qtrans.utils.qutils import quirk_to_qasm
+from qtrans.utils.quirk_utils import quirk_to_qasm
 from qtrans.utils.url_utils import (
     canonicalize_quirk_url,
     encode_quirk_url,

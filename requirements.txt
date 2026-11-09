@@ -1,4 +1,4 @@
-# Dependencias del pipeline (qtrans/core.py) y de las utilidades (qtrans/utils/qutils.py)
+# Dependencias del pipeline (qtrans/core.py) y de las utilidades (qtrans/utils/)
 python-dotenv==1.0.0
 numpy>=1.24.0
 pyzx>=0.10.7
@@ -6,14 +6,10 @@ qiskit
 qiskit-aer
 qiskit-qasm3-import
 matplotlib
-pylatexenc
-pandas
 selenium
 
-# API HTTP heredada (translator.py)
-Flask==2.0.1
-Flask-Cors==3.0.10
-Werkzeug==2.3.4
+# Cuadernos (visualización de tablas)
+pandas
 
 # Ecosistemas de migración opcionales (solo para ejecutar los scripts generados)
 # amazon-braket-sdk

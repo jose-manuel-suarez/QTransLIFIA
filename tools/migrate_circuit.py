@@ -6,9 +6,8 @@ uno de los registros de entrada (por índice o por nombre), pide a la API
 ``translate_circuit`` el OpenQASM y los scripts de cada proveedor, e imprime
 en la consola el JSON devuelto.
 
-Por omisión **no** se activa el cálculo ZX ni se generan imágenes (ambas cosas
-son etapas del pipeline completo, no de la migración); sí se puede pedirlas
-explícitamente con ``--zx`` e ``--images``.
+Por omisión **no** se activa el cálculo ZX; la generación de código de
+proveedor se controla con el flag ``generate_provider_code`` de la API.
 
 Ejemplos (Windows, desde la raíz del proyecto)::
 
@@ -121,8 +120,8 @@ def _build_parser():
         help="Activa el cálculo ZX (desactivado por omisión).",
     )
     parser.add_argument(
-        "--images", action="store_true",
-        help="Genera las imágenes (desactivado por omisión).",
+        "--generate-provider-code", action="store_true",
+        help="Genera el código de proveedor (por omisión, sí).",
     )
     parser.add_argument(
         "--preserve-custom-gates", action="store_true",
@@ -160,15 +159,11 @@ def main(argv=None):
             "url": url,
             "offset": args.offset,
             "qasm_version": args.qasm_version,
-            "provider": [p.strip() for p in args.providers.split(",") if p.strip()],
+            "provider": args.providers,
             "shots": args.shots,
             "preserve_custom_gates": args.preserve_custom_gates,
             "zx": {"enabled": bool(args.zx)},
-            "images": {
-                "quirk": bool(args.images),
-                "qasm": bool(args.images),
-                "composer": bool(args.images),
-            },
+            "generate_provider_code": bool(args.generate_provider_code),
         }
     }
     result = translate_circuit(payload)
@@ -176,7 +171,7 @@ def main(argv=None):
 
     print(f"Circuito: {name}")
     print(f"Proveedores: {', '.join(payload['input']['provider'])}")
-    print(f"ZX: {'sí' if args.zx else 'no'} | Imágenes: {'sí' if args.images else 'no'}")
+    print(f"ZX: {'sí' if args.zx else 'no'} | Generación de código provider: {'sí' if args.generate_provider_code else 'no'}")
     print("=" * 72)
     print(json.dumps(result, indent=2, ensure_ascii=False))
     print("=" * 72)

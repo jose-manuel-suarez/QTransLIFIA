@@ -18,11 +18,9 @@ Las utilidades de URL puras (parseo, normalización y codificación) viven en
 import cmath
 import json
 import math
-import os
 import re
 import string
 import sys
-import tempfile
 from pathlib import Path
 
 from .qasm_utils import (
@@ -32,7 +30,6 @@ from .qasm_utils import (
     _sanitize_gate_name,
     qasm3_to_qasm2,
 )
-from .pipeline_utils import log_stage
 from .url_utils import canonicalize_quirk_url, encode_quirk_url, parse_quirk_url
 
 
@@ -1982,91 +1979,3 @@ def comparison_markdown(name, url, qasm_code, qasm_version):
         f"## OpenQASM {qasm_version}\n\n"
         f"```qasm\n{qasm_code}\n```\n"
     )
-
-
-def image_quirk_base64(url, capture_timeout):
-    """Captura PNG en base64 del circuito Quirk (Selenium headless).
-
-    Parámetros:
-        - url (str): URL de Quirk a capturar.
-        - capture_timeout (int): límite en segundos de carga de la página.
-
-    Retorna:
-        - str | None: PNG en base64, o None si la captura no se pudo realizar.
-    """
-    import base64
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        image_path = Path(temp_dir) / "quirk.png"
-        captured = capture_quirk_circuit(url, image_path, timeout=capture_timeout)
-        if not captured or not image_path.is_file():
-            return None
-        return base64.b64encode(image_path.read_bytes()).decode("ascii")
-
-
-def write_comparison_docs(records, quirk_images_dir, qasm_images_dir, compare_dir, verbose):
-    """Escribe las páginas Markdown de comparación visual Quirk vs OpenQASM.
-
-    Parámetros:
-        - records (list[dict]): registros de los circuitos (clave ``name``).
-        - quirk_images_dir (str | Path): carpeta con las capturas de Quirk.
-        - qasm_images_dir (str | Path): carpeta con los diagramas OpenQASM.
-        - compare_dir (str | Path): carpeta de destino de las páginas Markdown.
-        - verbose (bool): muestra el log de cada etapa.
-
-    Retorna:
-        - list[pathlib.Path]: archivos escritos (páginas + índice ``README.md``).
-    """
-    quirk_images_dir = Path(quirk_images_dir)
-    qasm_images_dir = Path(qasm_images_dir)
-    compare_dir = Path(compare_dir)
-    compare_dir.mkdir(parents=True, exist_ok=True)
-    index_lines = ["# Comparación de circuitos", ""]
-    generated = []
-
-    for record in records:
-        name = record["name"]
-        quirk_image = quirk_images_dir / f"{name}.png"
-        qasm_image = qasm_images_dir / f"{name}.png"
-        quirk_link = (
-            Path(os.path.relpath(quirk_image, compare_dir)).as_posix()
-            if quirk_image.is_file()
-            else None
-        )
-        qasm_link = (
-            Path(os.path.relpath(qasm_image, compare_dir)).as_posix()
-            if qasm_image.is_file()
-            else None
-        )
-        page_path = compare_dir / f"{name}.md"
-        quirk_cell = (
-            f'<a href="{quirk_link}"><img src="{quirk_link}" alt="{name} Quirk" width="100%"></a>'
-            if quirk_link
-            else "Sin captura Quirk"
-        )
-        qasm_cell = (
-            f'<a href="{qasm_link}"><img src="{qasm_link}" alt="{name} OpenQASM" width="100%"></a>'
-            if qasm_link
-            else "Sin diagrama OpenQASM"
-        )
-        page_path.write_text(
-            "\n".join(
-                [
-                    f"# Comparación: {name}",
-                    "",
-                    "<table>",
-                    "<tr><th>Circuito Quirk</th><th>Circuito OpenQASM</th></tr>",
-                    f"<tr><td>{quirk_cell}</td><td>{qasm_cell}</td></tr>",
-                    "</table>",
-                    "",
-                ]
-            ),
-            encoding="utf-8",
-        )
-        index_lines.append(f"- [{name}]({page_path.name})")
-        generated.append(page_path)
-        log_stage(verbose, "Comparación visual", f"Generado {page_path.name}.")
-
-    index_path = compare_dir / "README.md"
-    index_path.write_text("\n".join(index_lines) + "\n", encoding="utf-8")
-    return generated + [index_path]

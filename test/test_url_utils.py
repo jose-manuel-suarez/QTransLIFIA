@@ -15,7 +15,7 @@ import json
 import unittest
 from urllib.parse import unquote
 
-from qtrans.utils.qutils import quirk_circuit_info, quirk_to_qasm
+from qtrans.utils.quirk_utils import quirk_circuit_info, quirk_to_qasm
 from qtrans.utils.url_utils import (
     encode_quirk_url,
     normalize_quirk_url,

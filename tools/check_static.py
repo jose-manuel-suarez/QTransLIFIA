@@ -8,7 +8,7 @@ por una ruta no cubierta:
    función que no está definido ni en el ámbito local, ni en el ámbito del
    módulo, ni entre los *builtins*. Es el síntoma típico de un *refactor* que
    movió una función de módulo y olvidó actualizar una referencia, o de una
-   reexportación eliminada de la fachada ``qtrans/utils/qutils.py``.
+   reexportación eliminada durante un refactor.
 2. **Imports sin usar**: un ``import`` cuyo nombre no aparece en ninguna carga
    del módulo ni en su ``__all__``. Detecta rastro de dependencias que la
    reorganización del paquete dejó colgando.

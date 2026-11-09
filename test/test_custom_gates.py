@@ -70,7 +70,6 @@ def _translate(preserve):
             'provider': 'qiskit',
             'preserve_custom_gates': preserve,
             'zx': {'enabled': False},
-            'images': {'quirk': False, 'qasm': False, 'composer': False},
         }
     })
     return response['output']

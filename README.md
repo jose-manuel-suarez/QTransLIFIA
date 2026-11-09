@@ -16,7 +16,7 @@ El proyecto ofrece **dos formas de ejecución**, independientes entre sí pero c
 
 Ambos modos comparten: lectura de JSON con URLs de Quirk, traducción a OpenQASM como lenguaje representacional intermedio, visualización (mediante capturas PNG, diagramas, comparaciones), grafos ZX y generación de scripts migrados.
 
-Las tres vías de ejecución —**API de librería** (`translate_circuit`), **CLI/pipeline** (`run_pipeline` / `python -m qtrans`) y **cuaderno**— comparten **una única lógica** implementada en `qtrans/utils` (traducción Quirk→OpenQASM, carga de OpenQASM, migración a proveedores y verificación ZX), de modo que no existen variantes contradictorias entre ellas.
+La **API de librería** (`translate_circuit` / `translate_circuits`) comparte **una única lógica** implementada en `qtrans/utils` (traducción Quirk→OpenQASM, carga de OpenQASM, migración a proveedores y verificación ZX), de modo que no existen variantes contradictorias entre ellas. No existe CLI, pipeline por archivos ni cuaderno en la versión pip-only.
 
 ## Estructura del proyecto
 
@@ -28,12 +28,11 @@ Las tres vías de ejecución —**API de librería** (`translate_circuit`), **CL
 ├── notebooks/
 │   └── QTrans.ipynb                      # Cuaderno con la lógica del pipeline
 ├── qtrans/                               # Paquete instalable
-│   ├── __init__.py                       # API pública: translate_circuit, run_pipeline, main
+│   ├── __init__.py                       # API pública: translate_circuit, translate_circuits
 │   ├── __main__.py                       # Soporte para `python -m qtrans`
 │   ├── core.py                           # Pipeline, CLI y API del pipeline
 │   └── utils/
 │       ├── __init__.py
-│       ├── qutils.py                     # Fachada de compatibilidad (reexporta todo)
 │       ├── qasm_utils.py                 # Utilidades de OpenQASM (tablas, ángulos, versiones)
 │       ├── quirk_utils.py                # Traducción Quirk/OpenQASM, capturas y comparación
 │       ├── provider_utils.py             # Registro de proveedores y dispatch de migración
@@ -41,9 +40,7 @@ Las tres vías de ejecución —**API de librería** (`translate_circuit`), **CL
 │       ├── braket_utils.py               # AWS Braket
 │       ├── pennylane_utils.py            # Xanadu PennyLane
 │       ├── zx_utils.py                   # Grafos ZX (PyZX) desde Quirk y OpenQASM
-│       ├── url_utils.py                  # Parseo/encodeo de URLs Quirk + extracción Postman
-│       ├── main.py
-│       └── cleanup_outputs.py            # Limpieza de las corridas de salida
+│       ├── url_utils.py                  # Parseo/encodeo y normalización de URLs Quirk
 ├── test/                                 # Directorio de pruebas funcionales
 │   ├── test_qtrans.py                    # Pruebas del pipeline/CLI
 │   ├── test_qasm.py                      # Pruebas de traducción OpenQASM (script manual)
@@ -65,8 +62,7 @@ Las tres vías de ejecución —**API de librería** (`translate_circuit`), **CL
 ├── demo/                                 # Subproyecto aislado: consume qtranslifia desde demo_venv
 ├── doc/                                  # Documentación QSE y paper (qtrans.tex)
 ├── pyproject.toml                        # Empaquetado (pip install)
-├── requirements.txt                      # Librerías requeridas
-└── original/                             # Librerías originales heredadas
+└── requirements.txt                      # Librerías requeridas
 ```
 
 ### Salidas: directorio de corrida (`run_<estampa_fecha_hora>`)
@@ -103,7 +99,6 @@ run_<estampa_fecha_hora>/
 - Ejecutar el flujo varias veces **dentro de la misma hora** reutiliza el mismo directorio y **sobrescribe** los archivos generados, evitando crear una carpeta nueva por cada reintento.
 - Al cambiar la hora se crea una nueva carpeta `run_*`, preservando el historial de corridas anteriores.
 - Las carpetas generadas están excluidas del control de versiones (`.gitignore`: `/output/`, y `/notebooks/output/` por compatibilidad con corridas antiguas). Por cuestión de optimización y tamaño del proyecto, por lo cual no existe trazabilidad a nivel de ejecuciones en el repositorio GitHub.
-- Además se provee un script para limpieza de directorios de salida en `qtrans/utils/cleanup_outputs.py`.
 
 ### Versión de OpenQASM
 
@@ -202,7 +197,7 @@ QTRANS_PRESERVE_CUSTOM_GATES=true
 
 ## Modo 1 — Ejecución como Librería Python (`qtrans`)
 
-El paquete `qtrans` es el pipeline completo: se puede usar como **CLI** de línea de comandos o importar como **API** desde código Python (`from qtrans import translate_circuit, run_pipeline`).
+El paquete `qtrans` se instala con pip e **expone la librería**: `from qtrans import translate_circuit, translate_circuits` (ver «Modo 1 — Ejecución como Librería Python (`qtrans`)»). No se distribuye CLI ni pipeline por archivos.
 
 ### Instalación del paquete
 
@@ -217,11 +212,10 @@ pip install -e .
 
 # o incluyendo extras opcionales
 pip install -e ".[providers]"   # amazon-braket-sdk, pennylane
-pip install -e ".[http]"        # Flask, Flask-Cors, Werkzeug
 pip install -e ".[notebook]"    # jupyter, ipykernel, qiskit-aer
 ```
 
-Extras disponibles: `providers`, `http`, `notebook`, `dev`.
+Extras disponibles: `providers`, `notebook`, `dev`.
 
 ### Uso como CLI
 
@@ -288,7 +282,7 @@ python -m qtrans --help
 
 ### Uso como API
 
-El paquete expone dos puntos de entrada: `translate_circuit` (traducción de circuitos desde un payload JSON, sin tocar disco) y `run_pipeline` (flujo completo sobre `input/`).
+El paquete expone dos funciones: `translate_circuit` (traducción de circuitos desde un payload JSON, sin tocar disco) y `translate_circuits` (igual, pero devuelve los circuitos nativos ya cargados).
 
 #### `translate_circuit(payload)`
 
@@ -304,6 +298,7 @@ result = translate_circuit({
         "provider": ["ibm", "aws"],
         "zx": {"enabled": True},
         "comparison": True,
+        "generate_provider_code": True,
     }
 })
 
@@ -321,47 +316,18 @@ objeto incluye además `name`):
 | Campo | Descripción |
 | --- | --- |
 | `qasm` | `code` (OpenQASM), `version`, `lines` y `gates` (`custom`/`native`, cada uno `{count, names}`; el conteo se hace sobre el QASM 3.0 previo a la reducción de basis, por lo que es estable aunque se pida la versión 2.0). |
-| `migrated_code` | Código Python por proveedor, con clave `<subcarpeta_proveedor>_code` (`ibm_qiskit_code`, `aws_braket_code`, `xanadu_pennylane_code`). |
+| `migrated_code` | Código Python por proveedor, con clave `<subcarpeta_proveedor>_code` (`ibm_qiskit_code`, `aws_braket_code`, `xanadu_pennylane_code`). Se genera según `input.generate_provider_code` (default `true`). |
 | `zx_calculus_result` | `'equivalente'` \| `'no-equivalente'` \| `'no-comprobado'`; `null` si `zx.enabled=false`. |
 | `circuit_info` | `n_qubits`, `n_cols`, `gates`. |
 | `custom_gates` | Catálogo **exhaustivo** de las compuertas custom declaradas en la URL de Quirk (las que se usan y las que no): `id`, `name`, `qasm_name`, `kind` (`matrix`/`circuit`/`unknown`), `n_qubits` y `used_in_circuit` (booleano). |
-| `img` | `{quirk, qasm, composer}` en base64 (PNG) o `null` si no se pidió o falló. |
 | `comparison_doc` | Markdown inline o `null`. |
 | `errors` | `[{stage, message}]` de etapas opcionales fallidas. |
 
-Etapas opcionales (imágenes en base64, comparación Markdown, validación ZX) se controlan desde `input.zx`, `input.images` y `input.comparison`; sus fallos se reportan en `output.errors` sin interrumpir la traducción. Payload inválido → `ValueError`.
-
-#### `run_pipeline(...)`
-
-`run_pipeline` ejecuta el flujo completo (escribe la corrida en `output/`) y devuelve un resumen:
-
-```python
-from qtrans import run_pipeline
-
-batch_result = run_pipeline(input_mode="batch")
-single_result = run_pipeline(
-    input_mode="algorithm",
-    input_file="main_algorithms.json",
-    capture_images=False,
-)
-```
-
-Parámetros principales de `run_pipeline`:
-
-| Parámetro | Descripción |
-| --- | --- |
-| `input_mode`, `input_file`, `input_files`, `input_dir` | Entrada (equivalentes a las opciones del CLI). |
-| `output_dir`, `run_label`, `run_dir` | Raíz de la corrida, etiqueta y directorio explícito de corrida. |
-| `qasm_version`, `target_providers`, `shots`, `zx_time`, `zx_timeout` | Configuración funcional. |
-| `capture_images`, `generate_qasm_images`, `generate_comparison`, `generate_composer_images`, `generate_zx`, `generate_zx_images` | Interruptores por etapa (`None` = tomar el valor del `.env`). |
-| `qasm_dir`, `quirk_images_dir`, `qasm_images_dir`, `compare_dir`, `zx_dir`, `migrated_dir`, `composer_images_dir` | Sobrescriben las rutas derivadas de la corrida. |
-| `verbose`, `capture_timeout` | Diagnóstico y timeout de captura. |
-
-El resumen devuelto incluye, entre otros: `input_mode`, `qasm_version`, `target_providers`, `run_dir`, `files_processed`, `algorithms_processed`, `qasm_generated`, `captures_succeeded`, `captures_failed`, `qasm_images_generated`, `comparison_docs_generated`, `composer_images_generated`, `zx_base_graphs_generated`, `zx_qasm_graphs_generated`, `zx_comparisons`, `zx_images_generated`, `provider_scripts_generated`, `output_directories` y `errors`.
+Etapas opcionales (comparación Markdown, validación ZX) se controlan desde `input.comparison` y `input.zx`; la generación de código de proveedor se controla con `input.generate_provider_code`. Sus fallos se reportan en `output.errors` sin interrumpir la traducción. Payload inválido → `ValueError`.
 
 ### Salida
 
-OpenQASM (según `QTRANS_QASM_VERSION`) en `output/run_<estampa>/algorithms_qasm/` y, cuando las etapas están activas, capturas PNG, diagramas, comparaciones, grafos ZX y scripts migrados, siguiendo la estructura de corrida descrita arriba. Los errores de captura o de cualquier etapa se contabilizan y **no cancelan** las demás generaciones.
+OpenQASM (según `QTRANS_QASM_VERSION`) derivado del payload, junto con el código de proveedor (`migrated_code`) según `input.generate_provider_code`; los errores de las etapas opcionales se reportan en `output.errors` sin interrumpir la traducción.
 
 ---
 
@@ -472,7 +438,7 @@ Resumen de generaciones activables por parámetro:
 
 Los scripts migrados se generan en Python ejecutable, uno por algoritmo y ecosistema:
 
-- **IBM Qiskit** (provider `qiskit` → `migrated_circuits/ibm_qiskit/`): usa puertas nativas (`h`, `x`, `y`, `z`, `s`, `sdg`, `t`, `tdg`, `sx`, `id`, `cx`, ...) en lugar de `circuit.u(...)` siempre que el `u1/u2/u3` corresponda a una puerta estándar. Produce además las imágenes estilo IBM Quantum Composer en `imgs/`.
+- **IBM Qiskit** (provider `qiskit` → `migrated_circuits/ibm_qiskit/`): usa puertas nativas (`h`, `x`, `y`, `z`, `s`, `sdg`, `t`, `tdg`, `sx`, `id`, `cx`, ...) en lugar de `circuit.u(...)` siempre que el `u1/u2/u3` corresponda a una puerta estándar.
 - **AWS Braket** (provider `braket` → `migrated_circuits/aws_braket/`): requiere `amazon-braket-sdk`.
 - **PennyLane** (provider `pennylane` → `migrated_circuits/xanadu_pennylane/`): QNodes con `QTRANS_SHOTS` shots; requiere `pennylane`.
 
@@ -489,7 +455,7 @@ devuelve la API, está `tools/migrate_circuit.py`:
 
 El JSON impreso es el de `translate_circuit` (`input` con la configuración efectiva y `output`
 con `qasm`, `migrated_code` —un script por proveedor—, `circuit_info`, `custom_gates`, `zx_calculus_result`,
-`img`, `comparison_doc` y `errors`). Opciones útiles:
+`comparison_doc` y `errors`). Opciones útiles:
 
 | Opción | Efecto |
 | --- | --- |
@@ -498,24 +464,7 @@ con `qasm`, `migrated_code` —un script por proveedor—, `circuit_info`, `cust
 | `--out <carpeta>` | Escribe además los scripts migrados (`<carpeta>/<proveedor>/<nombre>.py`) |
 | `--json-out <fichero>` | Guarda el JSON devuelto en un fichero |
 | `--preserve-custom-gates` | Conserva las compuertas custom como funciones locales en el script |
-| `--zx` / `--images` | Activa las etapas que por omisión están desactivadas |
-
-## API HTTP heredada
-
-Por trazabilidad se creó el directorio `original/` para conservar circuitos y requerimientos iniciales provistos por UnEx.
-`translator.py` conserva la API Flask usada por las integraciones existentes. Se inicia con:
-
-```bash
-python translator.py
-```
-
-El servidor escucha en `http://localhost:8081`. Endpoints POST disponibles:
-
-- `/code/ibm` y `/code/ibm/individual`
-- `/code/aws` y `/code/aws/individual`
-- `/code/qasm` y `/code/qasm/individual`
-
-La colección de Postman está en `postman/Quirk_Translator_IBM_AWS.postman_collection_original.json`.
+| `--zx` | Activa la etapa de validación ZX |
 
 ## Publicación de una nueva versión en PyPI (mantenedores)
 
@@ -653,6 +602,61 @@ python -m unittest discover -s test -p "test_*.py" -v
 ```
 
 ### Demo aislado (`demo`)
+
+### Extensibilidad y arquitectura
+
+El núcleo de QTransLIFIA sigue un modelo de **pipeline modular** (plantilla de pasos
+ordenados) que permite a los contribuyentes añadir o sustituir etapas sin tocar
+el flujo principal:
+
+1. **Stage `_translate_to_qasm`** – Convierte Quirk a OpenQASM y extrae información
+   del circuito (resumen de compuertas, catálogo de gates custom, info de qubits/columns).
+   Cualquier nuevo formato de entrada solo necesita sobrescribir esta función.
+
+2. **Stage `_generate_provider_code`** – Produce el diccionario ``migrated_code`` con
+   scripts Python por proveedor (Qiskit, Braket, PennyLane). Si se desactiva la
+   bandera ``generate_provider_code``, el paso retorna ``{}``. Se pueden agregar
+   nuevos proveedores creando una subclase de ``Provider`` (ver
+   ``qtrans/utils/provider_utils.py``) e inyectándola en el dict
+   ``_PROVIDER_INSTANCES``.
+
+3. **Stage `_load_provider_circuits`** – Carga el circuito nativo del proveedor
+   (``QuantumCircuit``/``Circuit``/``QNode``) usando el parser correspondiente.
+   Soporta carga nativa y respaldo por script migrado.
+
+4. **Stage `_run_zx`** – Valida la equivalencia mediante grafos ZX (PyZX). La
+   etapa está diseñada para ser opcional (`QTRANS_GENERATE_ZX`) y devuelve un
+   diccionario con ``result``, ``method`` y ``errors``. Nuevos métodos de
+   comparación pueden añadirse sobrescribiendo esta función.
+
+5. **Stage `_run_comparison`** – Genera un documento Markdown inline con la
+   comparación del circuito. Fácil de extender si se quiere soporte de otros
+   formatos de reporte.
+
+El punto de entrada `_translate_circuit_entry` orquesta estas cinco funciones
+en orden y acumula cualquier error en ``output['errors']`` sin lanzar excepciones.
+Esto garantiza que una falla en una etapa no impida que las siguientes se
+ejecuten, manteniendo la filosofía de "never tumble the translation".
+
+**Añadiendo un nuevo proveedor**
+
+1. Crear una clase que herede de ``Provider`` e implementar ``generate_code`` y
+   ``load_circuit``.
+2. Instanciarla y añadirla a ``_PROVIDER_INSTANCES`` en
+   ``qtrans/utils/provider_utils.py``.
+3. (Opcional) Añadir la variable de entorno ``QTRANS_TARGET_PROVIDERS`` para
+   que el demo y la CLI la seleccionen automáticamente.
+
+**Personalizando el pipeline**
+
+Para reordenar, omitir o modificar etapas, basta con sobrescribir las funciones
+correspondientes en ``TranslationPipeline`` (aunque la versión actual usa
+llamadas directas para compatibilidad con tests). El patrón template-method
+está pensado para futuras iteraciones donde el usuario pueda proveer una
+configuración de stages desde el payload.
+
+---
+
 
 `demo/` instala `qtranslifia` desde PyPI en su propio `demo_venv` y ejecuta
 `translate_circuit` + simulación sin tocar el código fuente del repositorio. Acepta un

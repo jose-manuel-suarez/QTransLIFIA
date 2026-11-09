@@ -1,16 +1,16 @@
 import unittest
 
-from qtrans.utils.qutils import (
+from qtrans.utils.provider_utils import (
     PROVIDER_DIRECTORY,
     SUPPORTED_PROVIDERS,
     cargar_circuito_qasm,
-    detect_qasm_version,
     load_provider_circuit,
     normalize_provider,
     parse_providers,
     provider_python_source,
     providers_from_env,
 )
+from qtrans.utils.qasm_utils import detect_qasm_version
 
 QASM3 = """OPENQASM 3.0;
 include "stdgates.inc";
