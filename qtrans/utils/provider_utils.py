@@ -155,6 +155,7 @@ def provider_python_source(qasm_source, provider, qasm_version='3.0', shots=1000
         # que el script migrado sea exhaustivo con la biblioteca del original.
         custom_gate_definitions = qasm_custom_gate_operations(qasm_source)
 
+    # Cada proveedor configurable tiene su propia lógica de traducción en utils
     if provider == 'qiskit':
         return _qiskit_python_source(
             circuit,

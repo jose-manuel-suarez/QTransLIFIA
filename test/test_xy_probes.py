@@ -182,7 +182,7 @@ class ProbeZxTests(unittest.TestCase):
     def _zx_result(self, url):
         output = translate_circuit({'input': {'url': url, 'zx': {'enabled': True}}})
         self.assertEqual([], output['output']['errors'])
-        return output['output']['zx_calculus_result']
+        return output['output']['zx_calculus']['result']
 
     def test_control_probes_are_zx_equivalent(self):
         algorithms = _algorithms()

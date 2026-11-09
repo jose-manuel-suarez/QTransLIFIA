@@ -571,24 +571,34 @@ una barrida exhaustiva del corpus que compara la unitaria emitida con la matriz 
 fase global incluida---, sondas de control de eje \emph{X}/\emph{Y} y post-selecciones,
 canonicidad de la transformada de Fourier y normalización de URLs de Quirk.
 
+\textbf{Interoperabilidad y \emph{endianness}.} La convención de orden de qubits de Quirk
+---el cable superior es el bit menos significativo, que corresponde al qubit~0 de
+Qiskit--- se replica en los tres destinos y se comprueba de forma explícita en la batería
+\texttt{test/test\_endianness.py}, que contrasta los conteos de medición obtenidos en Qiskit,
+AWS Braket y Xanadu PennyLane sobre circuitos de referencia. La prueba que consume el
+paquete publicado (\texttt{qtrans\_demo}) ejecuta el demo aislado con un único proveedor por
+corrida y normaliza las claves de conteo de Braket ---que ordena los bits en
+\emph{big-endian}, al revés que Qiskit--- invirtiéndolas, de modo que las distribuciones de
+los tres ecosistemas resultan directamente comparables.
+
 La verificación semántica por cálculo ZX se ejecuta sobre las colecciones de algoritmos de
 prueba, que abarcan algoritmos principales, variantes populares y diseños específicos de la
 transformada cuántica de Fourier y su inversa. El flujo completo ---incluidas la generación de
 imágenes, la comparación visual, los grafos ZX y la migración a proveedores--- se ejecuta de
 extremo a extremo tanto desde la línea de órdenes como desde el cuaderno, sin intervención
-manual: sobre el corpus principal produce 39 archivos OpenQASM, 39 capturas del circuito
-original, 39 diagramas, 39 comparaciones lado a lado y 39 scripts migrados, sin errores por
-etapa. La suite se ejecuta completa sin fallos (131/131); la aserción de idempotencia de la
+manual: sobre el corpus principal produce 38 archivos OpenQASM, 38 capturas del circuito
+original, 38 diagramas, 38 comparaciones lado a lado y 38 scripts migrados, sin errores por
+etapa. La suite se ejecuta completa sin fallos (149/149); la aserción de idempotencia de la
 canonicalización de URLs valida ahora el circuito parseado y no el escapado Unicode del
 texto, que era el origen de la discrepancia.
 
-Sobre el corpus completo ---134 algoritmos en seis registros, con las tres etapas de
-verificación simultáneas--- la corrida produce 134 archivos OpenQASM, 134 capturas del
-circuito original, 134 diagramas, 134 comparaciones lado a lado y 402 scripts migrados, con
-las 134 imágenes de la herramienta de composición de IBM. La verificación semántica por
-cálculo ZX compara 77 de esos circuitos y obtiene \emph{equivalencia} en los 77; los 57
-restantes no admiten comparación ---post-selecciones no unitarias, compuertas escalares
-globales y una matriz de cuatro por cuatro--- y quedan registrados como incidencias de esa
+Sobre el corpus completo ---138 algoritmos en siete registros, con las tres etapas de
+verificación simultáneas--- la corrida produce 138 archivos OpenQASM, 138 capturas del
+circuito original, 138 diagramas, 138 comparaciones lado a lado y 414 scripts migrados, con
+las 138 imágenes de la herramienta de composición de IBM. La verificación semántica por
+cálculo ZX compara 82 de esos circuitos y obtiene \emph{equivalencia} en los 82; los 56
+restantes no admiten comparación ---post-selecciones no unitarias y compuertas escalares
+globales--- y quedan registrados como incidencias de esa
 etapa, sin afectar a la traducción. El informe de equivalencia no omite esos casos: lista
 una fila por circuito analizado, con el motivo de cada no comparabilidad y una leyenda que
 explica el significado de cada veredicto, de modo que la ausencia de una prueba de

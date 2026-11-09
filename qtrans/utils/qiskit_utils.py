@@ -254,7 +254,7 @@ def _qiskit_python_source(parsed_circuit, preserve_custom_gates=False,
             python_lines.append('')
         if python_lines[-1] == '':
             python_lines.pop()
-    python_lines.extend(['', '# Creación del circuito cuántico'])
+    python_lines.extend(['', '', '# Creación del circuito cuántico'])
     python_lines.append(f"circuit = QuantumCircuit({', '.join(register_variables)})")
     python_lines.extend([''] + instructions)
     return '\n'.join(python_lines) + '\n'

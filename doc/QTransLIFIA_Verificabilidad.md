@@ -169,6 +169,8 @@ Dado que OpenQASM actúa como *punto de referencia intermedio*, la equivalencia 
 - **Quirk ↔ OpenQASM**: Verificable estructuralmente mediante `quirk_circuit_info` + inspección del OpenQASM generado (trazabilidad de puertas, conteos, conectividad).
 - **OpenQASM ↔ múltiples backends**: Verificable funcionalmente mediante ejecución cruzada con resultados consistentes entre ecosistemas.
 
+**Interoperabilidad y endianness.** La librería mantiene explícitamente la convención *little-endian* empleada por Quirk (el qubit superior se corresponde con el bit menos significativo / índice 0 de Qiskit). Esta convención se preserva íntegramente a lo largo de la traducción Quirk → OpenQASM → SDK destino (Qiskit, AWS Braket y Xanadu PennyLane), sin invertir el orden de los qubits. Cuando las convenciones difieren entre herramientas, es imprescindible mantener la coherencia de *endianness*: una inversión incorrecta del orden altera la interpretación del vector de estado y los resultados de medición, aunque topología y puertas parezcan idénticas. Las pruebas `test/test_endianness.py` validan esta propiedad para los tres proveedores y garantizan la fidelidad semántica en flujos de traducción interoperables.
+
 ### 6.4 Alcance del Contrato: Traducción vs. *Loads* y Ejecución
 
 Conviene distinguir con precisión **qué garantiza QTransLIFIA y qué queda del lado del proveedor**, porque ello delimita también el alcance de la verificación:

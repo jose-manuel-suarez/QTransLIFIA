@@ -20,12 +20,75 @@ CUSTOM_CIRCUIT = {
 QUIRK_URL = "https://algassert.com/quirk#circuit=" + json.dumps(
     CUSTOM_CIRCUIT, ensure_ascii=False
 )
+MATRIX_4X4_CIRCUIT = {
+    "cols": [["~4x4"]],
+    "gates": [
+        {
+            "id": "~4x4",
+            "name": "4x4",
+            "matrix": "{{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}}",
+        }
+    ],
+}
+CONTROLLED_MATRIX_CIRCUIT = {
+    "cols": [["•", "~m4"]],
+    "gates": [
+        {
+            "id": "~m4",
+            "name": "M4",
+            "matrix": (
+                "{{0.7071067811865476+0.7071067811865475i,0,0,0},"
+                "{0,0,0.7071067811865476+0.7071067811865475i,0},"
+                "{0,0.7071067811865476+0.7071067811865475i,0,0},"
+                "{0,0,0,0.7071067811865476+0.7071067811865475i}}"
+            ),
+        }
+    ],
+}
+POSTSELECT_CIRCUIT = {
+    "cols": [["|+⟩⟨+|"]],
+}
+NATIVE_CIRCUIT = {
+    "cols": [["H"], ["•", "X"]],
+}
+CONTROLLED_COMPOSITE_CIRCUIT = {
+    "cols": [["•", "~cg"]],
+    "gates": [
+        {
+            "id": "~cg",
+            "name": "CG",
+            "circuit": {
+                "cols": [["H", "X"], ["•", "X"], ["Z^½", "Y^¼"]],
+            },
+        }
+    ],
+}
+WIDE_COMPOSITE_CIRCUIT = {
+    "cols": [["~wg"]],
+    "gates": [
+        {
+            "id": "~wg",
+            "name": "WideX",
+            "circuit": {"cols": [[1, 1, "X"]]},
+        }
+    ],
+}
+WIDE_CONTROLLED_COMPOSITE_CIRCUIT = {
+    "cols": [["•", "~wg"]],
+    "gates": [
+        {
+            "id": "~wg",
+            "name": "WideX",
+            "circuit": {"cols": [[1, 1, "X"]]},
+        }
+    ],
+}
 
 OUTPUT_KEYS = {
     "qasm",
     "migrated_code",
     "circuits",
-    "zx_calculus_result",
+    "zx_calculus",
     "circuit_info",
     "custom_gates",
     "img",
@@ -71,8 +134,15 @@ class TranslateSingleTests(unittest.TestCase):
         self.assertEqual({"ibm_qiskit_code"}, set(output["migrated_code"]))
         self.assertIn("qiskit", output["migrated_code"]["ibm_qiskit_code"])
         self.assertIn(
-            output["zx_calculus_result"],
+            output["zx_calculus"]["result"],
             {"equivalente", "no-equivalente", "no-comprobado"},
+        )
+        self.assertEqual(
+            output["zx_calculus"]["result"], output["zx_calculus"]["result"]
+        )
+        self.assertIsInstance(output["zx_calculus"]["errors"], list)
+        self.assertIn(
+            output["zx_calculus"]["method"], {"directo", "aplanado", None}
         )
         self.assertEqual(3, output["circuit_info"]["n_qubits"])
         self.assertEqual({"n_qubits", "n_cols", "gates"}, set(output["circuit_info"]))
@@ -147,7 +217,100 @@ class TranslateSingleTests(unittest.TestCase):
             {"input": {"url": QUIRK_URL, "zx": {"enabled": False}}}
         )
 
-        self.assertIsNone(response["output"]["zx_calculus_result"])
+        self.assertIsNone(response["output"]["zx_calculus"]["result"])
+        self.assertEqual(
+            response["output"]["zx_calculus"],
+            {"result": None, "errors": [], "method": None, "comparison_method": None},
+        )
+
+    def test_zx_calculus_flattens_4x4_matrix(self):
+        response = translate_circuit(
+            {"input": {"json": MATRIX_4X4_CIRCUIT, "zx": {"enabled": True}}}
+        )
+
+        zx_calculus = response["output"]["zx_calculus"]
+        self.assertEqual("equivalente", zx_calculus["result"])
+        self.assertEqual("equivalente", response["output"]["zx_calculus"]["result"])
+        self.assertEqual([], zx_calculus["errors"])
+        self.assertEqual("aplanado", zx_calculus["method"])
+
+    def test_zx_calculus_flattens_controlled_matrix_gate(self):
+        response = translate_circuit(
+            {
+                "input": {
+                    "json": CONTROLLED_MATRIX_CIRCUIT,
+                    "zx": {"enabled": True},
+                }
+            }
+        )
+
+        zx_calculus = response["output"]["zx_calculus"]
+        self.assertEqual("equivalente", zx_calculus["result"])
+        self.assertEqual([], zx_calculus["errors"])
+        self.assertEqual("aplanado", zx_calculus["method"])
+
+    def test_zx_calculus_flattens_controlled_composite_gate(self):
+        response = translate_circuit(
+            {
+                "input": {
+                    "json": CONTROLLED_COMPOSITE_CIRCUIT,
+                    "zx": {"enabled": True},
+                }
+            }
+        )
+
+        zx_calculus = response["output"]["zx_calculus"]
+        self.assertEqual("equivalente", zx_calculus["result"])
+        self.assertEqual([], zx_calculus["errors"])
+        self.assertEqual("aplanado", zx_calculus["method"])
+
+    def test_zx_calculus_flattens_wide_composite_gate(self):
+        response = translate_circuit(
+            {"input": {"json": WIDE_COMPOSITE_CIRCUIT, "zx": {"enabled": True}}}
+        )
+
+        zx_calculus = response["output"]["zx_calculus"]
+        self.assertEqual("equivalente", zx_calculus["result"])
+        self.assertEqual([], zx_calculus["errors"])
+        self.assertEqual("aplanado", zx_calculus["method"])
+        self.assertIn("x c;", response["output"]["qasm"]["code"])
+
+    def test_zx_calculus_flattens_wide_controlled_composite_gate(self):
+        response = translate_circuit(
+            {
+                "input": {
+                    "json": WIDE_CONTROLLED_COMPOSITE_CIRCUIT,
+                    "zx": {"enabled": True},
+                }
+            }
+        )
+
+        zx_calculus = response["output"]["zx_calculus"]
+        self.assertEqual("equivalente", zx_calculus["result"])
+        self.assertEqual([], zx_calculus["errors"])
+        self.assertEqual("aplanado", zx_calculus["method"])
+
+    def test_zx_calculus_native_circuit_is_direct(self):
+        response = translate_circuit(
+            {"input": {"json": NATIVE_CIRCUIT, "zx": {"enabled": True}}}
+        )
+
+        zx_calculus = response["output"]["zx_calculus"]
+        self.assertEqual("equivalente", zx_calculus["result"])
+        self.assertEqual([], zx_calculus["errors"])
+        self.assertEqual("directo", zx_calculus["method"])
+
+    def test_zx_calculus_captures_stage_errors(self):
+        response = translate_circuit(
+            {"input": {"json": POSTSELECT_CIRCUIT, "zx": {"enabled": True}}}
+        )
+
+        zx_calculus = response["output"]["zx_calculus"]
+        self.assertEqual("no-comprobado", zx_calculus["result"])
+        self.assertEqual("no-comprobado", response["output"]["zx_calculus"]["result"])
+        self.assertEqual(1, len(zx_calculus["errors"]))
+        self.assertEqual("zx", zx_calculus["errors"][0]["stage"])
+        self.assertIsNone(zx_calculus["method"])
 
     def test_qasm_image_base64_and_comparison_doc(self):
         response = translate_circuit(
@@ -277,7 +440,11 @@ class TranslateBatchTests(unittest.TestCase):
                 {"xanadu_pennylane_code"},
                 set(item["migrated_code"]),
             )
-            self.assertIsNone(item["zx_calculus_result"])
+            self.assertIsNone(item["zx_calculus"]["result"])
+            self.assertEqual(
+                item["zx_calculus"],
+                {"result": None, "errors": [], "method": None, "comparison_method": None},
+            )
 
 
 if __name__ == "__main__":

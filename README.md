@@ -647,3 +647,12 @@ procedimiento, garantía y límites) está en
 ```bash
 python -m unittest discover -s test -p "test_*.py" -v
 ```
+
+### Demo aislado (`qtrans_demo`)
+
+`qtrans_demo/` instala `qtranslifia` desde PyPI en su propio `demo_venv` y ejecuta
+`translate_circuit` + simulación sin tocar el código fuente del repositorio. Acepta un
+**único** proveedor por corrida (`qiskit`, `braket` o `pennylane`, con alias `ibm`/`aws`/
+`xanadu`), que se elige con `QTRANS_TARGET_PROVIDERS`, y agrupa las salidas en
+`output/run_<fecha_hora>/<proveedor>/<algoritmo>/`. Instrucciones, variables de entorno y
+detalle de las salidas en [**qtrans_demo/README.md**](qtrans_demo/README.md).

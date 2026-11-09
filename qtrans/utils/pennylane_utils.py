@@ -183,6 +183,7 @@ def _pennylane_python_source(parsed_circuit, shots=1000, preserve_custom_gates=F
             python_lines.pop()
     python_lines.extend([
         '',
+        '',
         f"device = qml.device('default.qubit', wires={parsed_circuit.num_qubits}, shots={device_shots!r})",
         '',
         '@qml.qnode(device)',

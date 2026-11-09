@@ -264,6 +264,13 @@ def _braket_python_source(parsed_circuit, preserve_custom_gates=False,
 
         if operation.name == 'swap':
             instructions.append(f'circuit.swap({qubits[0]}, {qubits[1]})')
+        elif operation.name == 'p':
+            # 'p' tiene definición en Qiskit: sin este caso caería en la rama
+            # de custom gates y `preserve_custom_gates` la definiría una sola
+            # vez por nombre, perdiendo el ángulo de las demás apariciones.
+            instructions.append(
+                f'circuit.phaseshift({qubits[0]}, {parameters[0]})'
+            )
         elif operation.name == 'u1':
             instructions.append(f'circuit.phaseshift({qubits[0]}, {parameters[0]})')
         elif operation.name == 'u2':
@@ -324,6 +331,7 @@ def _braket_python_source(parsed_circuit, preserve_custom_gates=False,
         if python_lines[-1] == '':
             python_lines.pop()
     python_lines.extend([
+        '',
         '',
         '# Creación del circuito AWS Braket',
         'circuit = Circuit()',

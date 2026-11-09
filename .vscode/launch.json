@@ -2,25 +2,13 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug: qtrans (corrida desde .env)",
-      "type": "debugpy",
+      "name": "Debug main.py",
+      "type": "python",
       "request": "launch",
-      "module": "qtrans",
-      "args": [],
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "justMyCode": true,
-      "envFile": "${workspaceFolder}/.env"
-    },
-    {
-      "name": "Debug: run_pipeline (biblioteca, ${file})",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${file}",
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "justMyCode": true,
-      "envFile": "${workspaceFolder}/.env"
+      "program": "${workspaceFolder}/qtrans_demo/main.py",
+      "cwd": "${workspaceFolder}/qtrans_demo",
+      "python": "${workspaceFolder}/qtrans_demo/demo_venv/Scripts/python.exe",
+      "env": { "PYTHONPATH": "${workspaceFolder}" }
     }
   ]
 }

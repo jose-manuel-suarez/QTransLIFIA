@@ -60,18 +60,47 @@ def _build_gate_map(circuito):
     return gate_map
 
 
-def _gate_height(gate):
+def _gate_height(gate, gate_map=None, _seen=None):
     """Altura en qubits de un custom gate (por su 'circuit' o su 'matrix').
+
+    Para gates compuestos tiene en cuenta las QFT nativas, los shifts cíclicos
+    ('<<n'/'>>n') y, si se pasa ``gate_map``, la altura de los custom gates
+    anidados que aparecen en sus columnas.
 
     Parámetros:
         - gate (dict): definición del custom gate.
+        - gate_map (dict | None): mapa id/name -> definición de custom gates
+          (necesario para resolver gates anidados).
+        - _seen (set | None): ids de gates ya visitados (evita recursión
+          infinita con definiciones cíclicas).
 
     Retorna:
         - int: cantidad de qubits que ocupa el gate.
     """
+    if not isinstance(gate, dict):
+        return 0
     cols = gate.get('circuit', {}).get('cols', [])
     if cols:
-        return max(len(c) for c in cols)
+        if gate_map is None:
+            height = max(len(c) for c in cols)
+            for column in cols:
+                for index, value in enumerate(column):
+                    qft_info = _qft_token(value)
+                    if qft_info is not None:
+                        height = max(height, index + qft_info[0])
+                    cycle_info = _cycle_token(value)
+                    if cycle_info is not None:
+                        height = max(height, index + cycle_info[1])
+            return height
+        if _seen is None:
+            _seen = set()
+        marker = id(gate)
+        if marker in _seen:
+            return 0
+        return max(
+            _column_extent(column, gate_map, _seen | {marker})
+            for column in cols
+        )
     matrix = gate.get('matrix')
     if isinstance(matrix, list):
         dimension = len(matrix)
@@ -140,6 +169,34 @@ def _qft_token(value):
     return span, bool(match.group('inv1') or match.group('inv2'))
 
 
+# Compuertas nativas de rotación cíclica de bits de Quirk (CycleBitsGates.js):
+# '<<n' rota el contenido de los n wires hacia abajo (wire i -> wire i+1) y
+# '>>n' hacia arriba (wire i -> wire i-1), con wrap-around.
+_CYCLE_TOKEN_RE = re.compile(r'^(?P<direction><<|>>)(?P<span>\d+)$')
+
+
+def _cycle_token(value):
+    """Detecta si value es una compuerta de rotación cíclica de bits de Quirk.
+
+    Parámetros:
+        - value: celda de la columna (str u otro tipo).
+
+    Retorna:
+        - tuple | None: (dirección, span) con dirección '<<' o '>>'; None si
+          la celda no es un shift cíclico válido (span >= 2).
+    """
+    if not isinstance(value, str):
+        return None
+    match = _CYCLE_TOKEN_RE.match(value)
+    if match is None:
+        return None
+    span = int(match.group('span'))
+    if span < 2:
+        return None
+    return match.group('direction'), span
+
+
+
 def _qft_gate_name(span, inverse=False):
     """Nombre OpenQASM de la compuerta QFT de 'span' qubits.
 
@@ -201,26 +258,32 @@ def _qft_declarations(tokens):
     return lines
 
 
-def _column_extent(col, gate_map=None):
+def _column_extent(col, gate_map=None, _seen=None):
     """Altura efectiva de una columna, contando custom gates y QFT nativas.
 
     Parámetros:
         - col (list): columna del circuito.
         - gate_map (dict | None): mapa id/name -> definición de custom gates
           (para contar la altura de las celdas que referencian un gate).
+        - _seen (set | None): ids de gates ya visitados (interno, para evitar
+          recursión infinita en definiciones cíclicas).
 
     Retorna:
         - int: la máxima cantidad de qubits que toca la columna.
     """
     extent = len(col)
     for index, value in enumerate(col):
-        info = _qft_token(value)
-        if info is not None:
-            extent = max(extent, index + info[0])
+        qft_info = _qft_token(value)
+        if qft_info is not None:
+            extent = max(extent, index + qft_info[0])
+            continue
+        cycle_info = _cycle_token(value)
+        if cycle_info is not None:
+            extent = max(extent, index + cycle_info[1])
             continue
         if gate_map is not None and _is_gate_ref(value, gate_map):
             gate = gate_map.get(str(value).split(':')[0])
-            height = _gate_height(gate) if gate is not None else 0
+            height = _gate_height(gate, gate_map, _seen) if gate is not None else 0
             extent = max(extent, index + (height or 1))
     return extent
 
@@ -333,6 +396,7 @@ def _to_complex(value):
     text = str(value).strip()
     text = text.replace('√½', '0.7071067811865476')
     text = text.replace('√2', '1.4142135623730951')
+    text = text.replace('⅛', '0.125').replace('⅜', '0.375').replace('⅝', '0.625').replace('⅞', '0.875')
     text = text.replace('½', '0.5').replace('¼', '0.25').replace('¾', '0.75')
     text = text.replace('−', '-')  # signo menos Unicode
     if 'i' in text and 'j' not in text:
@@ -881,6 +945,9 @@ def _postselect_lines(value, qubit_index, offset):
 _CONTROL_GATES = {
     '•': {'setup': (), 'cleanup': (), 'negate': False},
     '◦': {'setup': (), 'cleanup': (), 'negate': True},
+    # 'o' es un alias ASCII del anti-control '◦' que aparece en URLs de Quirk
+    # editadas a mano (p. ej. la compuerta '0_cnot' de 'god_custom').
+    'o': {'setup': (), 'cleanup': (), 'negate': True},
     '⊕': {'setup': ('h',), 'cleanup': ('h',), 'negate': True},
     '⊖': {'setup': ('h',), 'cleanup': ('h',), 'negate': False},
     '⊗': {'setup': ('rx(pi/2)',), 'cleanup': ('rx(-pi/2)',), 'negate': True},
@@ -945,6 +1012,53 @@ def _control_cleanup_lines(control_cells, offset):
             lines.append(f'x q[{index + offset}];')
     for index, value in control_cells:
         for operation in _CONTROL_GATES[value]['cleanup']:
+            lines.append(f'{operation} q[{index + offset}];')
+    return lines
+
+
+# Estados iniciales de Quirk (campo 'init' del circuito). Cada valor se
+# prepara sobre |0> con las operaciones OpenQASM indicadas; coinciden con
+# INITIAL_STATES_TO_GATES de src/gates/AllGates.js.
+_INITIAL_STATE_GATES = {
+    '1': ('x',),
+    '+': ('h',),
+    '-': ('h', 'z'),
+    'i': ('h', 'p(pi/2)'),
+    '-i': ('h', 'p(-pi/2)'),
+}
+
+
+def _initial_state_gates(value):
+    """Operaciones OpenQASM que preparan un estado inicial de Quirk.
+
+    Parámetros:
+        - value: valor del campo 'init' (0, 1, '1', '+', '-', 'i' o '-i').
+
+    Retorna:
+        - tuple[str, ...]: operaciones OpenQASM; vacío si es |0> o desconocido.
+    """
+    if value in (0, None):
+        return ()
+    if value == 1:
+        value = '1'
+    if not isinstance(value, str):
+        return ()
+    return _INITIAL_STATE_GATES.get(value, ())
+
+
+def _initial_state_lines(init, offset=0):
+    """Líneas OpenQASM que preparan los estados iniciales del circuito.
+
+    Parámetros:
+        - init (list | None): valores del campo 'init' de Quirk.
+        - offset (int): desplazamiento de los índices q[i].
+
+    Retorna:
+        - list[str]: líneas OpenQASM con terminador ';'.
+    """
+    lines = []
+    for index, value in enumerate(init or []):
+        for operation in _initial_state_gates(value):
             lines.append(f'{operation} q[{index + offset}];')
     return lines
 
@@ -1037,11 +1151,30 @@ def _quirk2_col_to_qasm_core(col, offset, gate_map, gate_names=None):
             body.append(f'{modifier}{name} {", ".join(qubits)};')
             occupied.update(range(index, index + span))
             continue
+        cycle_info = _cycle_token(value)
+        if cycle_info is not None:
+            direction, span = cycle_info
+            # '<<n' baja el contenido (wire i -> i+1): swaps de abajo hacia
+            # arriba; '>>n' lo sube (wire i -> i-1): swaps de arriba hacia abajo.
+            pairs = (
+                [(k, k + 1) for k in range(span - 2, -1, -1)]
+                if direction == '<<'
+                else [(k, k + 1) for k in range(span - 1)]
+            )
+            for first, second in pairs:
+                qubits = [f'q[{i + offset}]' for i in control_indices]
+                qubits.extend([
+                    f'q[{index + first + offset}]',
+                    f'q[{index + second + offset}]',
+                ])
+                body.append(f'{modifier}swap {", ".join(qubits)};')
+            occupied.update(range(index, index + span))
+            continue
         if isinstance(value, str) and _is_gate_ref(value, gate_map):
             gate_id = value.split(':')[0]
             gate = gate_map[gate_id]
             operation = _gate_operation(gate, gate_id, gate_names)
-            gate_height = _gate_height(gate) or 1
+            gate_height = _gate_height(gate, gate_map) or 1
             qubits = [f'q[{i + offset}]' for i in control_indices]
             qubits.extend(f'q[{index + k + offset}]' for k in range(gate_height))
             body.append(f'{modifier}{operation} {", ".join(qubits)};')
@@ -1256,7 +1389,7 @@ def _col_to_qasm_with_gates(col, offset, gate_map, depth=0):
         if not gate_cols:
             # Custom gate con 'matrix': se expande como una sola operación.
             operation = _gate_operation(gate, base, gate_names)
-            gate_height = _gate_height(gate) or 1
+            gate_height = _gate_height(gate, gate_map) or 1
             qubits = ', '.join(
                 f'q[{i + offset}]' for i in range(idx, idx + gate_height)
             )
@@ -1343,7 +1476,47 @@ def replace_params(lines):
             lines[index] = re.sub(r'q\[(\d+)\]', lambda m: string.ascii_lowercase[int(m.group(1))], line)
     return lines
 
-def append_custom_gates(custom_gates_info, gate_map, gate_names=None):
+def _collect_used_gate_ids(circuito, gate_map):
+    """Ids canónicos de las compuertas custom alcanzables desde las columnas.
+
+    Recorre las columnas del circuito y, recursivamente, las definiciones de
+    las compuertas compuestas usadas, de modo que una compuerta anidada cuenta
+    como usada aunque no aparezca directamente en ``cols``.
+
+    Parámetros:
+        - circuito (dict): circuito Quirk parseado (con 'cols' y 'gates').
+        - gate_map (dict): mapa id/name -> definición de custom gates.
+
+    Retorna:
+        - set[str]: ids (sin el sufijo ':k') de las compuertas usadas.
+    """
+    used = set()
+    pending = [circuito.get('cols', [])]
+    while pending:
+        current = pending.pop()
+        for col in current:
+            for value in col:
+                if not isinstance(value, str):
+                    continue
+                definition = gate_map.get(value.split(':')[0])
+                if definition is None:
+                    continue
+                identifier = definition.get('id')
+                identifier = (
+                    identifier.split(':')[0]
+                    if isinstance(identifier, str)
+                    else None
+                )
+                if identifier is None or identifier in used:
+                    continue
+                used.add(identifier)
+                nested = definition.get('circuit', {}).get('cols')
+                if nested:
+                    pending.append(nested)
+    return used
+
+
+def append_custom_gates(custom_gates_info, gate_map, gate_names=None, used_ids=None):
     """Declaraciones `gate` (submódulos OpenQASM) de los custom gates.
 
     - Gates con 'circuit.cols': el cuerpo sale de sus columnas.
@@ -1354,10 +1527,17 @@ def append_custom_gates(custom_gates_info, gate_map, gate_names=None):
     llamados (``_gate_operation``), para que declaración y llamada coincidan.
     Las declaraciones se ordenan según sus referencias (se declara antes de usar).
 
+    Las compuertas ``matrix`` no traducibles (p. ej. no unitarias) que **no**
+    se usan en el circuito se omiten en lugar de abortar la traducción: Quirk
+    las permite como definiciones latentes y ``god_custom`` incluye una
+    (``u_9``).  Si una de ellas sí se usa, el error se propaga.
+
     Parámetros:
         - custom_gates_info (list[dict]): custom gates usados en el circuito.
         - gate_map (dict): mapa id/name -> definición de custom gates.
         - gate_names (dict | None): identificadores ya resueltos (opcional).
+        - used_ids (set[str] | None): ids alcanzables desde el circuito
+          (para decidir si una matriz inválida es solo una definición latente).
 
     Retorna:
         - str: bloque de declaraciones (cadena vacía si no hay custom gates).
@@ -1375,7 +1555,7 @@ def append_custom_gates(custom_gates_info, gate_map, gate_names=None):
         if cols:
             n_qubits = (
                 custom_gate_info.get('n_qubits')
-                or _gate_height(custom_gate_info)
+                or _gate_height(custom_gate_info, gate_map)
                 or 1
             )
             body = []
@@ -1383,7 +1563,12 @@ def append_custom_gates(custom_gates_info, gate_map, gate_names=None):
                 body.extend(replace_params(_quirk2_col_to_qasm(col, 0, gate_map, gate_names)))
         elif custom_gate_info.get('matrix') is not None:
             # Gates con 'matrix' (sin circuit): cuerpo = descomposición equivalente.
-            n_qubits, body = _matrix_gate_body_lines(custom_gate_info, gate_id)
+            try:
+                n_qubits, body = _matrix_gate_body_lines(custom_gate_info, gate_id)
+            except ValueError:
+                if used_ids is not None and gate_id not in used_ids:
+                    continue
+                raise
         else:
             # Sin 'circuit' ni 'matrix': no hay definición posible; solo se
             # falla si además se referencia en el circuito (_gate_operation).
@@ -1427,12 +1612,13 @@ def append_custom_gates(custom_gates_info, gate_map, gate_names=None):
             break
         remaining = next_round
 
-    lines = []
+    blocks = []
     for decl in ordered:
-        lines.append(f"gate {decl['name']} {primeras_letras(decl['n_qubits'])} {{")
-        lines.extend(decl['body'])
-        lines.append('}')
-    return '\n'.join(lines)
+        block_lines = [f"gate {decl['name']} {primeras_letras(decl['n_qubits'])} {{"]
+        block_lines.extend(decl['body'])
+        block_lines.append('}')
+        blocks.append('\n'.join(block_lines))
+    return '\n\n'.join(blocks)
 
 def quirk_to_qasm(url, offset=0, qasm_version='3.0'):
     """Traduce una URL de Quirk a código OpenQASM completo.
@@ -1457,6 +1643,7 @@ def quirk_to_qasm(url, offset=0, qasm_version='3.0'):
     circuito = parse_quirk_url(url)
     gate_map = _build_gate_map(circuito)
     gate_names = _resolve_gate_names(gate_map)
+    used_gate_ids = _collect_used_gate_ids(circuito, gate_map)
     cols = circuito.get('cols', [])
     qft_tokens = {
         info
@@ -1468,11 +1655,15 @@ def quirk_to_qasm(url, offset=0, qasm_version='3.0'):
     if qft_tokens:
         lines.extend(_qft_declarations(qft_tokens))
     if len(custom_gates_info) > 0:
-        declarations = append_custom_gates(custom_gates_info, gate_map, gate_names)
+        declarations = append_custom_gates(
+            custom_gates_info, gate_map, gate_names, used_gate_ids
+        )
         if declarations:
             lines.append(declarations)
+            lines.append('')
+    init_states = circuito.get('init') or []
     if not cols:
-        n = offset
+        n = max(offset, len(init_states) + offset)
     else:
         n = max(_column_extent(c, gate_map) for c in cols) + offset
         r = max(
@@ -1484,13 +1675,16 @@ def quirk_to_qasm(url, offset=0, qasm_version='3.0'):
             default=0,
         ) + offset
         if r > n: n = r
-        
-    lines.extend([f'qreg q[{n}];', f'creg c[{n}];'])
+        if init_states and len(init_states) + offset > n:
+            n = len(init_states) + offset
+
+    lines.extend(['', f'qreg q[{n}];', f'creg c[{n}];'])
     has_postselect = any(
         _is_postselect(value) for col in cols for value in col
     )
     if has_postselect:
         lines.append(f'creg ps[{n}];  // post-selección: descartar shots con ps != esperado')
+    lines.extend(_initial_state_lines(init_states, offset))
     for col in cols:
         # algo=_col_to_qasm_with_gates(col, offset, gate_map)
         algo = _quirk2_col_to_qasm(col, offset, gate_map, gate_names)
@@ -1515,10 +1709,11 @@ def quirk_circuit_info(url):
     circuito = parse_quirk_url(url)
     cols = circuito.get('cols', [])
     gates_defs = circuito.get('gates', [])
+    init_states = circuito.get('init') or []
+    gate_map_eff = _build_gate_map(circuito)
     # n_qubits efectivo: max de cols principales y altura de custom gates usados
     if cols:
-        gate_map_eff = _build_gate_map(circuito)
-        n_qubits = max(_column_extent(c, gate_map_eff) for c in cols) if cols else 0
+        n_qubits = max(_column_extent(c, gate_map_eff) for c in cols)
         for col in cols:
             for idx, entry in enumerate(col):
                 if not isinstance(entry, str):
@@ -1537,7 +1732,7 @@ def quirk_circuit_info(url):
                     except Exception:
                         pass
                 else:
-                    h = _gate_height(gate)
+                    h = _gate_height(gate, gate_map_eff)
                     needed = idx + h
                     if needed > n_qubits:
                         n_qubits = needed
@@ -1545,6 +1740,8 @@ def quirk_circuit_info(url):
     else:
         n_qubits = 0
         n_cols = 0
+    if init_states:
+        n_qubits = max(n_qubits, len(init_states))
 
     gates = set()
     for col in cols:
@@ -1573,11 +1770,15 @@ def quirk_circuit_info(url):
             'circuit_cols': g.get('circuit', {}).get('cols') if 'circuit' in g else None,
         }
         if 'circuit' in g:
-            info['n_qubits'] = _gate_height(g)
+            info['n_qubits'] = _gate_height(g, gate_map_eff)
             info['n_cols'] = len(g.get('circuit', {}).get('cols', []))
         else:
             # Gates con 'matrix': la altura sale de la dimensión de la matriz
-            info['n_qubits'] = _gate_height(g) if g.get('matrix') is not None else None
+            info['n_qubits'] = (
+                _gate_height(g, gate_map_eff)
+                if g.get('matrix') is not None
+                else None
+            )
             info['n_cols'] = None
         custom_gates_info.append(info)
 
@@ -1620,24 +1821,7 @@ def custom_gates_catalog(url):
         raw = definition.get('id')
         return raw.split(':')[0] if isinstance(raw, str) else None
 
-    used_ids = set()
-    pending = [circuito.get('cols', [])]
-    while pending:
-        current = pending.pop()
-        for col in current:
-            for value in col:
-                if not isinstance(value, str):
-                    continue
-                definition = gate_map.get(value.split(':')[0])
-                if definition is None:
-                    continue
-                identifier = canonical_id(definition)
-                if identifier is None or identifier in used_ids:
-                    continue
-                used_ids.add(identifier)
-                nested = definition.get('circuit', {}).get('cols')
-                if nested:
-                    pending.append(nested)
+    used_ids = _collect_used_gate_ids(circuito, gate_map)
 
     catalog = []
     for definition in circuito.get('gates', []):
@@ -1660,7 +1844,7 @@ def custom_gates_catalog(url):
             'name': raw_name,
             'qasm_name': qasm_name,
             'kind': kind,
-            'n_qubits': _gate_height(definition),
+            'n_qubits': _gate_height(definition, gate_map),
             'used_in_circuit': identifier in used_ids,
         })
     return catalog

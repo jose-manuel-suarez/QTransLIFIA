@@ -39,6 +39,7 @@ from qiskit.quantum_info import Operator
 
 from qtrans.utils.quirk_utils import (
     _build_gate_map,
+    _collect_used_gate_ids,
     _matrix_to_rows,
     _resolve_gate_names,
     quirk_to_qasm,
@@ -93,6 +94,26 @@ def _matrix_gates(circuit):
     return [
         gate for gate in circuit.get('gates', [])
         if gate.get('matrix') is not None
+    ]
+
+
+def _used_matrix_gates(circuit):
+    """Devuelve las compuertas con matriz que el circuito realmente usa.
+
+    Quirk permite definir compuertas latentes que no se usan (``god_custom``
+    declara ``u_9``, no unitaria).  El pipeline las omite; la validación
+    numérica solo debe exigir unitariedad y declaración a las usadas.
+
+    Parámetros:
+        - circuit (dict): circuito de Quirk.
+
+    Retorna:
+        - list[dict]: compuertas con ``matrix`` cuyo ``id`` es alcanzable.
+    """
+    used_ids = _collect_used_gate_ids(circuit, _build_gate_map(circuit))
+    return [
+        gate for gate in _matrix_gates(circuit)
+        if str(gate.get('id') or '').split(':')[0] in used_ids
     ]
 
 
@@ -196,6 +217,7 @@ def _discover():
                 'entry': entry,
                 'circuit': circuit,
                 'matrix_gates': gates,
+                'used_matrix_gates': _used_matrix_gates(circuit),
             })
     return scanned, per_file, entries
 
@@ -226,7 +248,7 @@ class MatrixDiscoveryTests(unittest.TestCase):
                 )
                 declarations = _gate_declarations(source)
                 gate_names = _resolve_gate_names(_build_gate_map(case['circuit']))
-                for gate in case['matrix_gates']:
+                for gate in case['used_matrix_gates']:
                     identifier = gate_names[gate['id']]
                     self.assertIn(identifier, declarations)
                     total += 1
@@ -255,7 +277,7 @@ class UrlMatrixVsQasmTests(unittest.TestCase):
 
     def test_source_matrices_are_unitary(self):
         for case in self.cases:
-            for gate in case['matrix_gates']:
+            for gate in case['used_matrix_gates']:
                 label = f"{case['file']}:{case['name']}:{gate.get('name', gate['id'])}"
                 with self.subTest(gate=label):
                     matrix = np.array(
@@ -270,7 +292,7 @@ class UrlMatrixVsQasmTests(unittest.TestCase):
 
     def test_declared_unitaries_match_the_url_matrices(self):
         for case in self.cases:
-            for gate in case['matrix_gates']:
+            for gate in case['used_matrix_gates']:
                 identifier = case['gate_names'][gate['id']]
                 label = f"{case['file']}:{case['name']}:{identifier}"
                 with self.subTest(gate=label):

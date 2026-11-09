@@ -81,7 +81,7 @@ Para circuitos de pocos qubits (estados Bell, Toffoli, «la demostración por la
 | C. Verificación numérica de matrices | `tools/verify_matrix_gates.py` | `python tools/verify_matrix_gates.py` | Fidelidad de las *custom gates* con campo `matrix` |
 | D. Equivalencia ZX | `qtrans/utils/zx_utils.py` + `input/*.json` | Etapa ZX del pipeline (`QTRANS_GENERATE_ZX=true`) | Equivalencia unitaria Quirk ↔ OpenQASM |
 | E. Equivalencia cruzada entre backends | `tools/verify_backend_equivalence.py` | `python tools/verify_backend_equivalence.py` | La ruta nativa y la ruta migrada describen el mismo circuito |
-| E2. Migración aislada de un circuito | `tools/migrate_circuit.py` | `python tools/migrate_circuit.py --file input/popular_algorithms.json --index 39` | El JSON de la API (OpenQASM + un script por proveedor) se materializa y se imprime en consola |
+| E2. Migración aislada de un circuito | `tools/migrate_circuit.py` | `python tools/migrate_circuit.py --file input/popular_algorithms.json --index 1` | El JSON de la API (OpenQASM + un script por proveedor) se materializa y se imprime en consola |
 | F. Corrida end-to-end | CLI `python -m qtrans` | `python -m qtrans --input-mode batch --input-file ""` | Integración completa y artefactos de corrida |
 | G. Comprobaciones manuales | `test/test_qasm.py`, `test/test_translate_lib.py`, `notebooks/` | Ejecución directa del script | Exploración y documentación de cara al usuario |
 | H. Aceptación de la distribución | `qtrans_demo/` (subproyecto aislado) | `qtrans_demo/demo_venv/Scripts/python.exe qtrans_demo/main.py` | El artefacto instalado desde PyPI traduce y simula en un entorno limpio |
@@ -104,13 +104,13 @@ python tools/check_static.py qtrans test tools
 
 ### 4.2 Batería B — Suite unitaria de integración
 
-El repositorio incluye **131 pruebas** distribuidas en once archivos, organizados por el contrato que cada uno congela:
+El repositorio incluye **149 pruebas** distribuidas en doce archivos, organizados por el contrato que cada uno congela:
 
 | Archivo | Pruebas | Contrato congelado |
 | --- | --- | --- |
-| `test/test_qtrans.py` | 28 | Pipeline y CLI: modos `algorithm`/`batch`, artefactos por corrida, imágenes, scripts migrados, errores por etapa y robustez de la salida por consola (`safe_print`) |
+| `test/test_qtrans.py` | 29 | Pipeline y CLI: modos `algorithm`/`batch`, artefactos por corrida, imágenes, scripts migrados, errores por etapa y robustez de la salida por consola (`safe_print`) |
 | `test/test_providers.py` | 22 | Registro y alias de proveedores, carga nativa de cada ecosistema, normalización del OpenQASM para Braket, `preserve_custom_gates` |
-| `test/test_translate.py` | 14 | Contrato JSON de `translate_circuit`: claves obligatorias, tipos, rangos, `ValueError` ante payloads inválidos, modo lote |
+| `test/test_translate.py` | 21 | Contrato JSON de `translate_circuit`: claves obligatorias, tipos, rangos, `ValueError` ante payloads inválidos, modo lote |
 | `test/test_translate_circuits.py` | 6 | API de objetos `translate_circuits`: forma `{proveedor: {nombre: circuito}}` y tipos nativos (`QuantumCircuit`, `Circuit`, `QNode`) |
 | `test/test_endianness.py` | 14 | Convención *little-endian* de Quirk ↔ OpenQASM ↔ los tres ecosistemas destino |
 | `test/test_matrix_customs.py` | 7 | Compuertas personalizadas con campo `matrix`: equivalencia numérica con la matriz de origen y con el código generado |
@@ -119,13 +119,14 @@ El repositorio incluye **131 pruebas** distribuidas en once archivos, organizado
 | `test/test_qft_canonical.py` | 9 | Canonicidad de `QFT†n`, sus variantes y la regresión sobre `input/qft_algorithms.json` |
 | `test/test_url_utils.py` | 9 | Normalización y canonicalización de URLs de Quirk pegadas a mano y codificación percent-encoded |
 | `test/test_custom_gates.py` | 7 | Tratamiento exhaustivo de las compuertas custom: catálogo con `used_in_circuit`, traslado de las declaradas sin uso al script migrado y conservación de los parámetros de las compuertas controladas |
+| `test/test_cycle_shifts.py` | 10 | Cycle shifts `<<n`/`>>n`, campo `init`, alias ASCII `o` del anti-control y equivalencia ZX de `god_custom` |
 
 ```bash
 python -m unittest discover -s test -p "test_*.py"
-# Ran 131 tests ... OK
+# Ran 149 tests ... OK
 ```
 
-**Corpora de entrada.** Las pruebas y las baterías C–F se apoyan en registros de algoritmos que actúan como *fixtures* estables: `input/popular_algorithms.json` (39 algoritmos reales: Shor, Bernstein-Vazirani, Grover, Deutsch-Jozsa, Simon, QFT, QPE, post-selecciones y compuertas personalizadas), `input/xy_probes_gates_algorithms.json` (24 sondas de X/Y Probes y post-selecciones, todas deterministas), `input/qft_algorithms.json` (12 casos de QFT), `input/main_algorithms.json` (15 algoritmos), `input/natives_post_select_algorithms.json` (16 casos) e `input/scalar_gates_algorithms.json` (28 casos).
+**Corpora de entrada.** Las pruebas y las baterías C–F se apoyan en registros de algoritmos que actúan como *fixtures* estables: `input/popular_algorithms.json` (38 algoritmos reales: Shor, Bernstein-Vazirani, Grover, Deutsch-Jozsa, Simon, QFT, QPE, post-selecciones y compuertas personalizadas), `input/custom_gates_algorithms.json` (5 circuitos con compuertas `matrix`, compuestas, cycle shifts y estados iniciales), `input/xy_probes_gates_algorithms.json` (24 sondas de X/Y Probes y post-selecciones, todas deterministas), `input/qft_algorithms.json` (12 casos de QFT), `input/main_algorithms.json` (15 algoritmos), `input/natives_post_select_algorithms.json` (16 casos) e `input/scalar_gates_algorithms.json` (28 casos).
 
 **Disciplina de los parches.** `qtrans/core.py` invoca a los módulos con **nombre qualificado** (`quirk_utils.quirk_to_qasm`, `provider_utils.generate_provider_files`, `qiskit_utils.generate_composer_images`, `zx_utils.run_zx_workflow`…) para que los parches de las pruebas apunten al módulo real y no a una copia reexportada.
 
@@ -140,11 +141,11 @@ python -m unittest discover -s test -p "test_*.py"
 3. la **unitaria de un camino independiente**: la descomposición ZYZ del verificador ZX para 2×2 y la descomposición KAK de Qiskit para 4×4;
 4. el **residuo de la proyección a unitaria** (SVD) que el pipeline aplica cuando la matriz publicada no es exactamente unitaria.
 
-**Resultado actual sobre el corpus:** 52 compuertas con `matrix` verificadas, con un residuo máximo `|OpenQASM − URL| = 4.927e-08`, que es exactamente el redondeo a siete decimales con el que Quirk serializa las matrices. La tolerancia por defecto de la batería es `1e-6`, dos órdenes de magnitud por encima de ese redondeo.
+**Resultado actual sobre `popular_algorithms.json`:** 44 compuertas con `matrix` verificadas, con un residuo máximo `|OpenQASM − URL| = 4.549e-11`, que es exactamente el redondeo a siete decimales con el que Quirk serializa las matrices. La tolerancia por defecto de la batería es `1e-6`, dos órdenes de magnitud por encima de ese redondeo.
 
 ```bash
 python tools/verify_matrix_gates.py
-# compuertas con "matrix" verificadas: 52   residuo máximo |OpenQASM-URL| = 4.927e-08   (tolerancia 1e-06)
+# compuertas con "matrix" verificadas: 44   residuo máximo |OpenQASM-URL| = 4.549e-11   (tolerancia 1e-06)
 ```
 
 ### 4.4 Batería D — Equivalencia semántica mediante cálculo ZX
@@ -160,15 +161,14 @@ Es un comportamiento **esperado y conocido**, no una regresión. Por eso el info
 
 **El informe lista todos los circuitos, no solo los comparables.** `run_zx_workflow` (`qtrans/utils/zx_utils.py:817`) mantiene una entrada por circuito analizado: los que se compararon (con método, veredicto y número de cúbits) y los que no se pudieron comparar (con el motivo: compuerta no soportada, matriz no representable, timeout o excepción). El `comparison_results.md` resultante lleva, además de la tabla, una **leyenda** con el significado y el recuento de cada estado y una tabla de **motivos de no comparabilidad** con el número de circuitos afectado por cada uno. De este modo, la ausencia de un veredicto de equivalencia es siempre visible y explicada, en lugar de desaparecer del informe. Regresión: `test/test_xy_probes.py::ProbeComparisonTableTests` (sobre el corpus de sondas: 24 filas = 12 `EQUIVALENTES` + 12 `NO COMPARABLES` con motivo, leyenda y tabla de motivos).
 
-**Cobertura sobre el corpus completo.** En la corrida E2E de los 134 algoritmos de `input/` la etapa ZX comparó **77 circuitos y los 77 resultaron `EQUIVALENTES`** (`compare_tensors (rw-greedy-linear)`), generando además los 77 diagramas SVG de los grafos. Los 57 restantes no son comparables y el pipeline los registra como error de esa etapa, todos por el mismo motivo (compuerta no representable en el grafo ZX, no fallo de traducción); en el informe figuran como `NO COMPARABLES` con su motivo:
+**Cobertura sobre el corpus completo.** En la corrida E2E de los 138 algoritmos de `input/` la etapa ZX comparó **82 circuitos y los 82 resultaron `EQUIVALENTES`** (`compare_tensors (rw-greedy-linear)`), generando además los 82 diagramas SVG de los grafos. Los 56 restantes no son comparables y el pipeline los registra como error de esa etapa, todos por el mismo motivo (compuerta no representable en el grafo ZX, no fallo de traducción); en el informe figuran como `NO COMPARABLES` con su motivo:
 
 | Causa | Circuitos | Detalle |
 | --- | :-: | --- |
 | Post-selección nativa | 28 | 16 de `natives_post_select_algorithms.json` + 12 de `xy_probes_gates_algorithms.json`; no son unitarias |
 | Compuerta escalar de Quirk | 28 | `0`, `i`, `√i`, `√-i`, `-i`, `NeGate`, `…` (7）× 4 tamaños: multiplican la amplitud global |
-| Matriz 4×4 personalizada | 1 | `mia` en `popular_algorithms.json`: el constructor ZX solo admite matrices 2×2 |
 
-Ninguna de las 57 incidencias afecta a la traducción: los 134 OpenQASM, las 134 capturas, los 134 diagramas y los 402 scripts migrados se generaron sin errores.
+Ninguna de las 56 incidencias afecta a la traducción: los 138 OpenQASM, las 138 capturas, las 138 diagramas y los 414 scripts migrados se generaron sin errores.
 
 Para habilitar esta etapa desde la línea de órdenes hay que activar la variable de entorno `QTRANS_GENERATE_ZX=true` (el `.env` local del proyecto la deja desactivada y la CLI solo ofrece el flag `--no-zx` para omitirla):
 
@@ -185,7 +185,7 @@ QTRANS_GENERATE_ZX=true python -m qtrans --input-mode batch --input-file "" \
 - **ruta nativa**: el parser del propio ecosistema (`qasm2/qasm3.loads` en Qiskit, `Circuit.from_ir` en Braket; PennyLane no tiene parser viable y usa el script);
 - **ruta migrada**: la ejecución del script Python que la librería genera (`migrated_circuits/<proveedor>/<nombre>.py`).
 
-Ambas deben describir el mismo circuito, porque el usuario puede consumir cualquiera de las dos. La batería compara, sobre los 39 algoritmos del corpus:
+Ambas deben describir el mismo circuito, porque el usuario puede consumir cualquiera de las dos. La batería compara, sobre los 38 algoritmos del corpus:
 
 - **Qiskit**: los vectores de estado finales de ambos circuitos (salvo fase global), después de retirar mediciones y barreras. Se comparan vectores y no matrices unitarias porque el corpus incluye circuitos de hasta 16 qubits, donde la matriz unitaria (65536×65536) no es materializable.
 - **AWS Braket**: una **firma semántica** de las instrucciones, tras canonicalizar las representaciones equivalentes que Braket ofrece (`PhaseShift` con control ≡ `CPhaseShift` ≡ `U(0,φ,0)`; `CNot` ≡ `X` con control) e ignorar la posición de las mediciones —el generador las difiere al final, lo que no altera el resultado porque ningún qubit medido se vuelve a tocar después.
@@ -195,11 +195,11 @@ Con `--simulate` se añade una comprobación estadística con el simulador local
 
 ```bash
 python tools/verify_backend_equivalence.py
-# qiskit: rutas equivalentes 39/39
-# braket: rutas equivalentes 39/39
+# qiskit: rutas equivalentes 38/38
+# braket: rutas equivalentes 38/38
 
-python tools/verify_backend_equivalence.py --providers braket --only "39. complex_customs" --simulate
-#   [simulación] 39. complex_customs: max|Δconteos| = 16/2000 -> EQUIVALENTE
+python tools/verify_backend_equivalence.py --providers braket --only "1. complex_customs" --simulate
+#   [simulación] 1. complex_customs: max|Δconteos| = 16/2000 -> EQUIVALENTE
 ```
 
 Esta batería es la que sostiene la frontera de responsabilidades descrita en `doc/QTransLIFIA_Verificabilidad.md`: la equivalencia Quirk ↔ OpenQASM es garantía de la librería; la equivalencia OpenQASM ↔ *backend* se verifica dentro del entorno del proveedor.
@@ -212,7 +212,7 @@ Comprobación de integración: se ejecuta el pipeline completo sobre el corpus y
 python -m qtrans --input-mode batch --input-file "" --input-dir input
 ```
 
-Resultado de referencia sobre `input/popular_algorithms.json`: **39 archivos OpenQASM** (2.0 y 3.0), 39 capturas de Quirk, 39 diagramas del circuito, 39 comparaciones lado a lado (más el `README.md` índice), 39 scripts migrados por proveedor y **0 errores por etapa**. La corrida sobre el directorio `input/` completo (6 registros JSON, 134 algoritmos) arroja el mismo resultado: 134 OpenQASM, 134 capturas, 134 diagramas, 134 scripts y 0 errores. Las únicas celdas en cero son las imágenes de IBM Quantum Composer, que requieren credenciales de IBM Quantum y por tanto no se generan en un entorno desatendido.
+Resultado de referencia sobre `input/popular_algorithms.json`: **38 archivos OpenQASM** (2.0 y 3.0), 38 capturas de Quirk, 38 diagramas del circuito, 38 comparaciones lado a lado (más el `README.md` índice), 38 scripts migrados por proveedor y **0 errores por etapa**. La corrida sobre el directorio `input/` completo (7 registros JSON, 138 algoritmos) arroja el mismo resultado: 138 OpenQASM, 138 capturas, 138 diagramas, 414 scripts y 0 errores. Las únicas celdas en cero son las imágenes de IBM Quantum Composer, que requieren credenciales de IBM Quantum y por tanto no se generan en un entorno desatendido.
 
 El resumen de la corrida (`Resumen: N JSON, N algoritmos, N QASM, N capturas Quirk, N diagramas QASM, N imágenes Composer, N scripts provider y N errores`) es el indicador de aceptación: un error en una etapa opcional no cancela las demás, pero queda registrado y es visible.
 
@@ -273,7 +273,7 @@ Orden recomendado antes de dar por cerrada una modificación (cualquiera que toq
 1. **Análisis estático**: `python tools/check_static.py qtrans test tools` (sin referencias rotas ni imports muertos).
 2. **Suite unitaria**: `python -m unittest discover -s test -p "test_*.py"` (131 pruebas; sin fallos).
 3. **Fidelidad numérica**: `python tools/verify_matrix_gates.py` (residuo ≤ `1e-6`; se espera `≈5e-8`).
-4. **Equivalencia entre backends**: `python tools/verify_backend_equivalence.py` (39/39 en Qiskit y Braket).
+4. **Equivalencia entre backends**: `python tools/verify_backend_equivalence.py` (38/38 en Qiskit y Braket).
 5. **Corrida end-to-end**: `python -m qtrans --input-mode batch --input-file ""` y revisión del resumen (0 errores de traducción; los errores de la etapa ZX son los de compuertas no comparables descritos en §4.4).
 6. **ZX** (cuando la modificación afecta a la semántica): activar `QTRANS_GENERATE_ZX=true` y revisar `ZXCalculus/comparison_results.md`.
 

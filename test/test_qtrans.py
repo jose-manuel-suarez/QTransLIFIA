@@ -407,6 +407,33 @@ class JsonReportTests(unittest.TestCase):
         # El reporte debe serializarse a JSON sin objetos no serializables.
         json.dumps(report)
 
+    def test_json_out_includes_zx_method(self):
+        self.write_algorithms('algorithms.json', '1. Bell')
+        json_path = self.root / 'report.json'
+        stages = dict(DISABLED_STAGES)
+        stages['generate_zx'] = True
+
+        run_pipeline(
+            input_mode='algorithm',
+            input_file='algorithms.json',
+            input_dir=self.input_dir,
+            output_dir=self.output_dir,
+            run_label='TEST',
+            input_files=(),
+            qasm_version='3.0',
+            target_providers=('qiskit',),
+            json_out=str(json_path),
+            **stages,
+        )
+
+        report = json.loads(json_path.read_text(encoding='utf-8'))
+        algorithm = report['algorithms'][0]
+        self.assertEqual(algorithm['zx']['result'], 'EQUIVALENTES')
+        self.assertEqual(algorithm['zx']['method'], 'directo')
+        self.assertIn('compare_tensors', algorithm['zx']['comparison_method'])
+        self.assertEqual(algorithm['zx']['reason'], '')
+        self.assertEqual(report['zx_comparisons'][0]['Grafo'], 'directo')
+
     def test_main_json_out_dash_prints_only_json(self):
         self.write_algorithms('algorithms.json', '1. Bell')
 
