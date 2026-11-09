@@ -84,7 +84,7 @@ Para circuitos de pocos qubits (estados Bell, Toffoli, «la demostración por la
 | E2. Migración aislada de un circuito | `tools/migrate_circuit.py` | `python tools/migrate_circuit.py --file input/popular_algorithms.json --index 1` | El JSON de la API (OpenQASM + un script por proveedor) se materializa y se imprime en consola |
 | F. Corrida end-to-end | CLI `python -m qtrans` | `python -m qtrans --input-mode batch --input-file ""` | Integración completa y artefactos de corrida |
 | G. Comprobaciones manuales | `test/test_qasm.py`, `test/test_translate_lib.py`, `notebooks/` | Ejecución directa del script | Exploración y documentación de cara al usuario |
-| H. Aceptación de la distribución | `qtrans_demo/` (subproyecto aislado) | `qtrans_demo/demo_venv/Scripts/python.exe qtrans_demo/main.py` | El artefacto instalado desde PyPI traduce y simula en un entorno limpio |
+| H. Aceptación de la distribución | `demo/` (subproyecto aislado) | `demo/demo_venv/Scripts/python.exe demo/main.py` | El artefacto instalado desde PyPI traduce y simula en un entorno limpio |
 
 Las baterías A–F y H son **ejecutables y repetibles** y constituyen el criterio de aceptación del proyecto; la G es de apoyo y documentación.
 
@@ -231,23 +231,23 @@ Comprobaciones que no encajan en una aserción automática pero que son parte de
 
 ### 4.8 Batería H — Aceptación de la distribución publicada (módulo aislado)
 
-**Qué problema resuelve.** Las baterías A–G se ejecutan contra el árbol de fuentes. Un paquete puede pasar todas ellas y, sin embargo, fallar al instalarse desde el wheel publicado: un módulo fuera de `packages.find`, una dependencia no declarada, una versión mal estampada o un import que solo resuelve por el `cwd` del repositorio. `qtrans_demo/` cierra ese hueco: es un **consumidor externo de caja negra** que instala `qtranslifia` desde PyPI en su propio entorno y ejercita el contrato público sin acceso al código fuente.
+**Qué problema resuelve.** Las baterías A–G se ejecutan contra el árbol de fuentes. Un paquete puede pasar todas ellas y, sin embargo, fallar al instalarse desde el wheel publicado: un módulo fuera de `packages.find`, una dependencia no declarada, una versión mal estampada o un import que solo resuelve por el `cwd` del repositorio. `demo/` cierra ese hueco: es un **consumidor externo de caja negra** que instala `qtranslifia` desde PyPI en su propio entorno y ejercita el contrato público sin acceso al código fuente.
 
-**Aislamiento.** El subproyecto tiene su propio `qtrans_demo/demo_venv` y fija la versión en `qtrans_demo/requirements.txt` (`qtranslifia==0.2.0`). `main.py` impone dos guardas antes de traducir: `sys.prefix` debe ser exactamente `qtrans_demo/demo_venv` (`qtrans_demo/main.py:26`) y `qtrans.__file__` debe estar dentro de ese entorno (`qtrans_demo/main.py:37`). Si se ejecuta con el `.venv` del repositorio o si el paquete se importa desde las fuentes locales, el script aborta con un mensaje accionable. `demo_venv/` y `output/` están ignorados por Git.
+**Aislamiento.** El subproyecto tiene su propio `demo/demo_venv` y fija la versión en `demo/requirements.txt` (`qtranslifia==0.3.0`). `main.py` define dos guardas antes de traducir (comentadas para depuración local): `sys.prefix` debe ser exactamente `demo/demo_venv` (`demo/main.py:30`) y `qtrans.__file__` debe estar dentro de ese entorno (`demo/main.py:43`). Si se ejecuta con el `.venv` del repositorio o si el paquete se importa desde las fuentes locales, el script aborta con un mensaje accionable. `demo_venv/` y `output/` están ignorados por Git.
 
-**Flujo.** Lee `qtrans_demo/input/custom_gates_algorithms.json` (2 circuitos con compuertas definidas por matriz), llama a `translate_circuit` en modo lote con `return_circuit=True`, QASM 3.0, proveedor Qiskit, 1024 shots, `preserve_custom_gates=true` y sin ZX ni imágenes. Después simula el `QuantumCircuit` devuelto con Qiskit Aer (con respaldo a `StatevectorSampler`) y guarda el OpenQASM, el script migrado de Qiskit y los conteos en `qtrans_demo/output/<nombre>/`.
+**Flujo.** Lee `demo/input/custom_gates_algorithms.json` (5 circuitos con compuertas definidas por matriz), llama a `translate_circuit` en modo lote con `return_circuit=True`, QASM 3.0, proveedor configurable, 1024 shots y `preserve_custom_gates=true`; ZX e imágenes se activan según `.env`. Después simula el circuito nativo devuelto y guarda OpenQASM, script migrado, conteos y diagramas en `demo/output/run_<estampa>/<proveedor>/<algoritmo>/`.
 
 ```bash
 # Desde la raíz del repositorio; el entorno del demo ya debe existir.
-qtrans_demo/demo_venv/Scripts/python.exe qtrans_demo/main.py
-# qtrans: ...\qtrans_demo\demo_venv\Lib\site-packages\qtrans\__init__.py (0.2.0)
+demo/demo_venv/Scripts/python.exe demo/main.py
+# qtrans: ...\demo\demo_venv\Lib\site-packages\qtrans\__init__.py (0.3.0)
 # Circuitos: 2
 # total: 1024 shots   (por cada circuito)
 ```
 
-Para recrear el entorno: `cd qtrans_demo && python -m venv demo_venv && source demo_venv/Scripts/activate && python -m pip install -r requirements.txt && python main.py` (en Linux/macOS, `source demo_venv/bin/activate`).
+Para recrear el entorno: `cd demo && python -m venv demo_venv && source demo_venv/Scripts/activate && python -m pip install -r requirements.txt && python main.py` (en Linux/macOS, `source demo_venv/bin/activate`).
 
-**Resultado de referencia.** 2/2 circuitos traducidos y simulados, sin errores de etapa; las salidas quedan en `qtrans_demo/output/1._complex_customs/` y `qtrans_demo/output/2._rotational_customs/`, cada una con su `_v3.0.txt`, su `_ibm_qiskit_code.py` y su `_counts.json` de 1024 shots.
+**Resultado de referencia.** 5/5 circuitos traducidos y simulados, sin errores de etapa; las salidas quedan en `demo/output/run_<estampa>/<proveedor>/<algoritmo>/`, cada una con su `_v3.0.txt`, su script migrado, sus conteos de 1024 shots y sus diagramas.
 
 **Qué garantiza y qué no.** Garantiza que el artefacto **instalado desde PyPI** se importa en un entorno limpio, resuelve sus dependencias, traduce compuertas personalizadas con matriz a OpenQASM 3.0, las carga con el parser nativo de Qiskit y las ejecuta en un simulador local. No sustituye a las baterías A–G: cubre un solo proveedor, un corpus de dos circuitos y un simulador, no un QPU, y no ejerce la CLI ni la generación de imágenes. Al publicar una versión nueva hay que actualizar el pin de `requirements.txt` y repetir la corrida.
 

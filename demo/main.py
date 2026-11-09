@@ -32,7 +32,7 @@ except (AttributeError, OSError):
 #         "Este demo debe ejecutarse con su propio entorno.\n"
 #         f"  esperado: {VENV_DIR}\n"
 #         f"  actual:   {Path(sys.prefix).resolve()}\n"
-#         "Activá el entorno con: source qtrans_demo/demo_venv/Scripts/activate"
+#         "Activá el entorno con: source demo/demo_venv/Scripts/activate"
 #     )
 
 import qtrans  # noqa: E402

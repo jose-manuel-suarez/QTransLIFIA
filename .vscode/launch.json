@@ -5,9 +5,9 @@
       "name": "Debug main.py",
       "type": "python",
       "request": "launch",
-      "program": "${workspaceFolder}/qtrans_demo/main.py",
-      "cwd": "${workspaceFolder}/qtrans_demo",
-      "python": "${workspaceFolder}/qtrans_demo/demo_venv/Scripts/python.exe",
+      "program": "${workspaceFolder}/demo/main.py",
+      "cwd": "${workspaceFolder}/demo",
+      "python": "${workspaceFolder}/demo/demo_venv/Scripts/python.exe",
       "env": { "PYTHONPATH": "${workspaceFolder}" }
     }
   ]

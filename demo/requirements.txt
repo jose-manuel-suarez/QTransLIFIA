@@ -1,4 +1,4 @@
-qtranslifia==0.2.0
+qtranslifia==0.3.0
 qiskit-aer
 amazon-braket-sdk
 pennylane

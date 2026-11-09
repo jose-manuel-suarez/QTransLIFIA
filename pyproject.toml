@@ -53,7 +53,7 @@ qtrans = "qtrans:main"
 
 [tool.setuptools.packages.find]
 include = ["qtrans", "qtrans.*"]
-exclude = ["qtrans_demo*"]
+exclude = ["demo*"]
 
 [tool.setuptools]
 include-package-data = true

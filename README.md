@@ -58,10 +58,11 @@ Las tres vías de ejecución —**API de librería** (`translate_circuit`), **CL
 │   └── test_url_utils.py                 # Normalización y canonicalización de URLs
 ├── tools/                                # Baterías de verificación ejecutables
 │   ├── check_static.py                   # Análisis estático (AST): nombres no definidos e imports muertos
+│   ├── check_dist.py                     # Verifica que el sdist/wheel solo contenga el paquete qtrans
 │   ├── verify_matrix_gates.py            # Fidelidad numérica de las compuertas custom con 'matrix'
 │   ├── verify_backend_equivalence.py     # Equivalencia entre el parser nativo y el script migrado
 │   └── migrate_circuit.py                # Migración aislada de un circuito (JSON en consola)
-├── qtrans_demo/                          # Subproyecto aislado: consume qtranslifia desde demo_venv
+├── demo/                                 # Subproyecto aislado: consume qtranslifia desde demo_venv
 ├── doc/                                  # Documentación QSE y paper (qtrans.tex)
 ├── pyproject.toml                        # Empaquetado (pip install)
 ├── requirements.txt                      # Librerías requeridas
@@ -572,11 +573,14 @@ Procedimiento resumido para publicar una release de `qtranslifia`. Reemplazá `<
    ls -lh dist
    ```
 
-7. **Validar metadatos y contenido.**
+7. **Validar metadatos y contenido.** `twine check` valida los metadatos; `check_dist.py` falla si el wheel o el sdist incluyen directorios ajenos al paquete (por ejemplo `demo/`, `demo_venv/`, `test/` dentro del wheel o el árbol de fuentes).
 
    ```bash
+   python tools/check_dist.py dist/*
    twine check --strict dist/*
    ```
+
+   El wheel sano debe contener solo `qtrans/` y `qtranslifia-<version>.dist-info/`, y pesar unos 100–150 KB. Si aparecen `demo/`, `.venv/`, `node_modules/` o un tamaño de decenas de MB, no publiques.
 
 8. **Probar la instalación desde el wheel en un entorno limpio.** Confirma que el paquete instalado reporta la versión correcta y que el comando `qtrans` funciona.
 
@@ -642,17 +646,17 @@ procedimiento, garantía y límites) está en
 | E. Equivalencia entre backends | `python tools/verify_backend_equivalence.py` | La ruta nativa del parser y la ruta del script migrado coinciden |
 | F. Corrida extremo a extremo | `python -m qtrans --input-mode batch --input-file ""` | Artefactos completos y cero errores por etapa |
 | G. Comprobaciones manuales | `python test/test_qasm.py`, cuadernos | Evidencia cualitativa y ejemplos de uso |
-| H. Aceptación de la distribución | `qtrans_demo/demo_venv/Scripts/python.exe qtrans_demo/main.py` | El paquete instalado desde PyPI traduce y simula en un entorno aislado |
+| H. Aceptación de la distribución | `demo/demo_venv/Scripts/python.exe demo/main.py` | El paquete instalado desde PyPI traduce y simula en un entorno aislado |
 
 ```bash
 python -m unittest discover -s test -p "test_*.py" -v
 ```
 
-### Demo aislado (`qtrans_demo`)
+### Demo aislado (`demo`)
 
-`qtrans_demo/` instala `qtranslifia` desde PyPI en su propio `demo_venv` y ejecuta
+`demo/` instala `qtranslifia` desde PyPI en su propio `demo_venv` y ejecuta
 `translate_circuit` + simulación sin tocar el código fuente del repositorio. Acepta un
 **único** proveedor por corrida (`qiskit`, `braket` o `pennylane`, con alias `ibm`/`aws`/
 `xanadu`), que se elige con `QTRANS_TARGET_PROVIDERS`, y agrupa las salidas en
 `output/run_<fecha_hora>/<proveedor>/<algoritmo>/`. Instrucciones, variables de entorno y
-detalle de las salidas en [**qtrans_demo/README.md**](qtrans_demo/README.md).
+detalle de las salidas en [**demo/README.md**](demo/README.md).

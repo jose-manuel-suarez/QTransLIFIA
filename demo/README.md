@@ -1,4 +1,4 @@
-# qtrans_demo
+# demo
 
 Subproyecto aislado para probar la librería `qtranslifia` instalada desde PyPI, sin depender del código fuente de QTransLIFIA.
 
@@ -6,7 +6,7 @@ Subproyecto aislado para probar la librería `qtranslifia` instalada desde PyPI,
 Desde el directorio del subproyecto creamos el entorno virtual de ejecución, lo activamos, instalamos las dependencias necesarias y ejecutamos el script Python principal.
 
 ```bash
-cd qtrans_demo
+cd demo
 python -m venv demo_venv
 source demo_venv/Scripts/activate
 python -m pip install -r requirements.txt
@@ -29,7 +29,7 @@ La configuración se toma de `.env`. `main.py` verifica que se ejecute con `demo
 
 El demo debe correr **siempre** con el intérprete de `demo_venv`; si se invoca con otro Python, `main.py` aborta con un mensaje accionable. Hay dos formas equivalentes:
 
-**1. Con el entorno activado** (desde `qtrans_demo/`):
+**1. Con el entorno activado** (desde `demo/`):
 
 ```bash
 source demo_venv/Scripts/activate      # Git Bash / macOS / Linux
@@ -41,9 +41,9 @@ python main.py
 
 ```bash
 # desde la raíz del repositorio
-qtrans_demo/demo_venv/Scripts/python.exe qtrans_demo/main.py
+demo/demo_venv/Scripts/python.exe demo/main.py
 
-# o desde qtrans_demo/
+# o desde demo/
 demo_venv/Scripts/python.exe main.py
 ```
 
@@ -107,7 +107,7 @@ output/
 - **Corrida**: `run_<DD_MM_YYYY__HH>` (una por ejecución).
 - **Proveedor**: `qiskit`, `braket` o `pennylane`, según `QTRANS_TARGET_PROVIDERS`. Solo aparece la carpeta del proveedor de esa corrida.
 - **Algoritmo**: nombre del circuito saneado (espacios y caracteres especiales → `_`).
-- La carpeta base `output/` se puede cambiar con `QTRANS_OUTPUT_DIR` (relativa a `qtrans_demo/`).
+- La carpeta base `output/` se puede cambiar con `QTRANS_OUTPUT_DIR` (relativa a `demo/`).
 
 ## Salidas de resultados
 
@@ -125,7 +125,7 @@ Además, la corrida imprime por consola el circuito OpenQASM y, por cada algorit
 
 ```
 Proveedor: qiskit | QASM: 3.0 | Shots: 1024
-Run dir: ...\qtrans_demo\output\run_28_10_2026__11
+Run dir: ...\demo\output\run_28_10_2026__11
 
 ===== 1. complex_customs [qiskit] =====
 OPENQASM 3.0;
